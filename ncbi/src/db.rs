@@ -25,7 +25,7 @@ pub async fn save_metadata() -> Result<()> {
     let mut file = File::create(meta_file)?;
 
     for (url, value) in db.meta.iter() {
-        writeln!(file, "{},{}, {}", url, value.0, value.1)?;
+        writeln!(file, "{},{},{}", url, value.0, value.1)?;
     }
 
     Ok(())
@@ -46,9 +46,12 @@ fn parse_metadata(filename: &PathBuf) -> HashMap<String, (String, bool)> {
             }
 
             let parts: Vec<&str> = item.split(',').collect();
+            if parts.len() < 3 {
+                continue; // 如果数据不完整，跳过该行
+            }
             let url = parts[0].to_string();
             let etag = parts[1].to_string();
-            let downloaded = parts[1].parse::<bool>().unwrap_or(false);
+            let downloaded = parts[2].parse::<bool>().unwrap_or(false);
             meta.insert(url, (etag, downloaded));
         }
     }
