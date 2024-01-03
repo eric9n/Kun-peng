@@ -167,8 +167,9 @@ fn get_md5_for_file(md5_file: &PathBuf, target_file_name: &str) -> Result<String
     Ok("".into()) // 如果没有找到对应的文件名，则返回 None
 }
 
-pub fn check_md5sum(ably: Assembly, delete: bool) -> Result<()> {
+pub fn check_md5sum(ably: Assembly, delete: bool) -> Result<Vec<Task>> {
     log::info!("{} check md5 start...", ably.group);
+    let mut tasks = vec![];
     let mut failed_files: Vec<String> = vec![];
     for (fna_file_name, _) in ably.md5sum.iter() {
         let fna_file = ably.data_dir.clone().join(fna_file_name);
@@ -176,8 +177,9 @@ pub fn check_md5sum(ably: Assembly, delete: bool) -> Result<()> {
         let md5_file = ably.data_dir.clone().join(md5_file_name);
         if let Ok(md5_value) = get_md5_for_file(&md5_file, &fna_file_name) {
             if let Ok(res) = check_md5sum_file(fna_file.clone(), md5_value) {
-                if !res {
-                    failed_files.push(fna_file_name.to_string());
+                if res {
+                    continue;
+                } else {
                     if delete {
                         std::fs::remove_file(&fna_file)?;
                         std::fs::remove_file(&md5_file)?;
@@ -185,7 +187,18 @@ pub fn check_md5sum(ably: Assembly, delete: bool) -> Result<()> {
                 }
             }
         }
+        failed_files.push(fna_file_name.to_string());
+        // 生成失败文件的下载任务
+        tasks.push(Task::new(
+            ably.md5sum.get(fna_file_name).unwrap().to_string(),
+            md5_file.clone(),
+        ));
+        tasks.push(Task::new(
+            ably.meta.get(fna_file_name).unwrap().to_string(),
+            fna_file.clone(),
+        ));
     }
+
     let file_path = ably.data_dir.clone().join("md5_failed.txt");
 
     if failed_files.is_empty() {
@@ -200,5 +213,5 @@ pub fn check_md5sum(ably: Assembly, delete: bool) -> Result<()> {
         log::info!("saved as {:?}", &file_path.to_str());
     }
     log::info!("{} check md5 finished...", ably.group);
-    Ok(())
+    Ok(tasks)
 }

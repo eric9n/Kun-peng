@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use env_logger;
 use ncbi::assembly::{check_md5sum, Assembly};
+use ncbi::download::Tasks;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -23,6 +24,10 @@ struct Args {
     /// 删除校验错误的文件
     #[arg(long, default_value = "true")]
     delete: bool,
+
+    /// 重新下载错误的文件
+    #[arg(long, default_value_t = false)]
+    retry: bool,
 }
 
 #[tokio::main]
@@ -35,11 +40,21 @@ async fn main() -> Result<()> {
     let db_path =
         PathBuf::from_str(args.database.unwrap_or("lib".into()).as_str()).expect("找不到数据库");
 
+    // 为了不让程序无限运行
+    let mut count = 100;
     if let Some(group) = &args.group {
         let data_dir = db_path.join(group);
-        let mut ably = Assembly::new(group, &data_dir);
-        ably.parse_assembly_file();
-        check_md5sum(ably, args.delete)?;
+        loop {
+            let mut ably = Assembly::new(group, &data_dir);
+            ably.parse_assembly_file();
+            let tasks = check_md5sum(ably, args.delete)?;
+            if tasks.is_empty() || count < 1 {
+                break;
+            }
+            count -= 1;
+            let task_handle = Tasks::new(format!("{} retry download file", group), tasks, 20);
+            task_handle.run().await?;
+        }
     }
     Ok(())
 }
