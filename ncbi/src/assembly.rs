@@ -28,6 +28,7 @@ impl Assembly {
     }
 
     pub async fn download_assembly_file(&self) -> Result<()> {
+        log::info!("{} assembly_file start...", &self.group);
         let mut tasks: Vec<Task> = vec![];
         for site in NCBI_SITES {
             let url = format!(
@@ -40,8 +41,9 @@ impl Assembly {
                 .join(format!("assembly_summary_{}.txt", site));
             tasks.push(Task::new(url, output_path));
         }
-        let task_handle = Tasks::new(tasks, 4);
+        let task_handle = Tasks::new(format!("{} assembly file", self.group), tasks, 4);
         task_handle.run().await?;
+        log::info!("{} assembly_file finished", &self.group);
         Ok(())
     }
 
@@ -86,26 +88,30 @@ impl Assembly {
 
     /// 根据 assembly 文件下载基因fna文件
     pub async fn download_genomic(&self, parallel: usize) -> Result<()> {
+        log::info!("{} download_genomic start...", &self.group);
         let mut tasks = vec![];
         for (fna_file, fna_url) in self.meta.iter() {
             let output_path = self.data_dir.clone().join(fna_file);
             tasks.push(Task::new(fna_url.into(), output_path));
         }
-        let task_handle = Tasks::new(tasks, parallel);
+        let task_handle = Tasks::new(format!("{} genomic file", &self.group), tasks, parallel);
         task_handle.run().await?;
+        log::info!("{} download_genomic finished", &self.group);
         Ok(())
     }
 
     /// 根据 assembly 文件下载md5checksums文件
     pub async fn download_md5_file(&self, parallel: usize) -> Result<()> {
+        log::info!("{} download_md5_file start...", &self.group);
         let mut tasks = vec![];
         for (fna_file, md5_url) in self.md5sum.iter() {
             let md5_file = format!("{}.md5checksums.txt", fna_file);
             let output_path = self.data_dir.clone().join(md5_file);
             tasks.push(Task::new(md5_url.into(), output_path));
         }
-        let task_handle = Tasks::new(tasks, parallel);
+        let task_handle = Tasks::new(format!("{} md5checksum file", &self.group), tasks, parallel);
         task_handle.run().await?;
+        log::info!("{} download_md5_file finished", &self.group);
         Ok(())
     }
 }
@@ -162,6 +168,7 @@ fn get_md5_for_file(md5_file: &PathBuf, target_file_name: &str) -> Result<String
 }
 
 pub fn check_md5sum(ably: Assembly, delete: bool) -> Result<()> {
+    log::info!("{} check md5 start...", ably.group);
     let mut failed_files: Vec<String> = vec![];
     for (fna_file_name, _) in ably.md5sum.iter() {
         let fna_file = ably.data_dir.clone().join(fna_file_name);
@@ -192,5 +199,6 @@ pub fn check_md5sum(ably: Assembly, delete: bool) -> Result<()> {
         write_failed_to_file(file_path.clone(), failed_files)?;
         log::info!("saved as {:?}", &file_path.to_str());
     }
+    log::info!("{} check md5 finished...", ably.group);
     Ok(())
 }

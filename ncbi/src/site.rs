@@ -13,7 +13,7 @@ pub struct Item {
 
 impl fmt::Debug for Item {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({}, {})\n", self.name, self.date)
+        write!(f, "({}, {})", self.name, self.date)
     }
 }
 
@@ -43,7 +43,7 @@ pub fn extract_info_from_html(html: &str) -> Result<Vec<Item>> {
 
 pub fn site_display(map: &HashMap<String, Vec<Item>>) {
     for (key, item) in map {
-        log::info!("{}:\n {:?}", key, item);
+        log::info!("{}: {:?}", key, item);
     }
 }
 

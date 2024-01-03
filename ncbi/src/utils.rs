@@ -21,12 +21,12 @@ pub fn create_file_in_dir(filename: &str) -> Result<File> {
     Ok(file)
 }
 
-pub fn create_data_dir(dirname: &str) -> Result<PathBuf, anyhow::Error> {
-    let path: PathBuf = PathBuf::from_str(dirname).unwrap();
-    if !path.exists() {
-        create_dir_all(&path)?;
+pub fn create_data_dir(dirname: &PathBuf) -> Result<PathBuf, anyhow::Error> {
+    // let path: PathBuf = PathBuf::from_str(dirname).unwrap();
+    if !dirname.exists() {
+        create_dir_all(&dirname)?;
     }
-    Ok(path)
+    Ok(dirname.clone())
 }
 
 pub fn create_dir(dirname: &PathBuf) -> Result<(), anyhow::Error> {
