@@ -15,8 +15,8 @@ pub struct DataBase {
     groups: Vec<String>,
     /// 文件路径
     pub dir: PathBuf,
-    // 元数据,文件路径: etag
-    pub meta: HashMap<String, String>,
+    // 元数据,文件路径: (etag, bool)
+    pub meta: HashMap<String, (String, bool)>,
 }
 
 pub async fn save_metadata() -> Result<()> {
@@ -24,15 +24,15 @@ pub async fn save_metadata() -> Result<()> {
     let meta_file: PathBuf = db.dir.clone().join(".metadata");
     let mut file = File::create(meta_file)?;
 
-    for (url, etag) in db.meta.iter() {
-        writeln!(file, "{},{}", url, etag)?;
+    for (url, value) in db.meta.iter() {
+        writeln!(file, "{},{}, {}", url, value.0, value.1)?;
     }
 
     Ok(())
 }
 
-fn parse_metadata(filename: &PathBuf) -> HashMap<String, String> {
-    let mut meta: HashMap<String, String> = HashMap::new();
+fn parse_metadata(filename: &PathBuf) -> HashMap<String, (String, bool)> {
+    let mut meta = HashMap::new();
     if !filename.exists() {
         File::create(filename).expect("创建 metadata 文件失败");
     }
@@ -48,7 +48,8 @@ fn parse_metadata(filename: &PathBuf) -> HashMap<String, String> {
             let parts: Vec<&str> = item.split(',').collect();
             let url = parts[0].to_string();
             let etag = parts[1].to_string();
-            meta.insert(url, etag);
+            let downloaded = parts[1].parse::<bool>().unwrap_or(false);
+            meta.insert(url, (etag, downloaded));
         }
     }
     meta
@@ -69,11 +70,26 @@ impl DataBase {
         self.meta = parse_metadata(&meta_file);
     }
 
-    pub fn insert_or_update(&mut self, key: String, latest_etag: String) {
+    pub fn insert_or_update(
+        &mut self,
+        key: String,
+        latest_etag: Option<String>,
+        downloaded: Option<bool>,
+    ) {
         match self.meta.get_mut(&key) {
-            Some(etag) => *etag = latest_etag,
+            Some((ref mut etag, ref mut down)) => {
+                if let Some(tag) = latest_etag {
+                    *etag = tag;
+                }
+                if let Some(flag) = downloaded {
+                    *down = flag;
+                }
+            }
             None => {
-                self.meta.insert(key, latest_etag);
+                self.meta.insert(
+                    key,
+                    (latest_etag.unwrap_or_default(), downloaded.unwrap_or(false)),
+                );
             }
         }
     }
@@ -81,4 +97,19 @@ impl DataBase {
 
 lazy_static! {
     pub static ref DATABASE: Arc<Mutex<DataBase>> = Arc::new(Mutex::new(DataBase::new()));
+}
+
+pub async fn update_db_state(key: String, latest_etag: Option<String>, downloaded: Option<bool>) {
+    let mut db = DATABASE.lock().await;
+    db.insert_or_update(key, latest_etag, downloaded);
+}
+
+pub async fn check_db_state(key: String, etag: String) -> bool {
+    let db = DATABASE.lock().await;
+    if let Some((h_etag, _)) = db.meta.get(&key) {
+        if &etag != "" && &etag == h_etag {
+            return true;
+        }
+    }
+    false
 }

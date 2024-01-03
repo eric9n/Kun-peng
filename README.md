@@ -1,4 +1,4 @@
-# kranken2-rust
+# kraken2-rust
 
 
 ## 从 NCBI 下载数据

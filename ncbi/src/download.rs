@@ -1,16 +1,16 @@
 use crate::client::retry_client;
-use anyhow::{Context, Result};
+use crate::db::{check_db_state, update_db_state};
+use anyhow::Result;
 use futures::future::join_all;
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
+use reqwest::{self, header, StatusCode};
 use std::path::PathBuf;
-
-use crate::db::DATABASE;
 use std::sync::{Arc, Mutex};
-use tokio::fs::OpenOptions;
+use tokio::fs::{self, OpenOptions};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Semaphore;
-use tokio::time::Duration;
+use tokio::time::{timeout, Duration};
 
 #[derive(Clone)]
 pub struct Task {
@@ -18,88 +18,79 @@ pub struct Task {
     output_file: PathBuf,
 }
 
+#[allow(dead_code)]
 impl Task {
     pub fn new(url: String, output_file: PathBuf) -> Self {
         Self { url, output_file }
     }
 
-    pub async fn run(&self) -> Result<()> {
-        let client = retry_client();
+    fn get_etag(&self, response: &reqwest::Response) -> String {
+        response
+            .headers()
+            .get(header::ETAG)
+            .map(|tag| tag.to_str().unwrap_or(""))
+            .unwrap_or("")
+            .to_string()
+    }
 
+    async fn is_latest_etag(
+        &self,
+        client: &reqwest_middleware::ClientWithMiddleware,
+    ) -> Result<bool> {
         // 如果文件存在，并且检查文件的 etag，如果 etag 没有变化，就跳过
         if self.output_file.exists() && self.output_file.is_file() {
             let head_resp: reqwest::Response = client.head(&self.url).send().await?;
-            let h_etag = head_resp
-                .headers()
-                .get("etag")
-                .map(|tag| tag.to_str().unwrap_or(""))
-                .unwrap_or("");
+            let h_etag = self.get_etag(&head_resp);
 
-            {
-                let db = DATABASE.lock().await;
-                if let Some(etag) = db.meta.get(&self.url) {
-                    if h_etag != "" && h_etag == etag {
-                        log::debug!("url {:?} does not need to be updated.", &self.url);
-                        return Ok(());
-                    }
-                }
+            if check_db_state(self.url.to_string(), h_etag.clone()).await {
+                return Ok(true);
             }
         }
+        Ok(false)
+    }
 
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .open(&self.output_file)
-            .await
-            .context("Failed to open file")?;
+    pub async fn run_resume(&self) -> Result<()> {
+        let client: &reqwest_middleware::ClientWithMiddleware = retry_client();
 
-        let response = client
-            .get(&self.url)
-            .send()
-            .await
-            .context("Failed to send request")?;
+        // 如果文件存在，并且检查文件的 etag，如果 etag 没有变化，就跳过
+        if self.is_latest_etag(client).await? {
+            return Ok(());
+        }
+        update_db_state(self.url.to_string(), None, Some(false)).await;
 
-        let latest_etag = response
-            .headers()
-            .get("etag")
-            .map(|tag| tag.to_str().unwrap_or(""))
-            .unwrap_or("")
-            .to_string();
+        // 检查本地文件大小
+        let file_size = if self.output_file.exists() {
+            fs::metadata(&self.output_file).await?.len()
+        } else {
+            0
+        };
 
-        let mut stream = response.bytes_stream();
-        let mut buffer = Vec::new();
+        // 设置 Range 头部
+        let mut headers = header::HeaderMap::new();
+        headers.insert(header::RANGE, format!("bytes={}-", file_size).parse()?);
 
-        while let Some(chunk) = stream.next().await {
-            match chunk {
-                Ok(result) => {
-                    buffer.extend_from_slice(&result);
-                    if buffer.len() >= 1 * 1024 * 1024 {
-                        // 例如，缓冲区大小为 1MB
-                        file.write_all(&buffer)
-                            .await
-                            .context("Error while writing to file")?;
-                        buffer.clear();
-                    }
-                }
-                Err(e) => {
-                    if e.is_body() {
-                        continue;
-                    }
-                    log::error!("Error while reading chunk: {}", e);
-                    return Err(e.into());
-                }
+        // 发送带 Range 头部的 GET 请求
+        let response = client.get(&self.url).headers(headers).send().await?;
+        let status = response.status();
+        let latest_etag = self.get_etag(&response);
+
+        // 仅当服务器响应 206 Partial Content 时处理响应体
+        if status == StatusCode::PARTIAL_CONTENT {
+            // 打开文件用于追加
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.output_file)
+                .await?;
+
+            // 读取响应内容并写入文件
+            let mut stream = response.bytes_stream();
+            while let Some(chunk) = timeout(Duration::from_secs(30), stream.next()).await? {
+                let chunk = chunk?;
+                file.write_all(&chunk).await?;
             }
-        }
 
-        if !buffer.is_empty() {
-            file.write_all(&buffer)
-                .await
-                .context("Error while writing to file")?;
-        }
-
-        {
-            let mut db = DATABASE.lock().await;
-            db.insert_or_update(self.url.to_string(), latest_etag);
+            update_db_state(self.url.to_string(), Some(latest_etag), Some(true)).await;
         }
 
         Ok(())
@@ -143,19 +134,20 @@ impl Tasks {
             let progress_clone = progress.clone();
 
             let task_future = tokio::spawn(async move {
-                let mut retries = 3;
+                let mut retries = 6;
                 let mut result;
                 loop {
-                    result = task_clone.run().await;
+                    result = task_clone.run_resume().await;
                     if result.is_ok() || retries == 0 {
                         break;
                     }
-                    let _ = std::fs::remove_file(&task_clone.output_file);
                     retries -= 1;
                     tokio::time::sleep(Duration::from_secs(2)).await; // 重试前等待
                 }
                 drop(permit); // 释放信号量
-                progress_clone.lock().unwrap().inc(1); // 增加进度
+                if result.is_ok() {
+                    progress_clone.lock().unwrap().inc(1); // 增加进度
+                }
                 result
             });
             task_list.push(task_future);
