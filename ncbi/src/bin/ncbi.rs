@@ -1,19 +1,10 @@
-use std::path::PathBuf;
-
-use anyhow::anyhow;
+use anyhow::Result;
 use clap::Parser;
-use ncbi::assembly::{check_md5sum, Assembly};
-use ncbi::{site, utils};
-
-use env_logger;
-use ncbi::db::{save_metadata, DATABASE};
-
-fn parse_comma_separated_list(s: &str) -> Vec<String> {
-    s.split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect()
-}
+use ncbi::meta::{init_meta, save_meta};
+use ncbi::task;
+use ncbi::utils;
+use std::path::PathBuf;
+use tokio::runtime::Builder;
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -42,53 +33,40 @@ struct Args {
     parallel: usize,
 }
 
-async fn download_groups(
-    groups: Vec<String>,
-    db_path: PathBuf,
-    parallel: usize,
-) -> Result<(), anyhow::Error> {
-    let items = site::open_ncbi_site(false).await.unwrap();
-    for group in &groups {
-        if !site::check_group(&group, &items) {
-            site::site_display(&items);
-            return Err(anyhow!("group 参数错误, 请选择上述所列种类进行操作"));
+async fn async_run(args: Args) -> Result<()> {
+    let db_path = utils::create_data_dir(&args.database).unwrap();
+    init_meta(&db_path).await;
+
+    if let Some(group_arg) = args.group {
+        let groups = utils::parse_comma_separated_list(&group_arg);
+        for group in groups {
+            let data_dir: PathBuf = db_path.join(group.clone());
+            utils::create_dir(&data_dir)?;
+            let _ = task::run_task(&group, &data_dir).await;
         }
     }
-
-    for group in &groups {
-        // 创建对应的数据库子目录
-        let data_dir: PathBuf = db_path.join(group);
-        utils::create_dir(&data_dir)?;
-        let mut ably = Assembly::new(group, &data_dir);
-        ably.download_assembly_file().await?;
-        ably.parse_assembly_file();
-        ably.download_genomic(parallel).await?;
-        ably.download_md5_file(parallel).await?;
-        check_md5sum(ably, true)?;
-    }
-    save_metadata().await?;
+    save_meta(&db_path).await?;
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
+fn main() -> Result<()> {
     env_logger::Builder::new()
         .filter_level(log::LevelFilter::Info)
         .init();
 
     let args = Args::parse();
-    let db_path = utils::create_data_dir(&args.database).unwrap();
-    {
-        let mut db = DATABASE.lock().await;
-        db.init(db_path.clone()).await;
-    }
-    if args.list {
-        let _ = site::open_ncbi_site(true).await.unwrap();
-    };
-    if let Some(group) = args.group {
-        let groups = parse_comma_separated_list(&group);
-        download_groups(groups, db_path, args.parallel).await?;
-    }
+    let num_thread = args.parallel.clone();
+    // 创建一个 Runtime 实例，并配置线程数
+    let runtime = Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("ncbi")
+        // .max_blocking_threads(100)
+        .worker_threads(num_thread) // 设置所需的工作线程数
+        .build()
+        .expect("Failed to create runtime");
+
+    // 使用 Runtime 运行异步代码
+    runtime.block_on(async_run(args))?;
 
     Ok(())
 }

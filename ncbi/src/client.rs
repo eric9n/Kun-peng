@@ -7,6 +7,8 @@ lazy_static! {
     static ref CLIENT: ClientWithMiddleware = {
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let client = reqwest::Client::builder()
+            .gzip(true)
+            .tcp_nodelay(true)
             // .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(20))
             // .tcp_keepalive(Duration::from_secs(300))

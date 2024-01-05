@@ -35,3 +35,10 @@ pub fn create_dir(dirname: &PathBuf) -> Result<(), anyhow::Error> {
     }
     Ok(())
 }
+
+pub fn parse_comma_separated_list(s: &str) -> Vec<String> {
+    s.split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
