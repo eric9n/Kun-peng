@@ -5,72 +5,144 @@ on:
     branches:
       - release
 
-# This is the example from the readme.
-# On each push to the `release` branch it will create or update a GitHub release, build your app, and upload the artifacts to the release.
 env:
   CARGO_TERM_COLOR: always
-  BINARY_PREFIX: ncbi
 
 jobs:
-  build-and-release:
-    permissions:
-      contents: write
+  build-cross:
+    runs-on: ubuntu-latest
+    env:
+      RUST_BACKTRACE: full
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-20.04, windows-latest]
+        target:
+          - i686-unknown-linux-musl
+          - x86_64-pc-windows-gnu
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+          - armv7-unknown-linux-musleabihf
+          - armv7-unknown-linux-gnueabihf
+          - arm-unknown-linux-gnueabi
+          - arm-unknown-linux-gnueabihf
+          - arm-unknown-linux-musleabi
+          - arm-unknown-linux-musleabihf
+          - aarch64-unknown-linux-gnu
+          - aarch64-unknown-linux-musl
+          - mips-unknown-linux-musl
+          - mipsel-unknown-linux-musl
 
-    runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        run: cargo build --release
+      - uses: actions/checkout@v3
 
-      # Set up the GitHub CLI
-      - name: Install GitHub CLI
+      - name: Install Rust
         run: |
-          brew install gh
-        if: matrix.platform == 'macos-latest'
+          rustup set profile minimal
+          rustup toolchain install stable
+          rustup default stable
+          rustup override set stable
+          rustup target add --toolchain stable ${{ matrix.target }}
 
-      - name: Install GitHub CLI
+      - name: Install cross
+        run: cargo install cross
+
+      - name: Build ${{ matrix.target }}
+        timeout-minutes: 120
         run: |
-          sudo apt install -y gh
-        if: matrix.platform == 'ubuntu-20.04'
+          compile_target=${{ matrix.target }}
 
-      - name: Install GitHub CLI
-        run: |
-          choco install gh
-        if: matrix.platform == 'windows-latest'
-
-      # Log in to the GitHub CLI
-      - name: Login to GitHub CLI
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
-      # Create a release
-      - name: Create Release
-        id: create_release
-        run: |
-          gh release create ${{ github.ref_name }} \
-            --title "Release ${{ github.ref_name }}" \
-            --notes "Release notes for ${{ github.ref_name }}" \
-            --draft
-        shell: bash
-
-      - name: Rename and prepare binaries for upload
-        run: |
-          EXT=""
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            EXT=".exe"
+          if [[ "$compile_target" == *"-linux-"* || "$compile_target" == *"-apple-"* ]]; then
+            compile_features="-f local-redir -f local-tun"
           fi
-          for file in "${BINARY_PREFIX}"*; do
-            mv "$file" "${file}-${RUNNER_OS}-${RUNNER_ARCH}${EXT}"
-          done
-          echo "Renamed binaries for upload"
-        shell: bash
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+          if [[ "$compile_target" == "mips-"* || "$compile_target" == "mipsel-"* || "$compile_target" == "mips64-"* || "$compile_target" == "mips64el-"* ]]; then
+            sudo apt-get update -y && sudo apt-get install -y upx;
+            if [[ "$?" == "0" ]]; then
+              compile_compress="-u"
+            fi
+          fi
+
+          cd build
+          ./build-release -t ${{ matrix.target }} $compile_features $compile_compress
+
+      - name: Upload Github Assets
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: ${{ env.BINARY_PREFIX }}-${{ runner.os }}-${{ runner.arch }}
-          path: |
-            ${BINARY_PREFIX}*-${RUNNER_OS}-${RUNNER_ARCH}${EXT}
+          files: build/release/*
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
+
+  build-unix:
+    runs-on: ${{ matrix.os }}
+    env:
+      BUILD_EXTRA_FEATURES: "local-redir local-tun"
+      RUST_BACKTRACE: full
+    strategy:
+      fail-fast: false
+      matrix:
+        # os: [ubuntu-latest, macos-latest]
+        os: [macos-latest]
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install GNU tar
+        if: runner.os == 'macOS'
+        run: |
+          brew install gnu-tar
+          # echo "::add-path::/usr/local/opt/gnu-tar/libexec/gnubin"
+          echo "/usr/local/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
+
+      - name: Install Rust
+        run: |
+          rustup set profile minimal
+          rustup toolchain install stable
+          rustup default stable
+          rustup override set stable
+          rustup target add --toolchain stable ${{ matrix.target }}
+
+      - name: Build release
+        shell: bash
+        run: |
+          ./build/build-host-release -t ${{ matrix.target }}
+
+      - name: Upload Github Assets
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: build/release/*
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
+
+  build-windows:
+    runs-on: windows-latest
+    env:
+      RUSTFLAGS: "-C target-feature=+crt-static"
+      RUST_BACKTRACE: full
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Rust
+        run: |
+          rustup set profile minimal
+          rustup toolchain install stable
+          rustup default stable
+          rustup override set stable
+
+      - name: Build release
+        run: |
+          pwsh ./build/build-host-release.ps1
+
+      - name: Upload Github Assets
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: build/release/*
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
