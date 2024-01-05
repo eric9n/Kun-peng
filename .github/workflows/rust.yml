@@ -11,7 +11,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  publish-tauri:
+  build-and-release:
     permissions:
       contents: write
     strategy:
@@ -53,6 +53,7 @@ jobs:
             --title "Release ${{ github.ref_name }}" \
             --notes "Release notes for ${{ github.ref_name }}" \
             --draft
+        shell: bash
 
       # Upload the built artifact to the release
       - name: Upload Release Asset
@@ -60,3 +61,4 @@ jobs:
           gh release upload ${{ github.ref_name }} \
             ./target/release/ncbi \
             --clobber
+        shell: bash
