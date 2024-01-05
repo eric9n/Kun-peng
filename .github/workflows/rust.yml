@@ -55,10 +55,17 @@ jobs:
             --draft
         shell: bash
 
-      # Upload the built artifact to the release
+      - name: Prepare asset name
+        id: prep
+        run: |
+          echo "ASSET_NAME=ncbi$(if [ ${{ runner.os }} = 'Windows' ]; then echo '.exe'; fi)" >> $GITHUB_ENV
+        shell: bash
+
       - name: Upload Release Asset
         run: |
           gh release upload ${{ github.ref_name }} \
-            ./target/release/ncbi \
+            ./target/release/${{ env.ASSET_NAME }} \
             --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
