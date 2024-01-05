@@ -7,7 +7,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::Mutex;
 
-const META_FILE_NAME: &'static str = ".meta";
+const META_FILE_NAME: &'static str = ".metadata";
 
 async fn parse_metadata(filename: &PathBuf) -> Result<HashMap<String, String>> {
     let mut meta: HashMap<String, String> = HashMap::new();
