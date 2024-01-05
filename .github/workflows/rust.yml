@@ -66,10 +66,11 @@ jobs:
             mv "$file" "${file}-${RUNNER_OS}-${RUNNER_ARCH}${EXT}"
           done
           echo "Renamed binaries for upload"
+        shell: bash
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: binaries-${{ runner.os }}-${{ runner.arch }}
+          name: ${{ env.BINARY_PREFIX }}-${{ runner.os }}-${{ runner.arch }}
           path: |
             ${BINARY_PREFIX}*-${RUNNER_OS}-${RUNNER_ARCH}${EXT}
