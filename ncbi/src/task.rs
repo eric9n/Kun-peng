@@ -3,7 +3,6 @@ use anyhow::Result;
 use futures::stream::StreamExt;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-// use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Semaphore};
 
@@ -93,13 +92,13 @@ async fn process_assembly_tasks(
     Ok(counter.load(Ordering::SeqCst))
 }
 
-pub async fn run_task(group: &str, data_dir: &PathBuf) -> Result<()> {
+pub async fn run_task(group: &str, data_dir: &PathBuf, num_threads: usize) -> Result<()> {
     log::info!("{} download assembly file start...", group);
     let (tx, rx) = mpsc::channel(4096); // 通道大小可以根据需要调整
     let (tx1, rx1) = mpsc::channel(4096); // 通道大小可以根据需要调整
     let assembly_tasks = process_assembly_tasks(group, data_dir, tx);
-    let download_handle = process_tasks("run".to_string(), 40, rx, Some(tx1));
-    let md5_handle = process_tasks("check".to_string(), 40, rx1, None);
+    let download_handle = process_tasks("run".to_string(), num_threads, rx, Some(tx1));
+    let md5_handle = process_tasks("check".to_string(), num_threads, rx1, None);
     // // 等待处理任务完成
     let (ably_res, down_res, md5_res) = tokio::join!(assembly_tasks, download_handle, md5_handle);
     log::info!(
@@ -110,5 +109,21 @@ pub async fn run_task(group: &str, data_dir: &PathBuf) -> Result<()> {
         md5_res?
     );
     log::info!("{} file finished...", group);
+    Ok(())
+}
+
+pub async fn run_check(group: &str, data_dir: &PathBuf, num_threads: usize) -> Result<()> {
+    log::info!("{} check md5 start...", group);
+    let (tx, rx) = mpsc::channel(4096); // 通道大小可以根据需要调整
+    let assembly_tasks = process_assembly_tasks(group, data_dir, tx);
+    let md5_handle = process_tasks("check".to_string(), num_threads, rx, None);
+    // // 等待处理任务完成
+    let (ably_res, md5_res) = tokio::join!(assembly_tasks, md5_handle);
+    log::info!(
+        "{} file total count: {}, md5match: {}",
+        group,
+        ably_res?,
+        md5_res?
+    );
     Ok(())
 }

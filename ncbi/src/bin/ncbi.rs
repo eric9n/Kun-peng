@@ -24,13 +24,13 @@ struct Args {
     /// 从 NCBI 站点上下载某个种类的数据信息，必须是列表中所列名称，archaea,bacteria,fungi...
     #[arg(short, long)]
     group: Option<String>,
-    /// 检查文件的 md5
-    #[arg(short, long, default_value = "true")]
-    check_md5: Option<bool>,
+    /// 仅检查文件的 md5
+    #[arg(short, long, default_value = "false")]
+    md5: bool,
 
     /// 下载时的并行大小
     #[arg(short, long, default_value = "8")]
-    parallel: usize,
+    threads: usize,
 }
 
 async fn async_run(args: Args) -> Result<()> {
@@ -42,7 +42,11 @@ async fn async_run(args: Args) -> Result<()> {
         for group in groups {
             let data_dir: PathBuf = db_path.join(group.clone());
             utils::create_dir(&data_dir)?;
-            let _ = task::run_task(&group, &data_dir).await;
+            if args.md5 {
+                let _ = task::run_check(&group, &data_dir, args.threads).await;
+            } else {
+                let _ = task::run_task(&group, &data_dir, args.threads).await;
+            }
         }
     }
     save_meta(&db_path).await?;
@@ -55,7 +59,7 @@ fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    let num_thread = args.parallel.clone();
+    let num_thread = args.threads.clone();
     // 创建一个 Runtime 实例，并配置线程数
     let runtime = Builder::new_multi_thread()
         .enable_all()
