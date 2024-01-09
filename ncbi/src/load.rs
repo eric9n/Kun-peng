@@ -12,6 +12,7 @@ use tokio::sync::mpsc;
 
 pub const NCBI_SITES: &[&str] = &["genbank", "refseq"];
 pub const NCBI_GEN_URL: &'static str = "https://ftp.ncbi.nlm.nih.gov/genomes/";
+pub const NCBI_TAXO_URL: &'static str = "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy";
 
 #[derive(Debug)]
 pub struct DownTuple {
@@ -23,6 +24,18 @@ pub struct DownTuple {
 impl DownTuple {
     pub fn new(url: String, file: PathBuf, etag: String) -> Self {
         Self { url, file, etag }
+    }
+
+    pub async fn new_taxo(url_path: String, taxo_dir: &PathBuf) -> Self {
+        let taxdump_url = format!("{}/{}", NCBI_TAXO_URL, url_path);
+        let file_name = if url_path.contains("/") {
+            url_path.split("/").last().unwrap().to_string()
+        } else {
+            url_path
+        };
+        let output_path = taxo_dir.join(file_name);
+        let etag = get_local_etag(&taxdump_url).await;
+        DownTuple::new(taxdump_url, output_path, etag.unwrap_or_default())
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -38,6 +51,7 @@ impl DownTuple {
 pub enum NcbiFile {
     Summary(DownTuple),
     Genomic(DownTuple, DownTuple),
+    Taxonomy(DownTuple, DownTuple),
 }
 
 impl NcbiFile {
@@ -59,10 +73,31 @@ impl NcbiFile {
         down_tasks
     }
 
+    pub async fn new_taxo(taxo_dir: &PathBuf) -> Vec<Self> {
+        let mut down_tasks = vec![];
+        let files = [
+            "taxdump.tar.gz",
+            "accession2taxid/nucl_gb.accession2taxid.gz",
+            "accession2taxid/nucl_wgs.accession2taxid.gz",
+        ];
+        for url_path in files.iter() {
+            let taxo = DownTuple::new_taxo(url_path.to_string(), taxo_dir).await;
+            let md5_file = format!("{}.md5", url_path);
+            let taxo_md5 = DownTuple::new_taxo(md5_file, taxo_dir).await;
+
+            down_tasks.push(NcbiFile::Taxonomy(taxo, taxo_md5));
+        }
+        down_tasks
+    }
+
     pub async fn run(&self) -> Result<()> {
         match self {
             NcbiFile::Summary(dt) => dt.run().await?,
             NcbiFile::Genomic(dt1, dt2) => {
+                dt1.run().await?;
+                dt2.run().await?;
+            }
+            NcbiFile::Taxonomy(dt1, dt2) => {
                 dt1.run().await?;
                 dt2.run().await?;
             }
@@ -74,6 +109,13 @@ impl NcbiFile {
         match self {
             NcbiFile::Summary(_) => unreachable!(),
             NcbiFile::Genomic(dt1, dt2) => {
+                let result = check_md5sum_file(&dt1.file, &dt2.file).await?;
+                if !result {
+                    return Err(anyhow::anyhow!("mismatch"));
+                }
+                Ok(())
+            }
+            NcbiFile::Taxonomy(dt1, dt2) => {
                 let result = check_md5sum_file(&dt1.file, &dt2.file).await?;
                 if !result {
                     return Err(anyhow::anyhow!("mismatch"));
@@ -93,6 +135,7 @@ impl NcbiFile {
     ) -> Result<()> {
         match self {
             NcbiFile::Genomic(_, _) => {}
+            NcbiFile::Taxonomy(_, _) => {}
             NcbiFile::Summary(ncbi) => {
                 let file = File::open(&ncbi.file).await?;
                 let reader = BufReader::new(file);

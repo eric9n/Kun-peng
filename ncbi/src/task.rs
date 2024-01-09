@@ -127,3 +127,13 @@ pub async fn run_check(group: &str, data_dir: &PathBuf, num_threads: usize) -> R
     );
     Ok(())
 }
+
+pub async fn run_taxo(taxo_dir: &PathBuf) -> Result<()> {
+    log::info!("download taxonomy...");
+    let down_tasks = NcbiFile::new_taxo(taxo_dir).await;
+    for task in down_tasks {
+        let _ = task.run().await;
+    }
+    log::info!("download taxonomy finished...");
+    Ok(())
+}

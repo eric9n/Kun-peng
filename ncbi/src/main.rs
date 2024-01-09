@@ -21,6 +21,10 @@ struct Args {
     #[arg(short, long, default_value = "lib")]
     database: PathBuf,
 
+    /// 下载 taxonomy 文件
+    #[arg(short, long, default_value = "false")]
+    taxonomy: bool,
+
     /// 从 NCBI 站点上下载某个种类的数据信息，必须是列表中所列名称，archaea,bacteria,fungi...
     #[arg(short, long)]
     group: Option<String>,
@@ -30,7 +34,7 @@ struct Args {
 
     /// 下载时的并行大小
     #[arg(short, long, default_value = "8")]
-    threads: usize,
+    num_threads: usize,
 }
 
 async fn async_run(args: Args) -> Result<()> {
@@ -43,11 +47,16 @@ async fn async_run(args: Args) -> Result<()> {
             let data_dir: PathBuf = db_path.join(group.clone());
             utils::create_dir(&data_dir)?;
             if args.md5 {
-                let _ = task::run_check(&group, &data_dir, args.threads).await;
+                let _ = task::run_check(&group, &data_dir, args.num_threads).await;
             } else {
-                let _ = task::run_task(&group, &data_dir, args.threads).await;
+                let _ = task::run_task(&group, &data_dir, args.num_threads).await;
             }
         }
+    }
+    if args.taxonomy {
+        let data_dir: PathBuf = db_path.join("taxonomy");
+        utils::create_dir(&data_dir)?;
+        let _ = task::run_taxo(&data_dir).await;
     }
     save_meta(&db_path).await?;
     Ok(())
@@ -59,7 +68,7 @@ fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    let num_thread = args.threads.clone();
+    let num_thread = args.num_threads.clone();
     // 创建一个 Runtime 实例，并配置线程数
     let runtime = Builder::new_multi_thread()
         .enable_all()
