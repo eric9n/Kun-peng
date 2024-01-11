@@ -17,41 +17,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: macos-latest
-            os: macos
-          - platform: ubuntu-20.04
-            os: linux
-          - platform: windows-latest
-            os: windows
-          - platform: ubuntu-20.04
-            os: centos
-            container: centos:7
+        platform: [macos-latest, ubuntu-20.04, windows-latest]
 
     runs-on: ${{ matrix.platform }}
-    container: ${{ matrix.container }}
-
     steps:
       - uses: actions/checkout@v4
-
-      # Install dependencies for CentOS 7
-      - name: Install dependencies on CentOS 7
-        if: matrix.os == 'centos'
-        run: |
-          yum update -y
-          yum install -y gcc make openssl-devel pkgconfig
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          source $HOME/.cargo/env
-          rustup default stable
-
-      # Build for CentOS 7
-      - name: Build on CentOS 7
-        if: matrix.os == 'centos'
-        run: cargo build --release
-
       - name: Build
         run: cargo build --release
-        if: matrix.os != 'centos'
 
       # Set up the GitHub CLI
       - name: Install GitHub CLI
@@ -87,8 +59,7 @@ jobs:
         id: prep
         run: |
           PLATFORM_TAG=$(echo ${{ matrix.platform }} | sed -e 's/-latest//' -e 's/ubuntu-20.04/linux-x86_64/' -e 's/macos/macos-x86_64/' -e 's/windows/windows-x86_64/')
-          ASSET_NAME="ncbi-${PLATFORM_TAG}$(if [ ${{ matrix.os }} = 'windows' ]; then echo '.exe'; elif [ ${{ matrix.os }} = 'centos' ]; then echo '-centos7'; fi)"
-          echo "ASSET_NAME=$ASSET_NAME" >> $GITHUB_ENV
+          echo "ASSET_NAME=ncbi-$PLATFORM_TAG$(if [ ${{ runner.os }} = 'Windows' ]; then echo '.exe'; fi)" >> $GITHUB_ENV
         shell: bash
 
       - name: Upload Release Asset
