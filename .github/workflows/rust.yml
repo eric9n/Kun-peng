@@ -99,23 +99,23 @@ jobs:
 
       - name: Copy artifact from container to runner
         run: |
-          docker cp centos7-container:/github/workspace/target/release/ncbi ./ncbi-centos7
+          docker cp centos7-container:/github/workspace/target/release/ncbi ./target/release/ncbi-centos7
 
-      - name: Install GitHub CLI
-        run: |
-          sudo apt install -y gh
+      # - name: Install GitHub CLI
+      #   run: |
+      #     sudo apt install -y gh
 
-      # Log in to the GitHub CLI
-      - name: Login to GitHub CLI
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+      # - name: Login to GitHub CLI
+      #   run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Upload Release Asset for CentOS 7
         run: |
           gh release upload ${{ github.ref_name }} \
-            ./ncbi-centos7 \
+            ./target/release/ncbi-centos7 \
             --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
 
       - name: Cleanup
         if: always()
