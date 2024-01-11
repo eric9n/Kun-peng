@@ -87,6 +87,9 @@ jobs:
           gh release upload ${{ github.ref_name }} \
             ./ncbi-centos7 \
             --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
 
   # build-on-centos7:
   #   runs-on: ubuntu-latest
