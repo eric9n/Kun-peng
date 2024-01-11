@@ -1,5 +1,6 @@
 mod client;
 pub mod down;
+pub mod fna;
 pub mod load;
 pub mod md5sum;
 pub mod meta;
