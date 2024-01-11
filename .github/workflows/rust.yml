@@ -77,7 +77,8 @@ jobs:
         if: matrix.platform == 'ubuntu-20.04'
         run: |
           docker run --name centos7-container -v $GITHUB_WORKSPACE:/github/workspace -w /github/workspace centos:7 \
-          /bin/bash -c "yum update -y && yum install -y gcc make openssl openssl-devel && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source $HOME/.cargo/env && cargo build --release"
+          /bin/bash -c "yum update -y && yum install -y gcc make openssl openssl-devel && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && export PATH=\$HOME/.cargo/bin:\$PATH && cd /github/workspace && cargo build --release"
+
           docker cp centos7-container:/github/workspace/target/release/ncbi ./ncbi-centos7
           docker rm centos7-container
 
