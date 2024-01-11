@@ -17,41 +17,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: macos-latest
-            os: macos
-          - platform: ubuntu-20.04
-            os: linux
-          - platform: windows-latest
-            os: windows
-          - platform: ubuntu-20.04
-            os: centos
-            container: centos:7
+        platform: [macos-latest, ubuntu-20.04, windows-latest]
 
     runs-on: ${{ matrix.platform }}
-    container: ${{ matrix.container }}
-
     steps:
       - uses: actions/checkout@v4
-
-      # Install dependencies for CentOS 7
-      - name: Install dependencies on CentOS 7
-        if: matrix.os == 'centos'
-        run: |
-          yum update -y
-          yum install -y gcc make openssl-devel pkgconfig
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          source $HOME/.cargo/env
-          rustup default stable
-
-      # Build for CentOS 7
-      - name: Build on CentOS 7
-        if: matrix.os == 'centos'
-        run: cargo build --release
-
       - name: Build
         run: cargo build --release
-        if: matrix.os != 'centos'
 
       # Set up the GitHub CLI
       - name: Install GitHub CLI
@@ -73,22 +45,21 @@ jobs:
       - name: Login to GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
-      # Create a release
-      - name: Create Release
-        id: create_release
-        run: |
-          gh release create ${{ github.ref_name }} \
-            --title "Release ${{ github.ref_name }}" \
-            --notes "Release notes for ${{ github.ref_name }}" \
-            --draft
-        shell: bash
+      # # Create a release
+      # - name: Create Release
+      #   id: create_release
+      #   run: |
+      #     gh release create ${{ github.ref_name }} \
+      #       --title "Release ${{ github.ref_name }}" \
+      #       --notes "Release notes for ${{ github.ref_name }}" \
+      #       --draft
+      #   shell: bash
 
       - name: Prepare asset name
         id: prep
         run: |
           PLATFORM_TAG=$(echo ${{ matrix.platform }} | sed -e 's/-latest//' -e 's/ubuntu-20.04/linux-x86_64/' -e 's/macos/macos-x86_64/' -e 's/windows/windows-x86_64/')
-          ASSET_NAME="ncbi-${PLATFORM_TAG}$(if [ ${{ matrix.os }} = 'windows' ]; then echo '.exe'; elif [ ${{ matrix.os }} = 'centos' ]; then echo '-centos7'; fi)"
-          echo "ASSET_NAME=$ASSET_NAME" >> $GITHUB_ENV
+          echo "ASSET_NAME=ncbi-$PLATFORM_TAG$(if [ ${{ runner.os }} = 'Windows' ]; then echo '.exe'; fi)" >> $GITHUB_ENV
         shell: bash
 
       - name: Upload Release Asset
@@ -100,3 +71,52 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
+
+  build-on-centos7:
+    runs-on: ubuntu-latest
+    needs: build-and-release
+    steps:
+      - name: Checkout code on the runner
+        uses: actions/checkout@v4
+
+      - name: Create Docker container
+        run: |
+          docker create -w /github/workspace --name centos7-container centos:7 tail -f /dev/null
+          docker start centos7-container
+
+      - name: Copy repo to the container
+        run: |
+          docker cp $GITHUB_WORKSPACE/. centos7-container:/github/workspace
+
+      - name: Install dependencies in the container
+        run: |
+          docker exec centos7-container yum update -y
+          docker exec centos7-container yum install -y gcc make openssl openssl-devel
+
+      - name: Build on CentOS 7
+        run: |
+          docker exec centos7-container bash -c "cd /github/workspace && cargo build --release"
+
+      - name: Copy artifact from container to runner
+        run: |
+          docker cp centos7-container:/github/workspace/target/release/ncbi ./ncbi-centos7
+
+      - name: Install GitHub CLI
+        run: |
+          sudo apt install -y gh
+
+      # Log in to the GitHub CLI
+      - name: Login to GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Upload Release Asset for CentOS 7
+        run: |
+          gh release upload ${{ github.ref_name }} \
+            ./ncbi-centos7 \
+            --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f centos7-container
