@@ -93,6 +93,11 @@ jobs:
           docker exec centos7-container yum update -y
           docker exec centos7-container yum install -y gcc make openssl openssl-devel
 
+      - name: Install Rust and Cargo
+        run: |
+          docker exec centos7-container bash -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
+          docker exec centos7-container bash -c "source $HOME/.cargo/env"
+
       - name: Build on CentOS 7
         run: |
           docker exec centos7-container bash -c "cd /github/workspace && cargo build --release"
