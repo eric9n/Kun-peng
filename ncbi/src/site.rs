@@ -17,7 +17,7 @@ impl fmt::Debug for Item {
     }
 }
 
-pub const NCBI_SITES: &[&str] = &["genbank", "refseq"];
+pub const NCBI_SITES: &[&str] = &["refseq"];
 pub const NCBI_GEN_URL: &'static str = "https://ftp.ncbi.nlm.nih.gov/genomes/";
 
 // 从https://ftp.ncbi.nlm.nih.gov/genomes/下的 genbank或者 refreq 目录获取解析 assembly_summary的信息。

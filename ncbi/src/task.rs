@@ -55,73 +55,73 @@ async fn process_tasks(
 
 /// 处理 assembly 文件
 async fn process_assembly_tasks(
+    site: &str,
     group: &str,
     data_dir: &PathBuf,
     tx: mpsc::Sender<NcbiFile>, // 发送端用于发送 `parse_assembly_file` 的结果
 ) -> Result<usize> {
     let counter = Arc::new(AtomicUsize::new(0));
-    let down_tasks = NcbiFile::from_group(group, data_dir).await;
-    let mut futures = vec![];
-    for asbly in down_tasks {
-        let data_dir_clone = data_dir.clone();
-        let tx_clone = tx.clone();
-        let counter_clone = counter.clone(); // 克隆 Arc
-        match asbly.run().await {
-            Ok(_) => {
-                let task_future = tokio::spawn(async move {
-                    if let Err(e) = asbly
-                        .parse_assembly_file(&data_dir_clone, tx_clone, counter_clone)
-                        .await
-                    {
-                        log::error!("Error parsing assembly file: {}", e);
-                    }
-                });
-                futures.push(task_future);
-            }
-            Err(e) => {
-                log::info!("{}", e);
+    let assembly = NcbiFile::from_group(group, data_dir, site).await;
+    let counter_clone = counter.clone();
+    match assembly.run().await {
+        Ok(_) => {
+            if let Err(e) = assembly
+                .parse_assembly_file(site, &data_dir, tx, counter_clone)
+                .await
+            {
+                log::error!("Error parsing assembly file: {}", e);
             }
         }
-    }
-    let mut stream = futures::stream::iter(futures).buffer_unordered(2);
-
-    while let Some(result) = stream.next().await {
-        let _ = result;
+        Err(e) => {
+            log::info!("{}", e);
+        }
     }
 
     Ok(counter.load(Ordering::SeqCst))
 }
 
-pub async fn run_task(group: &str, data_dir: &PathBuf, num_threads: usize) -> Result<()> {
-    log::info!("{} download assembly file start...", group);
+pub async fn run_task(
+    site: &str,
+    group: &str,
+    data_dir: &PathBuf,
+    num_threads: usize,
+) -> Result<()> {
+    log::info!("{} {} download assembly file start...", group, site);
     let (tx, rx) = mpsc::channel(4096); // 通道大小可以根据需要调整
     let (tx1, rx1) = mpsc::channel(4096); // 通道大小可以根据需要调整
-    let assembly_tasks = process_assembly_tasks(group, data_dir, tx);
+    let assembly_tasks = process_assembly_tasks(site, group, data_dir, tx);
     let download_handle = process_tasks("run".to_string(), num_threads, rx, Some(tx1));
     let md5_handle = process_tasks("check".to_string(), num_threads, rx1, None);
     // // 等待处理任务完成
     let (ably_res, down_res, md5_res) = tokio::join!(assembly_tasks, download_handle, md5_handle);
     log::info!(
-        "{} file total count: {}, downloaded: {}, md5match: {}",
+        "{} {} file total count: {}, downloaded: {}, md5match: {}",
         group,
+        site,
         ably_res?,
         down_res?,
         md5_res?
     );
-    log::info!("{} file finished...", group);
+    log::info!("{} {} file finished...", group, site);
     Ok(())
 }
 
-pub async fn run_check(group: &str, data_dir: &PathBuf, num_threads: usize) -> Result<()> {
-    log::info!("{} check md5 start...", group);
+pub async fn run_check(
+    site: &str,
+    group: &str,
+    data_dir: &PathBuf,
+    num_threads: usize,
+) -> Result<()> {
+    log::info!("{} {} check md5 start...", group, site);
     let (tx, rx) = mpsc::channel(4096); // 通道大小可以根据需要调整
-    let assembly_tasks = process_assembly_tasks(group, data_dir, tx);
+    let assembly_tasks = process_assembly_tasks(site, group, data_dir, tx);
     let md5_handle = process_tasks("check".to_string(), num_threads, rx, None);
     // // 等待处理任务完成
     let (ably_res, md5_res) = tokio::join!(assembly_tasks, md5_handle);
     log::info!(
-        "{} file total count: {}, md5match: {}",
+        "{} {} file total count: {}, md5match: {}",
         group,
+        site,
         ably_res?,
         md5_res?
     );

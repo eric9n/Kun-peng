@@ -10,7 +10,6 @@ use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 
-pub const NCBI_SITES: &[&str] = &["genbank", "refseq"];
 pub const NCBI_GEN_URL: &'static str = "https://ftp.ncbi.nlm.nih.gov/genomes/";
 pub const NCBI_TAXO_URL: &'static str = "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy";
 
@@ -55,22 +54,16 @@ pub enum NcbiFile {
 }
 
 impl NcbiFile {
-    pub async fn from_group(group: &str, data_dir: &PathBuf) -> Vec<Self> {
-        let mut down_tasks: Vec<NcbiFile> = vec![];
-        for site in NCBI_SITES {
-            let url = format!("{}{}/{}/assembly_summary.txt", NCBI_GEN_URL, site, group);
-            let output_path = data_dir.join(format!("assembly_summary_{}.txt", site));
+    pub async fn from_group(group: &str, data_dir: &PathBuf, site: &str) -> Self {
+        let url = format!("{}{}/{}/assembly_summary.txt", NCBI_GEN_URL, site, group);
+        let output_path = data_dir.join(format!("assembly_summary_{}.txt", site));
 
-            let etag = get_local_etag(&url).await;
-            let down_file = NcbiFile::Summary(DownTuple::new(
-                url.clone(),
-                output_path,
-                etag.unwrap_or("".into()),
-            ));
-            down_tasks.push(down_file);
-        }
-
-        down_tasks
+        let etag = get_local_etag(&url).await;
+        NcbiFile::Summary(DownTuple::new(
+            url.clone(),
+            output_path,
+            etag.unwrap_or("".into()),
+        ))
     }
 
     pub async fn new_taxo(taxo_dir: &PathBuf) -> Vec<Self> {
@@ -129,6 +122,7 @@ impl NcbiFile {
 impl NcbiFile {
     pub async fn parse_assembly_file(
         &self,
+        site: &str,
         data_dir: &PathBuf,
         sender: mpsc::Sender<NcbiFile>,
         counter: Arc<AtomicUsize>,
@@ -162,12 +156,13 @@ impl NcbiFile {
                         );
 
                         let fna_url = format!("{}/{}", ftp_path, fna_file_name);
-                        let fna_file = data_dir.join(&fna_file_name);
+                        let fna_file = data_dir.join(site).join(&fna_file_name);
                         let fna_etag = get_local_etag(&fna_url).await.unwrap_or_default();
                         let genomic_dt = DownTuple::new(fna_url, fna_file, fna_etag);
                         let md5_url = format!("{}/md5checksums.txt", ftp_path);
-                        let md5_file =
-                            data_dir.join(format!("{}_md5checksums.txt", &fna_file_name));
+                        let md5_file = data_dir
+                            .join(site)
+                            .join(format!("{}_md5checksums.txt", &fna_file_name));
                         let md5_etag = get_local_etag(&md5_url).await.unwrap_or_default();
                         let md5_dt = DownTuple::new(md5_url, md5_file, md5_etag);
                         let new_file = NcbiFile::Genomic(genomic_dt, md5_dt);

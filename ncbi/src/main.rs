@@ -1,10 +1,47 @@
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+use ncbi::fna::write_to_fna;
 use ncbi::meta::{init_meta, save_meta};
 use ncbi::task;
 use ncbi::utils;
+use std::fmt;
 use std::path::PathBuf;
 use tokio::runtime::Builder;
+
+const NCBI_LIBRARY: &'static [&str] = &[
+    "archaea", "bacteria", "viral", "fungi", "plant", "human", "protozoa",
+];
+
+fn validate_group(group: &str) -> Result<String, String> {
+    let groups = utils::parse_comma_separated_list(&group);
+    for grp in &groups {
+        if !NCBI_LIBRARY.contains(&grp.as_str()) {
+            return Err(format!("group not in ncbi library"));
+        }
+    }
+    Ok(group.to_string())
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum Site {
+    /// 下载 genbank 资源
+    Genbank,
+    /// 下载 refseq 资源
+    Refseq,
+}
+
+impl fmt::Display for Site {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Site::Genbank => "genbank",
+                Site::Refseq => "refseq",
+            }
+        )
+    }
+}
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -13,9 +50,8 @@ use tokio::runtime::Builder;
     long_about = "从 ncbi 网站上下载 genomes 资源"
 )]
 struct Args {
-    /// 列出 NCBI 站点上的种类列表信息，实时拉取
-    #[arg(short, long)]
-    list: bool,
+    #[arg(value_enum)]
+    site: Site,
 
     /// 构建数据库的目录
     #[arg(short, long, default_value = "lib")]
@@ -26,7 +62,7 @@ struct Args {
     taxonomy: bool,
 
     /// 从 NCBI 站点上下载某个种类的数据信息，必须是列表中所列名称，archaea,bacteria,fungi...
-    #[arg(short, long)]
+    #[arg(short, long, value_parser = validate_group)]
     group: Option<String>,
     /// 仅检查文件的 md5
     #[arg(short, long, default_value = "false")]
@@ -41,15 +77,27 @@ async fn async_run(args: Args) -> Result<()> {
     let db_path = utils::create_data_dir(&args.database).unwrap();
     init_meta(&db_path).await;
 
+    let site = args.site.to_string();
+
     if let Some(group_arg) = args.group {
         let groups = utils::parse_comma_separated_list(&group_arg);
         for group in groups {
-            let data_dir: PathBuf = db_path.join(group.clone());
-            utils::create_dir(&data_dir)?;
-            if args.md5 {
-                let _ = task::run_check(&group, &data_dir, args.num_threads).await;
+            let data_dir: PathBuf = db_path.join("library").join(group.clone());
+            utils::create_dir(&data_dir.join(&site))?;
+
+            let trans_group = if &group == "human" {
+                "vertebrate_mammalian/Homo_sapiens".to_string()
             } else {
-                let _ = task::run_task(&group, &data_dir, args.num_threads).await;
+                group.to_string()
+            };
+
+            let result = if args.md5 {
+                task::run_check(&site, &trans_group, &data_dir, args.num_threads).await
+            } else {
+                task::run_task(&site, &trans_group, &data_dir, args.num_threads).await
+            };
+            if result.is_ok() {
+                let _ = write_to_fna(&site, &data_dir).await;
             }
         }
     }
