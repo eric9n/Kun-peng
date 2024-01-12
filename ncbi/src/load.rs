@@ -1,4 +1,5 @@
 use crate::down::retry_download;
+use crate::fna::decompress_and_extract_tar_gz;
 use crate::md5sum::check_md5sum_file;
 use crate::meta::get_local_etag;
 use crate::meta::insert_local_etag;
@@ -66,21 +67,23 @@ impl NcbiFile {
         ))
     }
 
-    pub async fn new_taxo(taxo_dir: &PathBuf) -> Vec<Self> {
-        let mut down_tasks = vec![];
-        let files = [
-            "taxdump.tar.gz",
-            "accession2taxid/nucl_gb.accession2taxid.gz",
-            "accession2taxid/nucl_wgs.accession2taxid.gz",
-        ];
-        for url_path in files.iter() {
-            let taxo = DownTuple::new_taxo(url_path.to_string(), taxo_dir).await;
-            let md5_file = format!("{}.md5", url_path);
-            let taxo_md5 = DownTuple::new_taxo(md5_file, taxo_dir).await;
+    pub async fn new_taxo(taxo_dir: &PathBuf, url_path: &str) -> Self {
+        let taxo = DownTuple::new_taxo(url_path.to_string(), taxo_dir).await;
+        let md5_file = format!("{}.md5", url_path);
+        let taxo_md5 = DownTuple::new_taxo(md5_file, taxo_dir).await;
 
-            down_tasks.push(NcbiFile::Taxonomy(taxo, taxo_md5));
+        NcbiFile::Taxonomy(taxo, taxo_md5)
+    }
+
+    pub async fn decompress(&self, data_dir: &PathBuf) -> Result<()> {
+        match self {
+            NcbiFile::Summary(_) => {}
+            NcbiFile::Genomic(_, _) => {}
+            NcbiFile::Taxonomy(dt1, _) => {
+                let _ = decompress_and_extract_tar_gz(&dt1.file, &data_dir).await;
+            }
         }
-        down_tasks
+        Ok(())
     }
 
     pub async fn run(&self) -> Result<()> {

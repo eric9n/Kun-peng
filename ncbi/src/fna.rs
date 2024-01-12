@@ -4,11 +4,37 @@ use std::collections::HashMap;
 use tokio::fs::OpenOptions;
 use tokio::{
     fs::File,
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
 };
 
 use anyhow::Result;
 use std::path::PathBuf;
+use tar::Archive;
+
+pub async fn decompress_and_extract_tar_gz(
+    gz_path: &PathBuf,
+    out_path: &PathBuf,
+) -> std::io::Result<()> {
+    // Open the .tar.gz file
+    let file = File::open(gz_path).await?;
+    let buf_reader = BufReader::new(file);
+
+    // Use GzipDecoder for decompression
+    let gzip_decoder = GzipDecoder::new(buf_reader);
+
+    // Create an async reader
+    let mut async_reader = BufReader::new(gzip_decoder);
+
+    // Read all decompressed data into memory
+    let mut decompressed_data = Vec::new();
+    async_reader.read_to_end(&mut decompressed_data).await?; // Works after importing AsyncReadExt
+
+    // Use the tar crate to decompress the TAR archive
+    let mut archive = Archive::new(&decompressed_data[..]);
+    archive.unpack(out_path)?;
+
+    Ok(())
+}
 
 pub async fn parse_assembly_fna(site: &str, data_dir: &PathBuf) -> Result<HashMap<String, String>> {
     let mut gz_files: HashMap<String, String> = HashMap::new();
@@ -45,8 +71,8 @@ pub async fn write_to_fna(site: &str, group: &str, data_dir: &PathBuf) -> Result
     log::info!("{} {} write to fna...", group, site);
 
     let gz_files = parse_assembly_fna(site, data_dir).await?;
-    let library_fna_path = data_dir.join(format!("library_{}.fna", &site));
-    let prelim_map_path = data_dir.join(format!("prelim_map_{}.txt", &site));
+    let library_fna_path = data_dir.join("library.fna");
+    let prelim_map_path = data_dir.join("prelim_map.txt");
 
     let mut fna_writer = BufWriter::new(
         OpenOptions::new()
@@ -75,11 +101,12 @@ pub async fn write_to_fna(site: &str, group: &str, data_dir: &PathBuf) -> Result
         while reader.read_line(&mut line).await? != 0 {
             if let Some(caps) = re.captures(&line) {
                 let seqid = &caps[1];
+                let full_tax_id = format!("kraken:taxid|{}", taxid);
                 map_writer
-                    .write_all(format!("{}\t{}\n", seqid, taxid).as_bytes())
+                    .write_all(format!("TAXID\t{}|{}\t{}\n", full_tax_id, seqid, taxid).as_bytes())
                     .await?;
                 fna_writer
-                    .write_all(format!(">kraken:taxid|{}|{}", taxid, &line[1..]).as_bytes())
+                    .write_all(format!(">{}|{}", full_tax_id, &line[1..]).as_bytes())
                     .await?;
             } else {
                 fna_writer.write_all(line.as_bytes()).await?;
