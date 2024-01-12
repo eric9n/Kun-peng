@@ -41,8 +41,8 @@ pub async fn parse_assembly_fna(site: &str, data_dir: &PathBuf) -> Result<HashMa
     Ok(gz_files)
 }
 
-pub async fn write_to_fna(site: &str, data_dir: &PathBuf) -> Result<()> {
-    log::info!("write to fna...");
+pub async fn write_to_fna(site: &str, group: &str, data_dir: &PathBuf) -> Result<()> {
+    log::info!("{} {} write to fna...", group, site);
 
     let gz_files = parse_assembly_fna(site, data_dir).await?;
     let library_fna_path = data_dir.join(format!("library_{}.fna", &site));
@@ -91,6 +91,6 @@ pub async fn write_to_fna(site: &str, data_dir: &PathBuf) -> Result<()> {
     fna_writer.flush().await?;
     map_writer.flush().await?;
 
-    log::info!("write to fna finished");
+    log::info!("{} {} write to fna finished", group, site);
     Ok(())
 }

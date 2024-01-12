@@ -15,3 +15,4 @@ Cargo.lock
 .metadata
 .DS_Store
 lib/
+slurm.sh

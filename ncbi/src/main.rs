@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use ncbi::fna::write_to_fna;
 use ncbi::meta::{init_meta, save_meta};
 use ncbi::task;
@@ -43,6 +43,14 @@ impl fmt::Display for Site {
     }
 }
 
+#[derive(Subcommand, Debug)]
+enum Mode {
+    /// 仅检查文件的 md5
+    Md5,
+    /// 解析 genomic 文件，并且生成 library fna 文件
+    Fna,
+}
+
 #[derive(Parser, Debug)]
 #[clap(
     version,
@@ -50,62 +58,81 @@ impl fmt::Display for Site {
     long_about = "从 ncbi 网站上下载 genomes 资源"
 )]
 struct Args {
-    #[arg(value_enum)]
-    site: Site,
-
     /// 构建数据库的目录
     #[arg(short, long, default_value = "lib")]
     database: PathBuf,
 
-    /// 下载 taxonomy 文件
-    #[arg(short, long, default_value = "false")]
-    taxonomy: bool,
-
-    /// 从 NCBI 站点上下载某个种类的数据信息，必须是列表中所列名称，archaea,bacteria,fungi...
-    #[arg(short, long, value_parser = validate_group)]
-    group: Option<String>,
-    /// 仅检查文件的 md5
-    #[arg(short, long, default_value = "false")]
-    md5: bool,
-
     /// 下载时的并行大小
     #[arg(short, long, default_value = "8")]
     num_threads: usize,
+
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// 从 NCBI 下载 taxonomy 文件 (alias: tax)
+    #[command(alias = "tax")]
+    Taxonomy,
+
+    /// 从 NCBI 下载 genomes 数据 (alias: gen)
+    #[command(alias = "gen")]
+    Genomes {
+        /// 从 NCBI 哪个站点目录下载（RefSeq或GenBank）
+        #[arg(long, value_enum, default_value_t = Site::Refseq)]
+        site: Site,
+
+        /// 从 NCBI 站点上下载某个种类的数据信息，可以是逗号分隔的多个, archaea,bacteria,viral,fungi,plant,human,protozoa
+        #[arg(short, long, value_parser = validate_group)]
+        group: String,
+
+        /// 子命令，使用 md5 校验和生成 fna 文件
+        #[command(subcommand)]
+        mode: Option<Mode>,
+    },
 }
 
 async fn async_run(args: Args) -> Result<()> {
     let db_path = utils::create_data_dir(&args.database).unwrap();
     init_meta(&db_path).await;
 
-    let site = args.site.to_string();
+    match args.command {
+        Commands::Taxonomy => {
+            let data_dir: PathBuf = db_path.join("taxonomy");
+            utils::create_dir(&data_dir)?;
+            let _ = task::run_taxo(&data_dir).await;
+        }
+        Commands::Genomes { site, group, mode } => {
+            let site = site.to_string();
+            let groups = utils::parse_comma_separated_list(&group);
+            for grp in groups {
+                let data_dir: PathBuf = db_path.join("library").join(grp.clone());
+                utils::create_dir(&data_dir.join(&site))?;
 
-    if let Some(group_arg) = args.group {
-        let groups = utils::parse_comma_separated_list(&group_arg);
-        for group in groups {
-            let data_dir: PathBuf = db_path.join("library").join(group.clone());
-            utils::create_dir(&data_dir.join(&site))?;
+                let trans_group = if &grp == "human" {
+                    "vertebrate_mammalian/Homo_sapiens".to_string()
+                } else {
+                    grp.to_string()
+                };
 
-            let trans_group = if &group == "human" {
-                "vertebrate_mammalian/Homo_sapiens".to_string()
-            } else {
-                group.to_string()
-            };
-
-            let result = if args.md5 {
-                task::run_check(&site, &trans_group, &data_dir, args.num_threads).await
-            } else {
-                task::run_task(&site, &trans_group, &data_dir, args.num_threads).await
-            };
-            if result.is_ok() {
-                let _ = write_to_fna(&site, &data_dir).await;
+                match &mode {
+                    Some(Mode::Md5) => {
+                        let _ =
+                            task::run_check(&site, &trans_group, &data_dir, args.num_threads).await;
+                    }
+                    Some(Mode::Fna) => {
+                        let _ = write_to_fna(&site, &trans_group, &data_dir).await;
+                    }
+                    None => {
+                        let _ =
+                            task::run_task(&site, &trans_group, &data_dir, args.num_threads).await;
+                    }
+                }
             }
         }
     }
-    if args.taxonomy {
-        let data_dir: PathBuf = db_path.join("taxonomy");
-        utils::create_dir(&data_dir)?;
-        let _ = task::run_taxo(&data_dir).await;
-    }
+
     save_meta(&db_path).await?;
     Ok(())
 }
