@@ -58,18 +58,24 @@ async fn process_assembly_tasks(
     site: &str,
     group: &str,
     data_dir: &PathBuf,
-    tx: mpsc::Sender<NcbiFile>, // 发送端用于发送 `parse_assembly_file` 的结果
+    tx: mpsc::Sender<NcbiFile>,
 ) -> Result<usize> {
     let counter = Arc::new(AtomicUsize::new(0));
     let assembly = NcbiFile::from_group(group, data_dir, site).await;
-    let counter_clone = counter.clone();
     match assembly.run().await {
         Ok(_) => {
-            if let Err(e) = assembly
-                .parse_assembly_file(site, &data_dir, tx, counter_clone)
-                .await
-            {
-                log::error!("Error parsing assembly file: {}", e);
+            let result = assembly
+                .process_summary_and_apply(site, data_dir, |file: NcbiFile| {
+                    let tx_clone = tx.clone();
+                    let counter_clone = counter.clone();
+                    async move {
+                        let _ = tx_clone.send(file).await;
+                        counter_clone.fetch_add(1, Ordering::SeqCst);
+                    }
+                })
+                .await;
+            if result.is_err() {
+                log::error!("Error parsing assembly file: {:?}", result);
             }
         }
         Err(e) => {
@@ -143,5 +149,40 @@ pub async fn run_taxo(taxo_dir: &PathBuf) -> Result<()> {
         }
     }
     log::info!("download taxonomy finished...");
+    Ok(())
+}
+
+pub async fn run_assembly(site: &str, group: &str, data_dir: &PathBuf) -> Result<()> {
+    let assembly = NcbiFile::from_group(group, data_dir, site).await;
+    if !assembly.file_exists() {
+        let _ = assembly.run().await;
+    }
+    let total_counter = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::new(AtomicUsize::new(0));
+    let result = assembly
+        .process_summary_and_apply(site, data_dir, |file: NcbiFile| {
+            let counter_clone = counter.clone();
+            let total_counter_clone = total_counter.clone();
+            async move {
+                total_counter_clone.fetch_add(1, Ordering::SeqCst);
+                if file.file_exists() {
+                    counter_clone.fetch_add(1, Ordering::SeqCst);
+                }
+            }
+        })
+        .await;
+    if result.is_err() {
+        log::error!("Error parsing assembly file: {:?}", result);
+    }
+
+    let total_count = total_counter.load(Ordering::SeqCst);
+    let count = counter.load(Ordering::SeqCst);
+    log::info!(
+        "{} {} 总文件数: {}, 本地文件数: {}",
+        group,
+        site,
+        total_count,
+        count
+    );
     Ok(())
 }

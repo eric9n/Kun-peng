@@ -49,6 +49,8 @@ enum Mode {
     Md5,
     /// 解析 genomic 文件，并且生成 library fna 文件
     Fna,
+    /// 仅下载和解析 assembly 文件
+    Assembly,
 }
 
 #[derive(Parser, Debug)]
@@ -123,6 +125,9 @@ async fn async_run(args: Args) -> Result<()> {
                     }
                     Some(Mode::Fna) => {
                         let _ = write_to_fna(&site, &trans_group, &data_dir).await;
+                    }
+                    Some(Mode::Assembly) => {
+                        let _ = task::run_assembly(&site, &trans_group, &data_dir).await;
                     }
                     None => {
                         let _ =
