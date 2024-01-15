@@ -122,14 +122,24 @@ impl NcbiFile {
             NcbiFile::Genomic(dt1, dt2) => {
                 let result = check_md5sum_file(&dt1.file, &dt2.file).await?;
                 if !result {
-                    return Err(anyhow::anyhow!("mismatch"));
+                    return Err(anyhow::anyhow!(
+                        "{:?} {:?} {:?} mismatch",
+                        dt1.url,
+                        dt1.file,
+                        dt2.file
+                    ));
                 }
                 Ok(())
             }
             NcbiFile::Taxonomy(dt1, dt2) => {
                 let result = check_md5sum_file(&dt1.file, &dt2.file).await?;
                 if !result {
-                    return Err(anyhow::anyhow!("mismatch"));
+                    return Err(anyhow::anyhow!(
+                        "{:?} {:?} {:?} mismatch",
+                        dt1.url,
+                        dt1.file,
+                        dt2.file
+                    ));
                 }
                 Ok(())
             }
