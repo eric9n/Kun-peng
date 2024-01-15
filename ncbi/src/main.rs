@@ -51,6 +51,11 @@ enum Mode {
     Fna,
     /// 仅下载和解析 assembly 文件
     Assembly,
+    /// 单独下载 genomic 文件，指定 url 地址
+    Url {
+        #[clap(value_parser)]
+        url: String,
+    },
 }
 
 #[derive(Parser, Debug)]
@@ -128,6 +133,12 @@ async fn async_run(args: Args) -> Result<()> {
                     }
                     Some(Mode::Assembly) => {
                         let _ = task::run_assembly(&site, &trans_group, &data_dir).await;
+                    }
+                    Some(Mode::Url { url }) => {
+                        let result = task::run_download_file(&site, &data_dir, &url).await;
+                        if result.is_err() {
+                            log::error!("下载文件失败... {:?}", result);
+                        }
                     }
                     None => {
                         let _ =

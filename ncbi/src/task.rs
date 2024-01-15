@@ -152,6 +152,16 @@ pub async fn run_taxo(taxo_dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
+pub async fn run_download_file(site: &str, data_dir: &PathBuf, fna_url: &str) -> Result<()> {
+    let ncbi_file = NcbiFile::from_file(site, data_dir, fna_url).await;
+    log::info!("开始下载...");
+    ncbi_file.clear().await;
+    ncbi_file.run().await?;
+    ncbi_file.check().await?;
+    log::info!("下载文件完成 {}", fna_url);
+    Ok(())
+}
+
 pub async fn run_assembly(site: &str, group: &str, data_dir: &PathBuf) -> Result<()> {
     let assembly = NcbiFile::from_group(group, data_dir, site).await;
     if !assembly.file_exists() {

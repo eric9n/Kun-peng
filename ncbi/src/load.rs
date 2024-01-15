@@ -6,7 +6,7 @@ use crate::meta::insert_local_etag;
 use anyhow::{anyhow, Result};
 use futures::Future;
 use std::path::PathBuf;
-use tokio::fs::File;
+use tokio::fs::{remove_file, File};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 pub const NCBI_GEN_URL: &'static str = "https://ftp.ncbi.nlm.nih.gov/genomes/";
@@ -40,6 +40,10 @@ impl DownTuple {
         self.file.exists()
     }
 
+    pub async fn clear(&self) {
+        let _ = remove_file(&self.file).await;
+    }
+
     pub async fn run(&self) -> Result<()> {
         let result = retry_download(&self.url, &self.file, &self.etag, 3).await?;
         if result != self.etag {
@@ -69,6 +73,21 @@ impl NcbiFile {
         ))
     }
 
+    pub async fn from_file(site: &str, data_dir: &PathBuf, fna_url: &str) -> Self {
+        let fna_file_name = fna_url.split("/").last().unwrap_or_default();
+        let ftp_path = fna_url.trim_end_matches(fna_file_name);
+        let fna_file = data_dir.join(site).join(&fna_file_name);
+        let fna_etag = get_local_etag(&fna_url).await.unwrap_or_default();
+        let genomic_dt = DownTuple::new(fna_url.to_string(), fna_file, fna_etag);
+        let md5_url = format!("{}/md5checksums.txt", ftp_path);
+        let md5_file = data_dir
+            .join(site)
+            .join(format!("{}_md5checksums.txt", &fna_file_name));
+        let md5_etag = get_local_etag(&md5_url).await.unwrap_or_default();
+        let md5_dt = DownTuple::new(md5_url, md5_file, md5_etag);
+        NcbiFile::Genomic(genomic_dt, md5_dt)
+    }
+
     pub async fn new_taxo(taxo_dir: &PathBuf, url_path: &str) -> Self {
         let taxo = DownTuple::new_taxo(url_path.to_string(), taxo_dir).await;
         let md5_file = format!("{}.md5", url_path);
@@ -93,6 +112,20 @@ impl NcbiFile {
             NcbiFile::Summary(s) => s.file_exists(),
             NcbiFile::Genomic(dt1, dt2) => dt1.file_exists() && dt2.file_exists(),
             NcbiFile::Taxonomy(dt1, dt2) => dt1.file_exists() && dt2.file_exists(),
+        }
+    }
+
+    pub async fn clear(&self) {
+        match self {
+            NcbiFile::Summary(s) => s.clear().await,
+            NcbiFile::Genomic(dt1, dt2) => {
+                dt1.clear().await;
+                dt2.clear().await;
+            }
+            NcbiFile::Taxonomy(dt1, dt2) => {
+                dt1.clear().await;
+                dt2.clear().await;
+            }
         }
     }
 
