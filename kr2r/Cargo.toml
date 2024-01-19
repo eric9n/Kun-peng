@@ -1,0 +1,22 @@
+[package]
+name = "kr2r"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["dna"]
+dna = []
+protein = []
+
+
+[dependencies]
+
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "kr2r_benchmark"
+harness = false
