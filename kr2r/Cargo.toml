@@ -20,9 +20,8 @@ protein = []
 clap = { version = "4.4.10", features = ["derive"] }
 seq_io = "0.3.2"
 hyperloglogplus = { version = "*", features = ["const-loop"] }
-# mur3 = "0.1.0"
 walkdir = "2"
-
+rayon = "1.8"
 
 [dev-dependencies]
 criterion = "0.5.1"

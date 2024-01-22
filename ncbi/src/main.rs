@@ -133,7 +133,7 @@ async fn async_run(args: Args) -> Result<()> {
                             task::run_check(&site, &trans_group, &data_dir, args.num_threads).await;
                     }
                     Some(Mode::Fna { out_dir }) => {
-                        let fna_out_dir = out_dir.join(grp.clone());
+                        let fna_out_dir = out_dir.join("library").join(grp.clone());
                         utils::create_dir(&fna_out_dir)?;
                         let _ = write_to_fna(&site, &trans_group, &data_dir, &fna_out_dir).await;
                     }

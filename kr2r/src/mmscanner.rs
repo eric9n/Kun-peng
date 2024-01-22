@@ -138,7 +138,6 @@ impl MinimizerWindow {
         if self.capacity == 1 {
             return Some(item);
         }
-
         match self.cur_minimizer {
             Some(mizer) if mizer < item => self.queue.push(item),
             _ => self.set_minimizer(Some(item)),

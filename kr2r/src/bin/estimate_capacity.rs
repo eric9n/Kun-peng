@@ -70,17 +70,21 @@ fn main() {
 
     let hllp = Arc::new(Mutex::new(hllp));
     let counter = Arc::new(AtomicUsize::new(0)); // 初始化原子计数器
+    let seq_counter = Arc::new(AtomicUsize::new(0)); // 初始化原子计数器
 
     for fna_file in fna_files {
         println!("fna_file {:?}", fna_file);
         let reader = Reader::from_path(fna_file).unwrap();
-        let counter_clone = counter.clone();
+
         read_parallel(
             reader,
             args.threads as u32,
-            8,
+            args.threads as usize,
             |record_set| {
+                let mut count = 0;
+                let mut seq_count = 0;
                 for record in record_set.into_iter() {
+                    seq_count += 1;
                     let k_mer = args.k_mer as usize;
                     let l_mer = args.l_mer as usize;
                     let mut scranner =
@@ -92,11 +96,17 @@ fn main() {
                     while let Some(minimizer) = scranner.next_minimizer() {
                         let mut hllp_clone = hllp.lock().unwrap();
                         hllp_clone.insert(&minimizer);
-                        counter_clone.fetch_add(1, Ordering::SeqCst); // 递增计数器
+                        count += 1;
                     }
                 }
+                (seq_count, count)
             },
-            |_| {},
+            |record_sets| {
+                while let Some(Ok((_, (seq_count, count)))) = record_sets.next() {
+                    seq_counter.fetch_add(seq_count, Ordering::SeqCst);
+                    counter.fetch_add(count, Ordering::SeqCst);
+                }
+            },
         );
     }
 
@@ -106,4 +116,5 @@ fn main() {
     let hllp_count = hllp_clone.count();
     println!("Final count: {:?}", final_count);
     println!("HLLP count: {:?}", hllp_count);
+    println!("seq count {:?}", seq_counter.load(Ordering::SeqCst));
 }
