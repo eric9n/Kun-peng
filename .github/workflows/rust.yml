@@ -10,6 +10,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   BINARIES_LIST: 'ncbi estimate_capacity'
+  PROJECT_PREFIX: 'kraken_rust_'
 
 jobs:
   build-and-release:
@@ -59,7 +60,7 @@ jobs:
       - name: Prepare asset name
         run: |
           PLATFORM_TAG=$(echo ${{ matrix.platform }} | sed -e 's/-latest//' -e 's/ubuntu-20.04/linux-x86_64/' -e 's/macos/macos-x86_64/' -e 's/windows/windows-x86_64/')
-          echo "ASSET_NAME=${PLATFORM_TAG}.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_NAME=${PROJECT_PREFIX}${PLATFORM_TAG}.tar.gz" >> $GITHUB_ENV
         shell: bash
 
       - name: Create tar.gz archive
@@ -93,7 +94,7 @@ jobs:
             docker cp centos7-container:/github/workspace/target/release/$binary ./target/release/packaged_centos7/
           done
 
-          tar czvf ./kraken_rust_centos7.tar.gz -C ./target/release/packaged_centos7 .
+          tar czvf ./${PROJECT_PREFIX}centos7.tar.gz -C ./target/release/packaged_centos7 .
 
           docker rm centos7-container
 
@@ -101,7 +102,7 @@ jobs:
         if: matrix.platform == 'ubuntu-20.04'
         run: |
           gh release upload ${{ github.ref_name }} \
-            ./kraken_rust_centos7.tar.gz \
+            ./${PROJECT_PREFIX}centos7.tar.gz \
             --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

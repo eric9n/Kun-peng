@@ -15,4 +15,5 @@ Cargo.lock
 .metadata
 .DS_Store
 lib/
+out_dir/
 slurm.sh

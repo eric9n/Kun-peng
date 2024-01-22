@@ -48,7 +48,11 @@ enum Mode {
     /// 仅检查文件的 md5
     Md5,
     /// 解析 genomic 文件，并且生成 library fna 文件
-    Fna,
+    Fna {
+        /// library fna 文件存储目录，为了不和原始文件混淆
+        #[clap(value_parser)]
+        out_dir: PathBuf,
+    },
     /// 仅下载和解析 assembly 文件
     Assembly,
     /// 单独下载 genomic 文件，指定 url 地址
@@ -128,8 +132,10 @@ async fn async_run(args: Args) -> Result<()> {
                         let _ =
                             task::run_check(&site, &trans_group, &data_dir, args.num_threads).await;
                     }
-                    Some(Mode::Fna) => {
-                        let _ = write_to_fna(&site, &trans_group, &data_dir).await;
+                    Some(Mode::Fna { out_dir }) => {
+                        let fna_out_dir = out_dir.join(grp.clone());
+                        utils::create_dir(&fna_out_dir)?;
+                        let _ = write_to_fna(&site, &trans_group, &data_dir, &fna_out_dir).await;
                     }
                     Some(Mode::Assembly) => {
                         let _ = task::run_assembly(&site, &trans_group, &data_dir).await;
