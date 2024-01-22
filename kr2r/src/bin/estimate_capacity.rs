@@ -77,8 +77,8 @@ fn main() {
         let counter_clone = counter.clone();
         read_parallel(
             reader,
-            4,
-            2,
+            args.threads as u32,
+            8,
             |record_set| {
                 for record in record_set.into_iter() {
                     let k_mer = args.k_mer as usize;
