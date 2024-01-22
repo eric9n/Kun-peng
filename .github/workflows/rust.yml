@@ -9,6 +9,7 @@ on:
 # On each push to the `release` branch it will create or update a GitHub release, build your app, and upload the artifacts to the release.
 env:
   CARGO_TERM_COLOR: always
+  BINARIES_LIST: 'ncbi estimate_capacity'
 
 jobs:
   build-and-release:
@@ -56,10 +57,18 @@ jobs:
       #   shell: bash
 
       - name: Prepare asset name
-        id: prep
         run: |
           PLATFORM_TAG=$(echo ${{ matrix.platform }} | sed -e 's/-latest//' -e 's/ubuntu-20.04/linux-x86_64/' -e 's/macos/macos-x86_64/' -e 's/windows/windows-x86_64/')
-          echo "ASSET_NAME=ncbi-$PLATFORM_TAG$(if [ ${{ runner.os }} = 'Windows' ]; then echo '.exe'; fi)" >> $GITHUB_ENV
+          echo "ASSET_NAME=${PLATFORM_TAG}.tar.gz" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Create tar.gz archive
+        run: |
+          mkdir -p ./target/release/packaged
+          for binary in ${{ env.BINARIES_LIST }}; do
+            cp "./target/release/$binary" "./target/release/packaged/"
+          done
+          tar czvf "./target/release/${{ env.ASSET_NAME }}" -C "./target/release/packaged/" .
         shell: bash
 
       - name: Upload Release Asset
@@ -79,14 +88,20 @@ jobs:
           docker run --name centos7-container -v $GITHUB_WORKSPACE:/github/workspace -w /github/workspace centos:7 \
           /bin/bash -c "yum update -y && yum install -y gcc make openssl openssl-devel && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && export PATH=\$HOME/.cargo/bin:\$PATH && cd /github/workspace && cargo build --release"
 
-          docker cp centos7-container:/github/workspace/target/release/ncbi ./ncbi-centos7
+          mkdir -p ./target/release/packaged_centos7
+          for binary in $BINARIES_LIST; do
+            docker cp centos7-container:/github/workspace/target/release/$binary ./target/release/packaged_centos7/
+          done
+
+          tar czvf ./kraken_rust_centos7.tar.gz -C ./target/release/packaged_centos7 .
+
           docker rm centos7-container
 
       - name: Upload Release Asset for CentOS 7
         if: matrix.platform == 'ubuntu-20.04'
         run: |
           gh release upload ${{ github.ref_name }} \
-            ./ncbi-centos7 \
+            ./kraken_rust_centos7.tar.gz \
             --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

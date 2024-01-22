@@ -66,7 +66,7 @@ enum Mode {
 )]
 struct Args {
     /// 构建数据库的目录
-    #[arg(short, long, default_value = "lib")]
+    #[arg(short, long = "db", default_value = "lib")]
     database: PathBuf,
 
     /// 下载时的并行大小

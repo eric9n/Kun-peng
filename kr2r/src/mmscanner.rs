@@ -1,11 +1,11 @@
-const DEFAULT_TOGGLE_MASK: u64 = 0xe37e28c4271b5a2d;
-const DEFAULT_SPACED_SEED_MASK: u64 = 0;
-const CURRENT_REVCOM_VERSION: u8 = 1;
+pub const DEFAULT_TOGGLE_MASK: u64 = 0xe37e28c4271b5a2d;
+pub const DEFAULT_SPACED_SEED_MASK: u64 = 0;
+pub const CURRENT_REVCOM_VERSION: u8 = 1;
 
 #[cfg(feature = "dna")]
-const BITS_PER_CHAR: usize = 2;
+pub const BITS_PER_CHAR: usize = 2;
 #[cfg(feature = "protein")]
-const BITS_PER_CHAR: usize = 4;
+pub const BITS_PER_CHAR: usize = 4;
 
 #[inline]
 fn reverse_complement(mut kmer: u64, n: usize, revcom_version: u8) -> u64 {

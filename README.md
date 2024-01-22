@@ -47,3 +47,10 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ```
+
+
+
+## Bloom Filter
+
+布隆过滤器是一种空间效率高的概率数据结构，用于测试一个元素是否在一个集合中。
+这个或许可以用来先判断 hash_value 是否存在于 hash_table 中。过滤掉 60% 左右无效的 reads。

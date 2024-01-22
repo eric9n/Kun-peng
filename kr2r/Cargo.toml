@@ -5,6 +5,11 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "estimate_capacity"
+path = "src/bin/estimate_capacity.rs"
+
+
 [features]
 default = ["dna"]
 dna = []
@@ -12,6 +17,11 @@ protein = []
 
 
 [dependencies]
+clap = { version = "4.4.10", features = ["derive"] }
+seq_io = "0.3.2"
+hyperloglogplus = { version = "*", features = ["const-loop"] }
+# mur3 = "0.1.0"
+walkdir = "2"
 
 
 [dev-dependencies]
