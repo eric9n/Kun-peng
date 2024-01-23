@@ -5,6 +5,7 @@ use kr2r::utils::{expand_spaced_seed_mask, find_library_fna_files};
 use kr2r::KBuildHasher;
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -70,40 +71,43 @@ fn main() {
 
     let hllp = Arc::new(Mutex::new(hllp));
     let counter = Arc::new(AtomicUsize::new(0)); // 初始化原子计数器
-    let seq_counter = Arc::new(AtomicUsize::new(0)); // 初始化原子计数器
 
     for fna_file in fna_files {
         println!("fna_file {:?}", fna_file);
         let reader = Reader::from_path(fna_file).unwrap();
+        let k_mer = args.k_mer as usize;
+        let l_mer = args.l_mer as usize;
 
         read_parallel(
             reader,
             args.threads as u32,
-            args.threads as usize,
+            args.threads / 2 as usize,
             |record_set| {
                 let mut count = 0;
-                let mut seq_count = 0;
-                for record in record_set.into_iter() {
-                    seq_count += 1;
-                    let k_mer = args.k_mer as usize;
-                    let l_mer = args.l_mer as usize;
-                    let mut scranner =
-                        MinimizerScanner::default(record.seq().to_vec(), k_mer, l_mer);
-                    scranner.set_spaced_seed_mask(args.spaced_seed_mask);
-                    if let Some(toggle_mask) = args.toggle_mask {
-                        scranner.set_toggle_mask(toggle_mask);
-                    }
-                    while let Some(minimizer) = scranner.next_minimizer() {
-                        let mut hllp_clone = hllp.lock().unwrap();
-                        hllp_clone.insert(&minimizer);
-                        count += 1;
-                    }
+                let mut scanner = MinimizerScanner::default(k_mer, l_mer);
+                scanner.set_spaced_seed_mask(args.spaced_seed_mask);
+                if let Some(toggle_mask) = args.toggle_mask {
+                    scanner.set_toggle_mask(toggle_mask);
                 }
-                (seq_count, count)
+                let mut minimizer_set = HashSet::new();
+                for record in record_set.into_iter() {
+                    let seq = record.seq();
+                    scanner.set_seq_end(seq);
+                    while let Some(minimizer) = scanner.next_minimizer(seq) {
+                        count += 1;
+                        minimizer_set.insert(minimizer);
+                    }
+                    scanner.reset();
+                }
+                (minimizer_set, count)
             },
             |record_sets| {
-                while let Some(Ok((_, (seq_count, count)))) = record_sets.next() {
-                    seq_counter.fetch_add(seq_count, Ordering::SeqCst);
+                while let Some(Ok((_, (m_set, count)))) = record_sets.next() {
+                    let mut hllp_clone = hllp.lock().unwrap();
+                    for minimizer in m_set {
+                        hllp_clone.insert(&minimizer);
+                    }
+
                     counter.fetch_add(count, Ordering::SeqCst);
                 }
             },
@@ -116,5 +120,4 @@ fn main() {
     let hllp_count = hllp_clone.count();
     println!("Final count: {:?}", final_count);
     println!("HLLP count: {:?}", hllp_count);
-    println!("seq count {:?}", seq_counter.load(Ordering::SeqCst));
 }

@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 pub const DEFAULT_TOGGLE_MASK: u64 = 0xe37e28c4271b5a2d;
 pub const DEFAULT_SPACED_SEED_MASK: u64 = 0;
 pub const CURRENT_REVCOM_VERSION: u8 = 1;
@@ -104,67 +106,142 @@ fn char_to_value(c: u8) -> Option<64> {
     }
 }
 
-pub struct MinimizerWindow {
-    queue: Vec<u64>,
-    /// 当前窗口计数
-    count: usize,
-    /// 窗口队列的大小
-    capacity: usize,
-    /// 当前最小值
-    cur_minimizer: Option<u64>,
+#[derive(Debug)]
+struct MinimizerData {
+    pos: usize,
+    candidate_lmer: u64,
 }
 
-impl MinimizerWindow {
-    fn new(k_mer: usize, l_mer: usize) -> Self {
-        let capacity: usize = k_mer - l_mer + 1;
+impl MinimizerData {
+    fn new(candidate_lmer: u64, pos: usize) -> Self {
         Self {
-            queue: Vec::with_capacity(capacity),
+            candidate_lmer,
+            pos,
+        }
+    }
+}
+
+pub struct LMerWindow {
+    queue: VecDeque<MinimizerData>,
+    /// 窗口队列的大小
+    capacity: usize,
+    /// 队列计数
+    count: usize,
+}
+
+impl LMerWindow {
+    fn new(k_mer: usize, l_mer: usize) -> Self {
+        let capacity: usize = k_mer - l_mer;
+        Self {
+            queue: VecDeque::with_capacity(capacity),
             capacity,
             count: 0,
-            cur_minimizer: None,
         }
     }
 
-    fn set_minimizer(&mut self, item: Option<u64>) {
-        self.cur_minimizer = item;
-        self.queue.clear();
-    }
-
-    // 3, 4, 2, 5, 1 k=3 => 2, 1
-    // 1, 2, 3, 4  k=2 => 1, 2, 3
     #[inline]
-    fn next_candidate_lmer(&mut self, item: u64) -> Option<u64> {
+    fn next(&mut self, candidate_lmer: u64) -> Option<u64> {
         // 无需比较，直接返回
         if self.capacity == 1 {
-            return Some(item);
+            return Some(candidate_lmer);
         }
-        match self.cur_minimizer {
-            Some(mizer) if mizer < item => self.queue.push(item),
-            _ => self.set_minimizer(Some(item)),
+
+        let data = MinimizerData::new(candidate_lmer, self.count);
+
+        // 移除队列中所有比当前元素大的元素的索引
+        // 因为它们不可能是当前窗口的最小值
+        while let Some(m_data) = self.queue.back() {
+            if m_data.candidate_lmer > candidate_lmer {
+                self.queue.pop_back();
+            } else {
+                break;
+            }
+        }
+        // 将当前元素的索引添加到队列
+        self.queue.push_back(data);
+        // 确保队列的第一个元素在当前窗口内
+        if self.count < self.capacity {
+            self.count += 1;
+            return None;
+        } else if self
+            .queue
+            .front()
+            .map_or(false, |front| front.pos < self.count - self.capacity)
+        {
+            self.queue.pop_front();
         }
 
         self.count += 1;
-        if self.count >= self.capacity {
-            self.count = 0;
-            let cur = self.cur_minimizer;
-            self.set_minimizer(self.queue.iter().min().copied());
-            cur
-        } else {
-            None
-        }
-    }
-
-    fn get_last_minimizer(&mut self) -> Option<u64> {
-        self.cur_minimizer
-            .or_else(|| self.queue.iter().min().copied())
+        self.queue.front().map(|front| front.candidate_lmer)
     }
 
     fn clear(&mut self) {
-        self.cur_minimizer = None;
         self.count = 0;
         self.queue.clear();
     }
 }
+
+// pub struct MinimizerWindow {
+//     queue: Vec<u64>,
+//     /// 当前窗口计数
+//     count: usize,
+//     /// 窗口队列的大小
+//     capacity: usize,
+//     /// 当前最小值
+//     cur_minimizer: Option<u64>,
+// }
+
+// impl MinimizerWindow {
+//     fn new(k_mer: usize, l_mer: usize) -> Self {
+//         let capacity: usize = k_mer - l_mer + 1;
+//         Self {
+//             queue: Vec::with_capacity(capacity),
+//             capacity,
+//             count: 0,
+//             cur_minimizer: None,
+//         }
+//     }
+
+//     fn set_minimizer(&mut self, item: Option<u64>) {
+//         self.cur_minimizer = item;
+//         self.queue.clear();
+//     }
+
+//     // 3, 4, 2, 5, 1 k=3 => 2, 1
+//     // 1, 2, 3, 4  k=2 => 1, 2, 3
+//     #[inline]
+//     fn next_candidate_lmer(&mut self, item: u64) -> Option<u64> {
+//         // 无需比较，直接返回
+//         if self.capacity == 1 {
+//             return Some(item);
+//         }
+//         match self.cur_minimizer {
+//             Some(mizer) if mizer < item => self.queue.push(item),
+//             _ => self.set_minimizer(Some(item)),
+//         }
+
+//         self.count += 1;
+//         if self.count >= self.capacity {
+//             self.count = 0;
+//             let cur = self.cur_minimizer;
+//             self.set_minimizer(self.queue.iter().min().copied());
+//             cur
+//         } else {
+//             None
+//         }
+//     }
+
+//     fn get_last_minimizer(&mut self) -> Option<u64> {
+//         self.cur_minimizer
+//             .or_else(|| self.queue.iter().min().copied())
+//     }
+
+//     fn clear(&mut self) {
+//         self.cur_minimizer = None;
+//         self.count = 0;
+//         self.queue.clear();
+//     }
+// }
 
 pub struct Cursor {
     pos: usize,
@@ -173,19 +250,19 @@ pub struct Cursor {
     capacity: usize,
     value: u64,
     mask: u64,
-    window: MinimizerWindow,
+    window: LMerWindow,
 }
 
 impl Cursor {
-    pub fn new(size: usize, k_mer: usize, l_mer: usize, mask: u64) -> Self {
+    pub fn new(k_mer: usize, l_mer: usize, mask: u64) -> Self {
         Self {
             pos: 0,
-            end: size,
+            end: 0,
             inner: Vec::with_capacity(l_mer),
             capacity: l_mer,
             value: 0,
             mask,
-            window: MinimizerWindow::new(k_mer, l_mer),
+            window: LMerWindow::new(k_mer, l_mer),
         }
     }
 
@@ -193,7 +270,14 @@ impl Cursor {
     #[inline]
     pub fn slide(&mut self, seq: &[u8]) -> Option<u64> {
         while self.pos < self.end {
-            let code = char_to_value(seq[self.pos]);
+            let ch = seq[self.pos];
+            let code = if ch == b'\n' || ch == b'\r' {
+                self.pos += 1;
+                char_to_value(seq[self.pos])
+            } else {
+                char_to_value(ch)
+            };
+            // let code = char_to_value(seq[self.pos]);
             self.pos += 1;
             if let Some(c) = code {
                 if let Some(lmer) = self.next_lmer(c) {
@@ -223,7 +307,7 @@ impl Cursor {
 
     #[inline]
     fn next_candidate_lmer(&mut self, item: u64) -> Option<u64> {
-        self.window.next_candidate_lmer(item)
+        self.window.next(item)
     }
 
     pub fn has_next(&self) -> bool {
@@ -240,7 +324,6 @@ impl Cursor {
 }
 
 pub struct MinimizerScanner {
-    seq: Vec<u8>,
     l_mer: usize,
     cursor: Cursor,
     /// 存最近一个最小值
@@ -251,22 +334,30 @@ pub struct MinimizerScanner {
 }
 
 impl MinimizerScanner {
-    pub fn default(seq: Vec<u8>, k_mer: usize, l_mer: usize) -> Self {
-        let size = seq.len();
+    pub fn reset(&mut self) {
+        self.cursor.clear();
+        self.last_minimizer = std::u64::MAX;
+    }
+
+    pub fn default(k_mer: usize, l_mer: usize) -> Self {
         let mut mask = 1u64;
         mask <<= l_mer * BITS_PER_CHAR;
         mask -= 1;
 
         Self {
-            seq,
             // minimizer_queue: MinimizerQueue::new(k_mer, l_mer),
             l_mer,
-            cursor: Cursor::new(size, k_mer, l_mer, mask),
+            cursor: Cursor::new(k_mer, l_mer, mask),
             last_minimizer: std::u64::MAX,
             spaced_seed_mask: DEFAULT_SPACED_SEED_MASK,
             toggle_mask: DEFAULT_TOGGLE_MASK & mask,
             revcom_version: CURRENT_REVCOM_VERSION,
         }
+    }
+
+    pub fn set_seq_end(&mut self, seq: &[u8]) {
+        self.cursor.pos = 0;
+        self.cursor.end = seq.len();
     }
 
     pub fn set_spaced_seed_mask(&mut self, spaced_seed_mask: u64) -> &mut Self {
@@ -297,16 +388,16 @@ impl MinimizerScanner {
     }
 
     fn get_last_minimizer(&mut self) -> Option<u64> {
-        self.cursor
-            .window
-            .get_last_minimizer()
-            .map(|minimizer| minimizer ^ self.toggle_mask)
+        None
+        // self.cursor
+        //     .window
+        //     .get_last_minimizer()
+        //     .map(|minimizer| minimizer ^ self.toggle_mask)
     }
 
-    /// 滑动窗口最小算法改进版，构建一个 k_mer - l_mer + 1大小的滑动窗口，已经返回过的值，直接剔除。
-    pub fn next_minimizer(&mut self) -> Option<u64> {
+    pub fn next_minimizer(&mut self, seq: &[u8]) -> Option<u64> {
         while self.cursor.has_next() {
-            if let Some(lmer) = self.cursor.slide(&self.seq) {
+            if let Some(lmer) = self.cursor.slide(&seq) {
                 let candidate_lmer = self.to_candidate_lmer(lmer);
                 if let Some(minimizer) = self.cursor.next_candidate_lmer(candidate_lmer) {
                     if minimizer != self.last_minimizer {
@@ -335,11 +426,12 @@ mod tests {
         // 使用 assert_eq!、assert!、assert_ne! 等宏来断言测试条件是否为真
         // 如果条件不为真，测试将失败
         let seq: Vec<u8> = b"ACGATCGACGACG".to_vec();
-        let mut scanner = MinimizerScanner::default(seq, 10, 5);
-        let m1 = scanner.next_minimizer();
+        let mut scanner = MinimizerScanner::default(10, 5);
+        scanner.set_seq_end(&seq);
+        let m1 = scanner.next_minimizer(&seq);
         let mm1 = format!("{:016x}", m1.unwrap());
         assert_eq!(mm1, "00000000000002d8");
-        let m2 = scanner.next_minimizer();
+        let m2 = scanner.next_minimizer(&seq);
         let mm2 = format!("{:016x}", m2.unwrap());
         assert_eq!(mm2, "0000000000000218");
     }
@@ -349,30 +441,30 @@ mod tests {
         // 1, 2, 3, 4
         let seq: Vec<u64> = vec![1, 2, 3, 4];
         // 窗口大小 = 2 - 0 + 1
-        let mut mini = MinimizerWindow::new(1, 0);
+        let mut mini: LMerWindow = LMerWindow::new(1, 0);
         let mut result = vec![];
         for s in seq {
-            if let Some(a) = mini.next_candidate_lmer(s) {
+            if let Some(a) = mini.next(s) {
                 result.push(a);
             }
         }
-        if let Some(a) = mini.get_last_minimizer() {
-            result.push(a);
-        }
-        assert_eq!(result, [1, 2, 3]);
+        // if let Some(a) = mini.get_last_minimizer() {
+        //     result.push(a);
+        // }
+        assert_eq!(result, [1, 2, 3, 4]);
 
         let seq: Vec<u64> = vec![4, 3, 5, 2, 6, 2, 1];
         // 窗口大小 = 2 - 0 + 1
-        let mut mini = MinimizerWindow::new(2, 0);
+        let mut mini = LMerWindow::new(2, 0);
         let mut result = vec![];
         for s in seq {
-            if let Some(a) = mini.next_candidate_lmer(s) {
+            if let Some(a) = mini.next(s) {
                 result.push(a);
             }
         }
-        if let Some(a) = mini.get_last_minimizer() {
-            result.push(a);
-        }
-        assert_eq!(result, [3, 2, 1]);
+        // if let Some(a) = mini.get_last_minimizer() {
+        //     result.push(a);
+        // }
+        assert_eq!(result, [3, 2, 2, 2, 1]);
     }
 }
