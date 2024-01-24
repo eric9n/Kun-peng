@@ -1,3 +1,4 @@
+use seahash::SeaHasher;
 use std::hash::{BuildHasher, Hasher};
 
 // 定义 KeyValueStore trait
@@ -13,7 +14,7 @@ const M2: u64 = 0xc4ceb9fe1a85ec53;
 /// # Examples
 ///
 /// ```
-/// # use kr2r::fmix64; // Replace `kr2r` with the name of your crate
+/// # use kr2r::fmix64;
 /// let key: u64 = 123;
 /// let hash = fmix64(key);
 /// assert_eq!(hash, 9208534749291869864);
@@ -50,6 +51,13 @@ pub fn murmur_hash3(key: u64) -> u64 {
     h1
 }
 
+#[inline]
+pub fn sea_hash(key: u64) -> u64 {
+    let mut hasher = SeaHasher::default();
+    hasher.write_u64(key);
+    hasher.finish()
+}
+
 /// KHasher is designed to hash only u64 values.
 ///
 /// # Safety
@@ -63,16 +71,30 @@ pub struct KHasher {
 }
 
 impl Hasher for KHasher {
-    fn write(&mut self, bytes: &[u8]) {
-        #[cfg(debug_assertions)]
-        assert_eq!(bytes.len(), 8, "KHasher input must be exactly 8 bytes.");
+    // fn write(&mut self, _: &[u8]) {
+    // #[cfg(debug_assertions)]
+    // assert_eq!(bytes.len(), 8, "KHasher input must be exactly 8 bytes.");
 
-        // 使用 unsafe 从字节切片直接读取 u64
-        let key: u64 = unsafe { std::ptr::read_unaligned(bytes.as_ptr() as *const u64) };
+    // // 使用 unsafe 从字节切片直接读取 u64
+    // let key: u64 = unsafe { std::ptr::read_unaligned(bytes.as_ptr() as *const u64) };
 
-        self.hash = murmur_hash3(key);
+    // self.hash = murmur_hash3(key);
+    // }
+
+    // #[inline]
+    // fn finish(&self) -> u64 {
+    //     self.0
+    // }
+
+    #[inline]
+    fn write(&mut self, _: &[u8]) {}
+
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.hash = i;
     }
 
+    #[inline]
     fn finish(&self) -> u64 {
         self.hash
     }
@@ -86,5 +108,16 @@ impl BuildHasher for KBuildHasher {
 
     fn build_hasher(&self) -> Self::Hasher {
         KHasher { hash: 0 }
+    }
+}
+
+#[derive(Default)]
+pub struct SBuildHasher;
+
+impl BuildHasher for SBuildHasher {
+    type Hasher = SeaHasher;
+
+    fn build_hasher(&self) -> Self::Hasher {
+        SeaHasher::default()
     }
 }

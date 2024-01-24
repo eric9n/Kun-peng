@@ -2,7 +2,7 @@ use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use kr2r::mmscanner::{MinimizerScanner, BITS_PER_CHAR, DEFAULT_SPACED_SEED_MASK};
 use kr2r::utils::{expand_spaced_seed_mask, find_library_fna_files};
-use kr2r::{murmur_hash3, KBuildHasher};
+use kr2r::{sea_hash, KBuildHasher};
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
 use std::collections::HashSet;
@@ -96,9 +96,10 @@ fn main() {
                     scanner.set_seq_end(seq);
                     while let Some(minimizer) = scanner.next_minimizer(seq) {
                         count += 1;
-                        let hash_v = murmur_hash3(minimizer);
+
+                        let hash_v = sea_hash(minimizer);
                         if hash_v & RANGE_MASK < args.n as u64 {
-                            minimizer_set.insert(minimizer);
+                            minimizer_set.insert(hash_v);
                         }
                     }
                     scanner.reset();
