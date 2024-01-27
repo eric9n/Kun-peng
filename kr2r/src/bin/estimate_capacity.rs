@@ -81,7 +81,7 @@ fn process_sequece(
     // 构建预期的 JSON 文件路径
     let json_path = build_output_path(fna_file, "hllp.json");
     // 检查是否存在 JSON 文件
-    if Path::new(&json_path).exists() {
+    if args.cache && Path::new(&json_path).exists() {
         // 如果存在，从文件读取并反序列化
         let mut file = File::open(json_path).unwrap();
         let mut serialized_hllp = String::new();
