@@ -6,13 +6,15 @@ pub const DEFAULT_TOGGLE_MASK: u64 = 0xe37e28c4271b5a2d;
 pub const DEFAULT_SPACED_SEED_MASK: u64 = 0;
 pub const CURRENT_REVCOM_VERSION: u8 = 1;
 
-#[derive(Clone, Copy)]
+/// minimizer config
+#[derive(Copy, Debug, Clone)]
 pub struct Meros {
     pub k_mer: usize,
     pub l_mer: usize,
     pub mask: u64,
     pub spaced_seed_mask: u64,
     pub toggle_mask: u64,
+    pub min_clear_hash_value: Option<u64>,
 }
 
 impl Meros {
@@ -21,6 +23,7 @@ impl Meros {
         l_mer: usize,
         spaced_seed_mask: Option<u64>,
         toggle_mask: Option<u64>,
+        min_clear_hash_value: Option<u64>,
     ) -> Self {
         let mut mask = 1u64;
         mask <<= l_mer * BITS_PER_CHAR;
@@ -32,6 +35,7 @@ impl Meros {
             mask,
             spaced_seed_mask: spaced_seed_mask.unwrap_or(DEFAULT_SPACED_SEED_MASK),
             toggle_mask: toggle_mask.unwrap_or(DEFAULT_TOGGLE_MASK) & mask,
+            min_clear_hash_value,
         }
     }
 
@@ -46,7 +50,7 @@ pub const BITS_PER_CHAR: usize = 2;
 pub const BITS_PER_CHAR: usize = 4;
 
 #[inline]
-fn reverse_complement(mut kmer: u64, n: usize, revcom_version: u8) -> u64 {
+fn reverse_complement(mut kmer: u64, n: usize) -> u64 {
     // Reverse bits while leaving bit pairs (nucleotides) intact.
 
     // Swap consecutive pairs of bits
@@ -64,19 +68,22 @@ fn reverse_complement(mut kmer: u64, n: usize, revcom_version: u8) -> u64 {
     // Swap the two halves of the 64-bit word
     kmer = (kmer >> 32) | (kmer << 32);
 
-    if revcom_version == 0 {
-        // Complement the bits and mask to get the desired length
-        !kmer & ((1u64 << (n * 2)) - 1)
-    } else {
-        // Complement the bits, shift to the right length, and mask to get the desired length
-        (!kmer >> (64 - n * 2)) & ((1u64 << (n * 2)) - 1)
-    }
+    // Complement the bits, shift to the right length, and mask to get the desired length
+    (!kmer >> (64 - n * 2)) & ((1u64 << (n * 2)) - 1)
+
+    // if revcom_version == 0 {
+    //     // Complement the bits and mask to get the desired length
+    //     !kmer & ((1u64 << (n * 2)) - 1)
+    // } else {
+    //     // Complement the bits, shift to the right length, and mask to get the desired length
+    //     (!kmer >> (64 - n * 2)) & ((1u64 << (n * 2)) - 1)
+    // }
 }
 
 #[cfg(feature = "dna")]
 #[inline]
-fn canonical_representation(kmer: u64, n: usize, revcom_version: u8) -> u64 {
-    let revcom = reverse_complement(kmer, n, revcom_version);
+fn canonical_representation(kmer: u64, n: usize) -> u64 {
+    let revcom = reverse_complement(kmer, n);
     if kmer < revcom {
         kmer
     } else {
@@ -278,7 +285,7 @@ impl MinimizerWindow {
 //     }
 // }
 
-pub struct Cursor {
+struct Cursor {
     pos: usize,
     end: usize,
     inner: Vec<u64>,
@@ -289,7 +296,7 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    pub fn new(meros: &Meros) -> Self {
+    fn new(meros: &Meros) -> Self {
         Self {
             pos: 0,
             end: 0,
@@ -303,7 +310,7 @@ impl Cursor {
 
     // 每次取一个 lmer 值出来，如果为空，表示一直 seq 已处理完成
     #[inline]
-    pub fn slide(&mut self, seq: &[u8]) -> Option<u64> {
+    fn slide(&mut self, seq: &[u8]) -> Option<u64> {
         while self.pos < self.end {
             let ch = seq[self.pos];
             let code = if ch == b'\n' || ch == b'\r' {
@@ -351,7 +358,7 @@ impl Cursor {
 
     // 清除元素
     #[inline]
-    pub fn clear(&mut self) {
+    fn clear(&mut self) {
         self.inner.clear();
         self.value = 0;
         self.window.clear();
@@ -366,8 +373,6 @@ pub struct MinimizerScanner {
     last_minimizer: u64,
     // spaced_seed_mask: u64,
     // toggle_mask: u64,
-    revcom_version: u8,
-    min_clear_hash_value: Option<u64>,
 }
 
 impl MinimizerScanner {
@@ -378,12 +383,9 @@ impl MinimizerScanner {
 
     pub fn new(meros: Meros) -> Self {
         Self {
-            // minimizer_queue: MinimizerQueue::new(k_mer, l_mer),
             meros,
             cursor: Cursor::new(&meros),
             last_minimizer: std::u64::MAX,
-            revcom_version: CURRENT_REVCOM_VERSION,
-            min_clear_hash_value: None,
         }
     }
 
@@ -392,15 +394,9 @@ impl MinimizerScanner {
         self.cursor.end = seq.len();
     }
 
-    pub fn set_revcom_version(&mut self, revcom_version: u8) -> &mut Self {
-        self.revcom_version = revcom_version;
-        self
-    }
-
     #[inline]
     fn to_candidate_lmer(&self, lmer: u64) -> u64 {
-        let mut canonical_lmer =
-            canonical_representation(lmer, self.meros.l_mer, self.revcom_version);
+        let mut canonical_lmer = canonical_representation(lmer, self.meros.l_mer);
         if self.meros.spaced_seed_mask > 0 {
             canonical_lmer &= self.meros.spaced_seed_mask;
         }
@@ -430,7 +426,8 @@ impl MinimizerScanner {
         self.next_minimizer(seq)
             .map(murmur_hash3)
             .filter(|&hashed| {
-                self.min_clear_hash_value
+                self.meros
+                    .min_clear_hash_value
                     .map_or(true, |min_hash| hashed >= min_hash)
             })
     }
@@ -472,7 +469,7 @@ mod tests {
         // 使用 assert_eq!、assert!、assert_ne! 等宏来断言测试条件是否为真
         // 如果条件不为真，测试将失败
         let seq: Vec<u8> = b"ACGATCGACGACG".to_vec();
-        let meros = Meros::new(10, 5, None, None);
+        let meros = Meros::new(10, 5, None, None, None);
         let mut scanner = MinimizerScanner::new(meros);
         scanner.set_seq_end(&seq);
         let m1 = scanner.next_minimizer(&seq);

@@ -4,19 +4,6 @@ use std::io::{BufRead, BufReader, Result};
 use std::path::Path;
 use walkdir::WalkDir;
 
-#[repr(C)]
-pub struct IndexOptions {
-    pub k: usize,
-    pub l: usize,
-    pub spaced_seed_mask: u64,
-    pub toggle_mask: u64,
-    pub dna_db: bool,
-    pub minimum_acceptable_hash_value: u64,
-    pub revcom_version: i32, // 修复 K2.0.8 之前的 bug
-    pub db_version: i32,     // 为未来的数据库结构变化预留
-    pub db_type: i32,        // 为未来使用其他数据结构预留
-}
-
 /// 读取 seqid2taxid.map 文件。为了裁剪 ncbi 的 taxonomy 树
 pub fn read_id_to_taxon_map(filename: &str) -> Result<HashMap<String, u64>> {
     let file = File::open(filename)?;

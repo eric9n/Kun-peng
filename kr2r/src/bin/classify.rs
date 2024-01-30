@@ -1,24 +1,10 @@
 use clap::Parser;
 use kr2r::readcounts::TaxonCounters;
-use kr2r::utils::IndexOptions;
+use kr2r::IndexOptions;
 use std::fs::File;
-use std::io::{self, ErrorKind, Read};
-use std::path::Path;
+use std::io::{self, ErrorKind};
 use std::sync::Mutex;
 use std::time::Duration;
-
-fn read_index_options<P: AsRef<Path>>(file_path: P) -> io::Result<IndexOptions> {
-    let mut file = File::open(file_path)?;
-    let mut buffer = vec![0; std::mem::size_of::<IndexOptions>()];
-    file.read_exact(&mut buffer)?;
-
-    let idx_opts: IndexOptions = unsafe {
-        // 确保这种转换是安全的，这依赖于数据的确切布局和来源
-        std::ptr::read(buffer.as_ptr() as *const _)
-    };
-
-    Ok(idx_opts)
-}
 
 #[derive(Parser, Debug, Clone)]
 #[clap(
@@ -120,6 +106,7 @@ struct OutputStreamData {
     kraken_output: Option<File>,
 }
 
+/// 感觉作用不大。可以删掉
 fn report_stats(elapsed: Duration, stats: &ClassificationStats) {
     let seconds = elapsed.as_secs() as f64 + elapsed.subsec_micros() as f64 * 1e-6;
     let total_unclassified = stats.total_sequences - stats.total_classified;
@@ -215,7 +202,7 @@ fn open_output_file(filename: &str, is_paired: bool, is_first: bool) -> io::Resu
 
 fn main() -> io::Result<()> {
     let args = Args::parse();
-    let idx_opts = read_index_options(args.options_filename)?;
+    let idx_opts = IndexOptions::read_index_options(args.options_filename)?;
 
     Ok(())
 }

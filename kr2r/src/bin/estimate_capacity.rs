@@ -103,7 +103,13 @@ fn process_sequece(
         args.threads as u32,
         args.threads - 2 as usize,
         |record_set| {
-            let meros = Meros::new(k_mer, l_mer, Some(args.spaced_seed_mask), args.toggle_mask);
+            let meros = Meros::new(
+                k_mer,
+                l_mer,
+                Some(args.spaced_seed_mask),
+                args.toggle_mask,
+                None,
+            );
 
             let mut scanner = MinimizerScanner::new(meros);
 
