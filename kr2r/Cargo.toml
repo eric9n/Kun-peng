@@ -9,10 +9,17 @@ edition = "2021"
 name = "estimate_capacity"
 path = "src/bin/estimate_capacity.rs"
 
+[[bin]]
+name = "classify"
+path = "src/bin/classify.rs"
 
 [[bin]]
 name = "cht"
 path = "src/bin/cht.rs"
+
+[[bin]]
+name = "taxo"
+path = "src/bin/taxo.rs"
 
 
 [features]
@@ -20,6 +27,7 @@ default = ["dna"]
 dna = []
 protein = []
 double_hashing = []
+exact_counting = []
 
 [dependencies]
 clap = { version = "4.4.10", features = ["derive"] }
@@ -28,7 +36,7 @@ hyperloglogplus = { version = "*", features = ["const-loop"] }
 seahash = "4.1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-taxonomy = "0.10.0"
+# taxonomy = "0.10.0"
 memmap2 = "0.9.4"
 byteorder = "1.4"
 walkdir = "2"

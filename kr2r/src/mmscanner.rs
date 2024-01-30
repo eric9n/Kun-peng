@@ -1,3 +1,5 @@
+// kraken 2 使用的是murmur_hash3 算法的 fmix64作为 hash
+use crate::fmix64 as murmur_hash3;
 use std::collections::VecDeque;
 
 pub const DEFAULT_TOGGLE_MASK: u64 = 0xe37e28c4271b5a2d;
@@ -121,7 +123,7 @@ impl MinimizerData {
     }
 }
 
-pub struct LMerWindow {
+pub struct MinimizerWindow {
     queue: VecDeque<MinimizerData>,
     /// 窗口队列的大小
     capacity: usize,
@@ -129,7 +131,7 @@ pub struct LMerWindow {
     count: usize,
 }
 
-impl LMerWindow {
+impl MinimizerWindow {
     fn new(k_mer: usize, l_mer: usize) -> Self {
         let capacity: usize = k_mer - l_mer;
         Self {
@@ -250,7 +252,7 @@ pub struct Cursor {
     capacity: usize,
     value: u64,
     mask: u64,
-    window: LMerWindow,
+    window: MinimizerWindow,
 }
 
 impl Cursor {
@@ -262,7 +264,7 @@ impl Cursor {
             capacity: l_mer,
             value: 0,
             mask,
-            window: LMerWindow::new(k_mer, l_mer),
+            window: MinimizerWindow::new(k_mer, l_mer),
         }
     }
 
@@ -331,6 +333,7 @@ pub struct MinimizerScanner {
     spaced_seed_mask: u64,
     toggle_mask: u64,
     revcom_version: u8,
+    min_clear_hash_value: Option<u64>,
 }
 
 impl MinimizerScanner {
@@ -352,6 +355,7 @@ impl MinimizerScanner {
             spaced_seed_mask: DEFAULT_SPACED_SEED_MASK,
             toggle_mask: DEFAULT_TOGGLE_MASK & mask,
             revcom_version: CURRENT_REVCOM_VERSION,
+            min_clear_hash_value: None,
         }
     }
 
@@ -395,17 +399,43 @@ impl MinimizerScanner {
         //     .map(|minimizer| minimizer ^ self.toggle_mask)
     }
 
+    /// 在一个序列上滑动一个光标（可能是为了找到下一个有意义的片段或窗口），
+    /// 并对滑动得到的片段进行某种转换或处理。如果光标无法继续滑动（例如到达序列的末尾），则返回 None。
+    fn next_window(&mut self, seq: &[u8]) -> Option<u64> {
+        self.cursor.slide(seq).and_then(|lmer| {
+            let candidate_lmer = self.to_candidate_lmer(lmer);
+            self.cursor.next_candidate_lmer(candidate_lmer)
+        })
+    }
+
+    /// 这个函数通过 next_minimizer 获取序列的下一个最小化器，然后使用 murmur_hash3 对其进行哈希处理，
+    /// 最后根据设定的最小哈希值进行筛选
+    pub fn next_hashed_minimizer(&mut self, seq: &[u8]) -> Option<u64> {
+        self.next_minimizer(seq)
+            .map(murmur_hash3)
+            .filter(|&hashed| {
+                self.min_clear_hash_value
+                    .map_or(true, |min_hash| hashed >= min_hash)
+            })
+    }
+
     pub fn next_minimizer(&mut self, seq: &[u8]) -> Option<u64> {
         while self.cursor.has_next() {
-            if let Some(lmer) = self.cursor.slide(&seq) {
-                let candidate_lmer = self.to_candidate_lmer(lmer);
-                if let Some(minimizer) = self.cursor.next_candidate_lmer(candidate_lmer) {
-                    if minimizer != self.last_minimizer {
-                        self.last_minimizer = minimizer;
-                        return Some(minimizer ^ self.toggle_mask);
-                    }
+            if let Some(minimizer) = self.next_window(&seq) {
+                if minimizer != self.last_minimizer {
+                    self.last_minimizer = minimizer;
+                    return Some(minimizer ^ self.toggle_mask);
                 }
             }
+            // if let Some(lmer) = self.cursor.slide(&seq) {
+            //     let candidate_lmer = self.to_candidate_lmer(lmer);
+            //     if let Some(minimizer) = self.cursor.next_candidate_lmer(candidate_lmer) {
+            //         if minimizer != self.last_minimizer {
+            //             self.last_minimizer = minimizer;
+            //             return Some(minimizer ^ self.toggle_mask);
+            //         }
+            //     }
+            // }
         }
         // 检查滑动队列中是否存在值
         let last_minimizer = self.get_last_minimizer();
@@ -441,7 +471,7 @@ mod tests {
         // 1, 2, 3, 4
         let seq: Vec<u64> = vec![1, 2, 3, 4];
         // 窗口大小 = 2 - 0 + 1
-        let mut mini: LMerWindow = LMerWindow::new(1, 0);
+        let mut mini: MinimizerWindow = MinimizerWindow::new(1, 0);
         let mut result = vec![];
         for s in seq {
             if let Some(a) = mini.next(s) {
@@ -455,7 +485,7 @@ mod tests {
 
         let seq: Vec<u64> = vec![4, 3, 5, 2, 6, 2, 1];
         // 窗口大小 = 2 - 0 + 1
-        let mut mini = LMerWindow::new(2, 0);
+        let mut mini = MinimizerWindow::new(2, 0);
         let mut result = vec![];
         for s in seq {
             if let Some(a) = mini.next(s) {
