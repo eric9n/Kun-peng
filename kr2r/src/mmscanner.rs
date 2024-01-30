@@ -6,6 +6,40 @@ pub const DEFAULT_TOGGLE_MASK: u64 = 0xe37e28c4271b5a2d;
 pub const DEFAULT_SPACED_SEED_MASK: u64 = 0;
 pub const CURRENT_REVCOM_VERSION: u8 = 1;
 
+#[derive(Clone, Copy)]
+pub struct Meros {
+    pub k_mer: usize,
+    pub l_mer: usize,
+    pub mask: u64,
+    pub spaced_seed_mask: u64,
+    pub toggle_mask: u64,
+}
+
+impl Meros {
+    pub fn new(
+        k_mer: usize,
+        l_mer: usize,
+        spaced_seed_mask: Option<u64>,
+        toggle_mask: Option<u64>,
+    ) -> Self {
+        let mut mask = 1u64;
+        mask <<= l_mer * BITS_PER_CHAR;
+        mask -= 1;
+
+        Self {
+            k_mer,
+            l_mer,
+            mask,
+            spaced_seed_mask: spaced_seed_mask.unwrap_or(DEFAULT_SPACED_SEED_MASK),
+            toggle_mask: toggle_mask.unwrap_or(DEFAULT_TOGGLE_MASK) & mask,
+        }
+    }
+
+    pub fn window_size(&self) -> usize {
+        self.k_mer - self.l_mer
+    }
+}
+
 #[cfg(feature = "dna")]
 pub const BITS_PER_CHAR: usize = 2;
 #[cfg(feature = "protein")]
@@ -132,8 +166,7 @@ pub struct MinimizerWindow {
 }
 
 impl MinimizerWindow {
-    fn new(k_mer: usize, l_mer: usize) -> Self {
-        let capacity: usize = k_mer - l_mer;
+    fn new(capacity: usize) -> Self {
         Self {
             queue: VecDeque::with_capacity(capacity),
             capacity,
@@ -256,15 +289,15 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    pub fn new(k_mer: usize, l_mer: usize, mask: u64) -> Self {
+    pub fn new(meros: &Meros) -> Self {
         Self {
             pos: 0,
             end: 0,
-            inner: Vec::with_capacity(l_mer),
-            capacity: l_mer,
+            inner: Vec::with_capacity(meros.l_mer),
+            capacity: meros.l_mer,
             value: 0,
-            mask,
-            window: MinimizerWindow::new(k_mer, l_mer),
+            mask: meros.mask,
+            window: MinimizerWindow::new(meros.window_size()),
         }
     }
 
@@ -326,12 +359,13 @@ impl Cursor {
 }
 
 pub struct MinimizerScanner {
-    l_mer: usize,
+    meros: Meros,
+    // l_mer: usize,
     cursor: Cursor,
     /// 存最近一个最小值
     last_minimizer: u64,
-    spaced_seed_mask: u64,
-    toggle_mask: u64,
+    // spaced_seed_mask: u64,
+    // toggle_mask: u64,
     revcom_version: u8,
     min_clear_hash_value: Option<u64>,
 }
@@ -342,18 +376,12 @@ impl MinimizerScanner {
         self.last_minimizer = std::u64::MAX;
     }
 
-    pub fn default(k_mer: usize, l_mer: usize) -> Self {
-        let mut mask = 1u64;
-        mask <<= l_mer * BITS_PER_CHAR;
-        mask -= 1;
-
+    pub fn new(meros: Meros) -> Self {
         Self {
             // minimizer_queue: MinimizerQueue::new(k_mer, l_mer),
-            l_mer,
-            cursor: Cursor::new(k_mer, l_mer, mask),
+            meros,
+            cursor: Cursor::new(&meros),
             last_minimizer: std::u64::MAX,
-            spaced_seed_mask: DEFAULT_SPACED_SEED_MASK,
-            toggle_mask: DEFAULT_TOGGLE_MASK & mask,
             revcom_version: CURRENT_REVCOM_VERSION,
             min_clear_hash_value: None,
         }
@@ -364,19 +392,6 @@ impl MinimizerScanner {
         self.cursor.end = seq.len();
     }
 
-    pub fn set_spaced_seed_mask(&mut self, spaced_seed_mask: u64) -> &mut Self {
-        self.spaced_seed_mask = spaced_seed_mask;
-        self
-    }
-
-    pub fn set_toggle_mask(&mut self, toggle_mask: u64) -> &mut Self {
-        let mut mask = 1u64;
-        mask <<= self.l_mer * BITS_PER_CHAR;
-        mask -= 1;
-        self.toggle_mask = toggle_mask & mask;
-        self
-    }
-
     pub fn set_revcom_version(&mut self, revcom_version: u8) -> &mut Self {
         self.revcom_version = revcom_version;
         self
@@ -384,11 +399,12 @@ impl MinimizerScanner {
 
     #[inline]
     fn to_candidate_lmer(&self, lmer: u64) -> u64 {
-        let mut canonical_lmer = canonical_representation(lmer, self.l_mer, self.revcom_version);
-        if self.spaced_seed_mask > 0 {
-            canonical_lmer &= self.spaced_seed_mask;
+        let mut canonical_lmer =
+            canonical_representation(lmer, self.meros.l_mer, self.revcom_version);
+        if self.meros.spaced_seed_mask > 0 {
+            canonical_lmer &= self.meros.spaced_seed_mask;
         }
-        canonical_lmer ^ self.toggle_mask
+        canonical_lmer ^ self.meros.toggle_mask
     }
 
     fn get_last_minimizer(&mut self) -> Option<u64> {
@@ -424,7 +440,7 @@ impl MinimizerScanner {
             if let Some(minimizer) = self.next_window(&seq) {
                 if minimizer != self.last_minimizer {
                     self.last_minimizer = minimizer;
-                    return Some(minimizer ^ self.toggle_mask);
+                    return Some(minimizer ^ self.meros.toggle_mask);
                 }
             }
             // if let Some(lmer) = self.cursor.slide(&seq) {
@@ -456,7 +472,8 @@ mod tests {
         // 使用 assert_eq!、assert!、assert_ne! 等宏来断言测试条件是否为真
         // 如果条件不为真，测试将失败
         let seq: Vec<u8> = b"ACGATCGACGACG".to_vec();
-        let mut scanner = MinimizerScanner::default(10, 5);
+        let meros = Meros::new(10, 5, None, None);
+        let mut scanner = MinimizerScanner::new(meros);
         scanner.set_seq_end(&seq);
         let m1 = scanner.next_minimizer(&seq);
         let mm1 = format!("{:016x}", m1.unwrap());
@@ -471,7 +488,7 @@ mod tests {
         // 1, 2, 3, 4
         let seq: Vec<u64> = vec![1, 2, 3, 4];
         // 窗口大小 = 2 - 0 + 1
-        let mut mini: MinimizerWindow = MinimizerWindow::new(1, 0);
+        let mut mini: MinimizerWindow = MinimizerWindow::new(1);
         let mut result = vec![];
         for s in seq {
             if let Some(a) = mini.next(s) {
@@ -485,7 +502,7 @@ mod tests {
 
         let seq: Vec<u64> = vec![4, 3, 5, 2, 6, 2, 1];
         // 窗口大小 = 2 - 0 + 1
-        let mut mini = MinimizerWindow::new(2, 0);
+        let mut mini = MinimizerWindow::new(2);
         let mut result = vec![];
         for s in seq {
             if let Some(a) = mini.next(s) {

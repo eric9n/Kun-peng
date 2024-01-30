@@ -1,6 +1,6 @@
 use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
-use kr2r::mmscanner::{MinimizerScanner, BITS_PER_CHAR, DEFAULT_SPACED_SEED_MASK};
+use kr2r::mmscanner::{Meros, MinimizerScanner, BITS_PER_CHAR, DEFAULT_SPACED_SEED_MASK};
 use kr2r::utils::{expand_spaced_seed_mask, find_library_fna_files};
 use kr2r::{sea_hash, KBuildHasher};
 use seq_io::fasta::{Reader, Record};
@@ -103,11 +103,10 @@ fn process_sequece(
         args.threads as u32,
         args.threads - 2 as usize,
         |record_set| {
-            let mut scanner = MinimizerScanner::default(k_mer, l_mer);
-            scanner.set_spaced_seed_mask(args.spaced_seed_mask);
-            if let Some(toggle_mask) = args.toggle_mask {
-                scanner.set_toggle_mask(toggle_mask);
-            }
+            let meros = Meros::new(k_mer, l_mer, Some(args.spaced_seed_mask), args.toggle_mask);
+
+            let mut scanner = MinimizerScanner::new(meros);
+
             let mut minimizer_set = HashSet::new();
             for record in record_set.into_iter() {
                 let seq = record.seq();

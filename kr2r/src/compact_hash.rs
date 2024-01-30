@@ -338,7 +338,8 @@ mod tests {
         let mut cell = CompactHashCell(0u32);
         cell.populate(123u64, 456u32, 16);
 
+        let value_mask = (1 << 16) - 1;
         assert_eq!(cell.hashed_key(16), 123);
-        assert_eq!(cell.value(16), 456);
+        assert_eq!(cell.value(value_mask), 456);
     }
 }
