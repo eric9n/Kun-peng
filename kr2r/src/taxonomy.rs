@@ -332,11 +332,27 @@ impl Taxonomy {
         a
     }
 
+    // 获取给定节点的所有祖先节点
+    pub fn get_ancestors(&self, mut taxon: u64) -> Vec<u64> {
+        let mut ancestors = Vec::new();
+        while taxon != 0 {
+            match self.nodes.get(taxon as usize) {
+                Some(node) => {
+                    ancestors.push(taxon); // 添加当前节点到祖先列表
+                    taxon = node.parent_id; // 移动到父节点
+                }
+                None => break,
+            }
+        }
+        ancestors
+    }
+
+    // get_internal_id 函数的优化
     pub fn get_internal_id(&self, external_id: u64) -> u64 {
-        self.external_to_internal_id_map
+        *self
+            .external_to_internal_id_map
             .get(&external_id)
-            .cloned()
-            .unwrap_or(0)
+            .unwrap_or(&0)
     }
 
     pub fn generate_external_to_internal_id_map(&mut self) {

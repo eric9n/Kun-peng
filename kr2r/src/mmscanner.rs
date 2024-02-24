@@ -423,15 +423,35 @@ impl MinimizerScanner {
     /// 这个函数通过 next_minimizer 获取序列的下一个最小化器，然后使用 murmur_hash3 对其进行哈希处理，
     /// 最后根据设定的最小哈希值进行筛选
     pub fn next_hashed_minimizer(&mut self, seq: &[u8]) -> Option<u64> {
-        self.next_minimizer(seq)
-            .map(murmur_hash3)
-            .filter(|&hashed| {
-                self.meros
-                    .min_clear_hash_value
-                    .map_or(true, |min_hash| hashed >= min_hash)
-            })
+        while let Some(minimizer) = self.next_minimizer_inclusive(seq) {
+            let hashed = murmur_hash3(minimizer);
+            if self
+                .meros
+                .min_clear_hash_value
+                .map_or(true, |min_hash| hashed >= min_hash)
+            {
+                return Some(hashed);
+            }
+            // 如果哈希值不满足条件，循环将继续尝试下一个最小化器
+        }
+        None // 当没有更多的最小化器时返回 None
     }
 
+    pub fn next_minimizer_inclusive(&mut self, seq: &[u8]) -> Option<u64> {
+        while self.cursor.has_next() {
+            if let Some(minimizer) = self.next_window(&seq) {
+                // 直接返回当前最小化器，不进行重复检查
+                return Some(minimizer ^ self.meros.toggle_mask);
+            }
+        }
+        // 如果循环结束还没有找到最小化器，检查是否有遗留的最小化器
+        let last_minimizer = self.get_last_minimizer();
+        // 清空所有的值，准备下一次获取
+        self.cursor.clear();
+        last_minimizer
+    }
+
+    /// 去除重复的值
     pub fn next_minimizer(&mut self, seq: &[u8]) -> Option<u64> {
         while self.cursor.has_next() {
             if let Some(minimizer) = self.next_window(&seq) {
