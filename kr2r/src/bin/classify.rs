@@ -339,8 +339,8 @@ fn process_files(args: Args, idx_opts: IndexOptions, cht: &CompactHashTable, tax
                         );
                     }
                 },
-                |record_sets| {
-                    while let Some(Ok((_, _))) = record_sets.next() {}
+                |_| {
+                    // while let Some(Ok((_, _))) = record_sets.next() {}
                 },
             )
         }

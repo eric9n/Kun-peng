@@ -1,53 +1,7 @@
 // kraken 2 使用的是murmur_hash3 算法的 fmix64作为 hash
 use crate::fmix64 as murmur_hash3;
+use crate::{Meros, BITS_PER_CHAR};
 use std::collections::VecDeque;
-
-pub const DEFAULT_TOGGLE_MASK: u64 = 0xe37e28c4271b5a2d;
-pub const DEFAULT_SPACED_SEED_MASK: u64 = 0;
-pub const CURRENT_REVCOM_VERSION: u8 = 1;
-
-/// minimizer config
-#[derive(Copy, Debug, Clone)]
-pub struct Meros {
-    pub k_mer: usize,
-    pub l_mer: usize,
-    pub mask: u64,
-    pub spaced_seed_mask: u64,
-    pub toggle_mask: u64,
-    pub min_clear_hash_value: Option<u64>,
-}
-
-impl Meros {
-    pub fn new(
-        k_mer: usize,
-        l_mer: usize,
-        spaced_seed_mask: Option<u64>,
-        toggle_mask: Option<u64>,
-        min_clear_hash_value: Option<u64>,
-    ) -> Self {
-        let mut mask = 1u64;
-        mask <<= l_mer * BITS_PER_CHAR;
-        mask -= 1;
-
-        Self {
-            k_mer,
-            l_mer,
-            mask,
-            spaced_seed_mask: spaced_seed_mask.unwrap_or(DEFAULT_SPACED_SEED_MASK),
-            toggle_mask: toggle_mask.unwrap_or(DEFAULT_TOGGLE_MASK) & mask,
-            min_clear_hash_value,
-        }
-    }
-
-    pub fn window_size(&self) -> usize {
-        self.k_mer - self.l_mer
-    }
-}
-
-#[cfg(feature = "dna")]
-pub const BITS_PER_CHAR: usize = 2;
-#[cfg(feature = "protein")]
-pub const BITS_PER_CHAR: usize = 4;
 
 #[inline]
 fn reverse_complement(mut kmer: u64, n: usize) -> u64 {
@@ -308,7 +262,8 @@ impl Cursor {
         }
     }
 
-    // 每次取一个 lmer 值出来，如果为空，表示一直 seq 已处理完成
+    /// 每次取一个 lmer 值出来，如果为空，表示一直 seq 已处理完成
+    /// 遇到换行符,就跳过.
     #[inline]
     fn slide(&mut self, seq: &[u8]) -> Option<u64> {
         while self.pos < self.end {

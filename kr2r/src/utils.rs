@@ -5,7 +5,7 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 /// 读取 seqid2taxid.map 文件。为了裁剪 ncbi 的 taxonomy 树
-pub fn read_id_to_taxon_map(filename: &str) -> Result<HashMap<String, u64>> {
+pub fn read_id_to_taxon_map<P: AsRef<Path>>(filename: P) -> Result<HashMap<String, u64>> {
     let file = File::open(filename)?;
     let reader = BufReader::new(file);
     let mut id_map = HashMap::new();

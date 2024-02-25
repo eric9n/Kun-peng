@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result, Write};
+use std::path::Path;
 
 /// 解析 ncbi 文件的 taxonomy nodes 文件
-pub fn parse_nodes_file(
-    nodes_filename: &str,
+pub fn parse_nodes_file<P: AsRef<Path>>(
+    nodes_filename: P,
 ) -> Result<(
     HashMap<u64, u64>,
     HashMap<u64, HashSet<u64>>,
@@ -57,7 +58,7 @@ pub fn parse_nodes_file(
 }
 
 /// 解析 ncbi 文件的 taxonomy names 文件
-pub fn parse_names_file(names_filename: &str) -> Result<HashMap<u64, String>> {
+pub fn parse_names_file<P: AsRef<Path>>(names_filename: P) -> Result<HashMap<u64, String>> {
     let names_file = File::open(names_filename)?;
     let reader = BufReader::new(names_file);
 
@@ -127,7 +128,7 @@ pub struct NCBITaxonomy {
 
 impl NCBITaxonomy {
     // 构造函数等实现
-    pub fn from_ncbi(nodes_filename: &str, names_filename: &str) -> Result<Self> {
+    pub fn from_ncbi<P: AsRef<Path>>(nodes_filename: P, names_filename: P) -> Result<Self> {
         let mut marked_nodes = HashSet::new();
         let (parent_map, child_map, rank_map, known_ranks) = parse_nodes_file(nodes_filename)?;
 
@@ -347,6 +348,10 @@ impl Taxonomy {
         ancestors
     }
 
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
     // get_internal_id 函数的优化
     pub fn get_internal_id(&self, external_id: u64) -> u64 {
         *self
@@ -365,7 +370,7 @@ impl Taxonomy {
         }
     }
 
-    pub fn write_to_disk(&self, filename: &str) -> Result<()> {
+    pub fn write_to_disk<P: AsRef<Path>>(&self, filename: P) -> Result<()> {
         let mut file = File::create(filename)?;
 
         // Write file magic

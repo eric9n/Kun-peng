@@ -1,8 +1,9 @@
 use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
-use kr2r::mmscanner::{Meros, MinimizerScanner, BITS_PER_CHAR, DEFAULT_SPACED_SEED_MASK};
+use kr2r::mmscanner::MinimizerScanner;
 use kr2r::utils::{expand_spaced_seed_mask, find_library_fna_files};
 use kr2r::{sea_hash, KBuildHasher};
+use kr2r::{Meros, BITS_PER_CHAR, DEFAULT_SPACED_SEED_MASK};
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
 use serde_json;
@@ -73,7 +74,7 @@ fn build_output_path(input_path: &str, extension: &str) -> String {
     output_path.to_str().unwrap().to_owned()
 }
 
-fn process_sequece(
+fn process_sequence(
     fna_file: &str,
     // hllp: &mut HyperLogLogPlus<u64, KBuildHasher>,
     args: Args,
@@ -174,7 +175,7 @@ fn main() {
             source: source.clone(),
             ..args
         };
-        let local_hllp = process_sequece(&fna_file, args_clone);
+        let local_hllp = process_sequence(&fna_file, args_clone);
         if let Err(e) = hllp.merge(&local_hllp) {
             println!("hllp merge err {:?}", e);
         }

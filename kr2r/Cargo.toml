@@ -10,6 +10,10 @@ name = "estimate_capacity"
 path = "src/bin/estimate_capacity.rs"
 
 [[bin]]
+name = "build_db"
+path = "src/bin/build_db.rs"
+
+[[bin]]
 name = "classify"
 path = "src/bin/classify.rs"
 

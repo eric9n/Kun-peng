@@ -1,5 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use kr2r::mmscanner::{Meros, MinimizerScanner};
+use kr2r::mmscanner::MinimizerScanner;
+use kr2r::Meros;
 
 // 定义性能测试函数
 fn performance_test(c: &mut Criterion) {
