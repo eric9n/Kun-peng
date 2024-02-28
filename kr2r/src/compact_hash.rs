@@ -210,9 +210,23 @@ where
 
     #[inline]
     pub fn get(&self, hash_key: u64) -> u32 {
-        self.find_cell(hash_key)
-            .map(|ci| ci.cell.taxid)
-            .unwrap_or(0)
+        let compacted_key = hash_key.compacted(self.value_bits);
+        let mut idx = hash_key.index(self.capacity);
+        let first_idx = idx;
+        let step = 1;
+        while let Some(cell) = self.table.get(idx) {
+            if cell.taxid(self.value_mask) == 0 {
+                break;
+            }
+            if cell.compacted_key(self.value_bits) == compacted_key {
+                return cell.taxid(self.value_mask);
+            }
+            idx = (idx + step) % self.capacity;
+            if idx == first_idx {
+                break;
+            }
+        }
+        0
     }
 }
 

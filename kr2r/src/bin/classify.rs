@@ -1,14 +1,17 @@
 use clap::Parser;
 use kr2r::compact_hash::CompactHashTable;
-use kr2r::iclassify::classify_seq;
+use kr2r::iclassify::{classify_seq, mask_low_quality_bases};
 use kr2r::mmscanner::MinimizerScanner;
 // use kr2r::readcounts::TaxonCounters;
 use kr2r::pair;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
+use rayon::prelude::*;
 use seq_io::fastq::{Reader as FqReader, Record, RefRecord};
 use seq_io::parallel::read_parallel;
-// use std::fs::File;
+use std::collections::HashSet;
+use std::fs::File;
+use std::io::{self, BufWriter, Write};
 use std::io::{Error, ErrorKind, Result};
 // use std::sync::Mutex;
 // use std::time::Duration;
@@ -122,125 +125,6 @@ struct Args {
     input_files: Vec<String>,
 }
 
-// struct ClassificationStats {
-//     total_sequences: u64,
-//     total_bases: u64,
-//     total_classified: u64,
-// }
-
-// struct OutputData {
-//     block_id: u64,
-//     kraken_str: String,
-//     classified_out1_str: String,
-//     classified_out2_str: String,
-//     unclassified_out1_str: String,
-//     unclassified_out2_str: String,
-// }
-
-// struct OutputStreamData {
-//     initialized: Mutex<bool>,
-//     printing_sequences: bool,
-//     classified_output1: Option<File>,
-//     classified_output2: Option<File>,
-//     unclassified_output1: Option<File>,
-//     unclassified_output2: Option<File>,
-//     kraken_output: Option<File>,
-// }
-
-// /// 感觉作用不大。可以删掉
-// fn report_stats(elapsed: Duration, stats: &ClassificationStats) {
-//     let seconds = elapsed.as_secs() as f64 + elapsed.subsec_micros() as f64 * 1e-6;
-//     let total_unclassified = stats.total_sequences - stats.total_classified;
-
-//     eprintln!(
-//         "{} sequences ({:.2} Mbp) processed in {:.3}s ({:.1} Kseq/m, {:.2} Mbp/m).",
-//         stats.total_sequences,
-//         stats.total_bases as f64 / 1e6,
-//         seconds,
-//         stats.total_sequences as f64 / 1e3 / (seconds / 60.0),
-//         stats.total_bases as f64 / 1e6 / (seconds / 60.0)
-//     );
-
-//     eprintln!(
-//         "  {} sequences classified ({:.2}%)",
-//         stats.total_classified,
-//         stats.total_classified as f64 * 100.0 / stats.total_sequences as f64
-//     );
-
-//     eprintln!(
-//         "  {} sequences unclassified ({:.2}%)",
-//         total_unclassified,
-//         total_unclassified as f64 * 100.0 / stats.total_sequences as f64
-//     );
-// }
-
-// fn initialize_outputs(args: Args, outputs: &mut OutputStreamData) -> Result<()> {
-//     let mut initialized = outputs.initialized.lock().unwrap();
-//     if !*initialized {
-//         if let Some(filename) = args.classified_output_filename {
-//             outputs.classified_output1 = Some(open_output_file(
-//                 &filename,
-//                 args.paired_end_processing,
-//                 true,
-//             )?);
-//             if args.paired_end_processing {
-//                 outputs.classified_output2 = Some(open_output_file(
-//                     &filename,
-//                     args.paired_end_processing,
-//                     false,
-//                 )?);
-//             }
-//             outputs.printing_sequences = true;
-//         }
-//         if let Some(filename) = args.unclassified_output_filename {
-//             outputs.unclassified_output1 = Some(open_output_file(
-//                 &filename,
-//                 args.paired_end_processing,
-//                 true,
-//             )?);
-//             if args.paired_end_processing {
-//                 outputs.unclassified_output2 = Some(open_output_file(
-//                     &filename,
-//                     args.paired_end_processing,
-//                     false,
-//                 )?);
-//             }
-//         }
-//         if let Some(filename) = args.kraken_output_filename {
-//             outputs.kraken_output = Some(File::create(filename)?);
-//         }
-
-//         *initialized = true;
-//     }
-//     Ok(())
-// }
-
-// fn open_output_file(filename: &str, is_paired: bool, is_first: bool) -> Result<File> {
-//     if is_paired {
-//         let fields: Vec<&str> = filename.split('#').collect();
-//         if fields.len() < 2 {
-//             return Err(Error::new(
-//                 ErrorKind::InvalidInput,
-//                 "Paired filename format missing # character",
-//             ));
-//         } else if fields.len() > 2 {
-//             return Err(Error::new(
-//                 ErrorKind::InvalidInput,
-//                 "Paired filename format has >1 # character",
-//             ));
-//         }
-//         let modified_filename = format!(
-//             "{}_{}{}",
-//             fields[0],
-//             if is_first { "1" } else { "2" },
-//             fields[1]
-//         );
-//         File::create(&modified_filename)
-//     } else {
-//         File::create(filename)
-//     }
-// }
-
 fn check_feature(dna_db: bool) -> Result<()> {
     #[cfg(feature = "dna")]
     if !dna_db {
@@ -267,12 +151,19 @@ fn get_record_id(ref_record: &RefRecord) -> String {
         .into()
 }
 
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord)]
+struct SeqReads {
+    pub dna_id: String,
+    pub seq_paired: Vec<Vec<u8>>,
+}
+
 /// 处理fastq文件
 fn process_files(
     args: Args,
     idx_opts: IndexOptions,
     cht: &CompactHashTable<u32>,
     taxonomy: &Taxonomy,
+    writer: &mut Box<dyn std::io::Write>,
 ) {
     let queue_len = if args.num_threads > 2 {
         args.num_threads as usize - 2
@@ -293,27 +184,38 @@ fn process_files(
                 args.num_threads as u32,
                 queue_len,
                 |record_set| {
-                    let mut scanner = MinimizerScanner::new(idx_opts.as_meros());
+                    let mut seq_pair_set = HashSet::<SeqReads>::new();
 
                     for records in record_set.into_iter() {
                         let dna_id = get_record_id(&records.0);
-                        let record_list = vec![records.0, records.1];
-                        classify_seq(
-                            &taxonomy,
-                            &cht,
-                            &mut scanner,
-                            &record_list,
-                            args.minimum_quality_score,
-                            meros,
-                            args.confidence_threshold,
-                            args.minimum_hit_groups,
-                            dna_id.into(),
-                        );
+                        let seq1 = mask_low_quality_bases(&records.0, args.minimum_quality_score);
+                        let seq2 = mask_low_quality_bases(&records.1, args.minimum_quality_score);
+                        let seq_paired: Vec<Vec<u8>> = vec![seq1, seq2];
+                        seq_pair_set.insert(SeqReads { dna_id, seq_paired });
                     }
+                    seq_pair_set
                 },
                 |record_sets| {
-                    while let Some(Ok((_, _))) = record_sets.next() {
-                        // counter.fetch_add(count, Ordering::SeqCst);
+                    while let Some(Ok((_, seq_pair_set))) = record_sets.next() {
+                        let results: Vec<String> = seq_pair_set
+                            .into_par_iter()
+                            .map(|item| {
+                                let mut scanner = MinimizerScanner::new(idx_opts.as_meros());
+                                classify_seq(
+                                    &taxonomy,
+                                    &cht,
+                                    &mut scanner,
+                                    &item.seq_paired,
+                                    meros,
+                                    args.confidence_threshold,
+                                    args.minimum_hit_groups,
+                                    item.dna_id,
+                                )
+                            })
+                            .collect();
+                        for result in results {
+                            writeln!(writer, "{}", result).expect("Unable to write to file");
+                        }
                     }
                 },
             )
@@ -327,27 +229,66 @@ fn process_files(
                 args.num_threads as u32,
                 queue_len,
                 |record_set| {
-                    let mut scanner = MinimizerScanner::new(idx_opts.as_meros());
-                    for record1 in record_set.into_iter() {
-                        let dna_id = get_record_id(&record1);
-                        let record_list = vec![record1];
-                        classify_seq(
-                            &taxonomy,
-                            &cht,
-                            &mut scanner,
-                            &record_list,
-                            args.minimum_quality_score,
-                            meros,
-                            args.confidence_threshold,
-                            args.minimum_hit_groups,
-                            dna_id.into(),
-                        );
+                    let mut seq_pair_set = HashSet::<SeqReads>::new();
+
+                    for records in record_set.into_iter() {
+                        let dna_id = get_record_id(&records);
+                        let seq1 = mask_low_quality_bases(&records, args.minimum_quality_score);
+                        let seq_paired: Vec<Vec<u8>> = vec![seq1];
+                        seq_pair_set.insert(SeqReads { dna_id, seq_paired });
+                    }
+                    seq_pair_set
+                },
+                |record_sets| {
+                    while let Some(Ok((_, seq_pair_set))) = record_sets.next() {
+                        let results: Vec<String> = seq_pair_set
+                            .into_par_iter()
+                            .map(|item| {
+                                let mut scanner = MinimizerScanner::new(idx_opts.as_meros());
+                                classify_seq(
+                                    &taxonomy,
+                                    &cht,
+                                    &mut scanner,
+                                    &item.seq_paired,
+                                    meros,
+                                    args.confidence_threshold,
+                                    args.minimum_hit_groups,
+                                    item.dna_id,
+                                )
+                            })
+                            .collect();
+                        for result in results {
+                            writeln!(writer, "{}", result).expect("Unable to write to file");
+                        }
                     }
                 },
-                |_| {
-                    // while let Some(Ok((_, _))) = record_sets.next() {}
-                },
             )
+            // read_parallel(
+            //     reader,
+            //     args.num_threads as u32,
+            //     queue_len,
+            //     |record_set| {
+            //         let mut scanner = MinimizerScanner::new(idx_opts.as_meros());
+            //         for record1 in record_set.into_iter() {
+            //             let dna_id = get_record_id(&record1);
+            //             let record_list = vec![record1];
+            //             classify_seq(
+            //                 &taxonomy,
+            //                 &cht,
+            //                 &mut scanner,
+            //                 &record_list,
+            //                 args.minimum_quality_score,
+            //                 meros,
+            //                 args.confidence_threshold,
+            //                 args.minimum_hit_groups,
+            //                 dna_id.into(),
+            //             );
+            //         }
+            //     },
+            //     |_| {
+            //         // while let Some(Ok((_, _))) = record_sets.next() {}
+            //     },
+            // )
         }
     }
 }
@@ -366,6 +307,18 @@ fn main() -> Result<()> {
             "Paired-end processing requires an even number of input files.",
         ));
     }
-    process_files(args, idx_opts, &cht, &taxo);
+
+    // let file = File::create("out_rust.txt")?;
+    // let mut writer = BufWriter::new(file);
+
+    let mut writer: Box<dyn Write> = match &args.kraken_output_filename {
+        Some(filename) => {
+            let file = File::create(filename)?;
+            Box::new(BufWriter::new(file)) as Box<dyn Write>
+        }
+        None => Box::new(io::stdout()) as Box<dyn Write>,
+    };
+
+    process_files(args, idx_opts, &cht, &taxo, &mut writer);
     Ok(())
 }

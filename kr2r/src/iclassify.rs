@@ -13,7 +13,10 @@ pub const MATE_PAIR_BORDER_TAXON: u32 = TAXID_MAX;
 pub const READING_FRAME_BORDER_TAXON: u32 = TAXID_MAX - 1;
 pub const AMBIGUOUS_SPAN_TAXON: u32 = TAXID_MAX - 2;
 
-fn mask_low_quality_bases<'a>(ref_record: &'a RefRecord, minimum_quality_score: i32) -> Vec<u8> {
+pub fn mask_low_quality_bases<'a>(
+    ref_record: &'a RefRecord,
+    minimum_quality_score: i32,
+) -> Vec<u8> {
     let seq = ref_record.seq();
     let qual = ref_record.qual();
 
@@ -45,21 +48,21 @@ pub fn classify_seq<'a>(
     taxonomy: &Taxonomy,
     cht: &CompactHashTable<u32>,
     scanner: &mut MinimizerScanner,
-    record_list: &'a Vec<RefRecord>,
-    minimum_quality_score: i32,
+    seq_paired: &'a Vec<Vec<u8>>,
+    // minimum_quality_score: i32,
     meros: Meros,
     confidence_threshold: f64,
     minimum_hit_groups: i32,
     dna_id: String,
-) {
+) -> String {
     let mut hit_counts = TaxonCounts::new();
     let mut taxa = Vec::<u32>::new();
     let mut minimizer_hit_groups = 0;
 
-    for record in record_list {
+    for seq in seq_paired {
         let mut last_minimizer = u64::MAX;
         let mut last_taxon = TAXID_MAX;
-        let seq = mask_low_quality_bases(&record, minimum_quality_score);
+        // let seq = mask_low_quality_bases(&record, minimum_quality_score);
         scanner.set_seq_end(&seq);
         while let Some(minimizer) = scanner.next_minimizer(&seq) {
             let taxon = if last_minimizer != minimizer {
@@ -89,7 +92,7 @@ pub fn classify_seq<'a>(
 
         scanner.reset();
     }
-    let total_kmers = if record_list.len() > 1 {
+    let total_kmers = if seq_paired.len() > 1 {
         taxa.len() - 2
     } else {
         taxa.len() - 1
@@ -101,7 +104,7 @@ pub fn classify_seq<'a>(
 
     let ext_call = taxonomy.nodes[call as usize].external_id;
     let classify = if call > 0 { "C" } else { "U" };
-    println!("{}\t{}\t{}", classify, dna_id, ext_call);
+    format!("{}\t{}\t{}", classify, dna_id, ext_call)
 }
 
 pub fn trim_pair_info(id: &str) -> String {
