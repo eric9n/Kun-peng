@@ -76,9 +76,6 @@ pub fn classify_seq<'a>(
                         minimizer_hit_groups += 1;
                     }
                 }
-                // if taxon > 0 {
-                //     println!("hash {:?}, taxon: {:?}", hashed, taxon);
-                // }
                 taxon
             } else {
                 last_taxon
@@ -124,9 +121,10 @@ pub fn resolve_tree(
     total_minimizers: usize,
     confidence_threshold: f64,
 ) -> u32 {
+    let required_score = (confidence_threshold * total_minimizers as f64).ceil() as u64;
+
     let mut max_taxon = 0u32;
     let mut max_score = 0;
-    let required_score = (confidence_threshold * total_minimizers as f64).ceil() as u64;
 
     for (&taxon, _) in hit_counts {
         let mut score = 0;
@@ -141,7 +139,7 @@ pub fn resolve_tree(
             max_score = score;
             max_taxon = taxon;
         } else if score == max_score {
-            max_taxon = taxonomy.lowest_common_ancestor(max_taxon, taxon);
+            max_taxon = taxonomy.lca(max_taxon, taxon);
         }
     }
 

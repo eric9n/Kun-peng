@@ -301,7 +301,7 @@ impl Taxonomy {
         })
     }
 
-    pub fn is_a_ancestor_of_b(&self, a: u32, b: u32) -> bool {
+    pub fn _is_a_ancestor_of_b(&self, a: u32, b: u32) -> bool {
         if a == 0 || b == 0 {
             return false;
         }
@@ -316,6 +316,20 @@ impl Taxonomy {
         }
 
         current == a
+    }
+
+    pub fn is_a_ancestor_of_b(&self, a: u32, b: u32) -> bool {
+        if a == 0 || b == 0 {
+            return false;
+        }
+
+        // 尝试从path_cache中获取b的祖先路径
+        if let Some(path) = self.path_cache.get(&b) {
+            // 检查路径中是否包含a
+            return path.contains(&a);
+        }
+
+        false
     }
 
     // 查找两个节点的最低公共祖先
