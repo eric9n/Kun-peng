@@ -8,10 +8,10 @@ use seq_io::fastq::{Record, RefRecord};
 use crate::fmix64 as murmur_hash3;
 use std::collections::HashMap;
 
-pub const TAXID_MAX: u64 = u64::MAX - 1;
-pub const MATE_PAIR_BORDER_TAXON: u64 = TAXID_MAX;
-pub const READING_FRAME_BORDER_TAXON: u64 = TAXID_MAX - 1;
-pub const AMBIGUOUS_SPAN_TAXON: u64 = TAXID_MAX - 2;
+pub const TAXID_MAX: u32 = u32::MAX - 1;
+pub const MATE_PAIR_BORDER_TAXON: u32 = TAXID_MAX;
+pub const READING_FRAME_BORDER_TAXON: u32 = TAXID_MAX - 1;
+pub const AMBIGUOUS_SPAN_TAXON: u32 = TAXID_MAX - 2;
 
 fn mask_low_quality_bases<'a>(ref_record: &'a RefRecord, minimum_quality_score: i32) -> Vec<u8> {
     let seq = ref_record.seq();
@@ -43,7 +43,7 @@ fn mask_low_quality_bases<'a>(ref_record: &'a RefRecord, minimum_quality_score: 
 
 pub fn classify_seq<'a>(
     taxonomy: &Taxonomy,
-    cht: &CompactHashTable,
+    cht: &CompactHashTable<u32>,
     scanner: &mut MinimizerScanner,
     record_list: &'a Vec<RefRecord>,
     minimum_quality_score: i32,
@@ -53,7 +53,7 @@ pub fn classify_seq<'a>(
     dna_id: String,
 ) {
     let mut hit_counts = TaxonCounts::new();
-    let mut taxa = Vec::<u64>::new();
+    let mut taxa = Vec::<u32>::new();
     let mut minimizer_hit_groups = 0;
 
     for record in record_list {
@@ -69,13 +69,16 @@ pub fn classify_seq<'a>(
                     .min_clear_hash_value
                     .map_or(true, |min_hash| hashed >= min_hash)
                 {
-                    taxon = cht.get(hashed) as u64;
+                    taxon = cht.get(hashed);
                     last_minimizer = minimizer;
                     last_taxon = taxon;
                     if taxon > 0 {
                         minimizer_hit_groups += 1;
                     }
                 }
+                // if taxon > 0 {
+                //     println!("hash {:?}, taxon: {:?}", hashed, taxon);
+                // }
                 taxon
             } else {
                 last_taxon
@@ -116,12 +119,12 @@ pub fn trim_pair_info(id: &str) -> String {
 }
 
 pub fn resolve_tree(
-    hit_counts: &HashMap<u64, u64>,
+    hit_counts: &HashMap<u32, u64>,
     taxonomy: &Taxonomy,
     total_minimizers: usize,
     confidence_threshold: f64,
-) -> u64 {
-    let mut max_taxon = 0;
+) -> u32 {
+    let mut max_taxon = 0u32;
     let mut max_score = 0;
     let required_score = (confidence_threshold * total_minimizers as f64).ceil() as u64;
 
@@ -154,7 +157,7 @@ pub fn resolve_tree(
         if max_score >= required_score {
             break;
         } else {
-            max_taxon = taxonomy.nodes[max_taxon as usize].parent_id;
+            max_taxon = taxonomy.nodes[max_taxon as usize].parent_id as u32;
         }
     }
 
@@ -200,42 +203,7 @@ pub fn resolve_tree_optimized(
         .unwrap_or(0)
 }
 
-pub fn resolve_tree2(
-    hit_counts: &HashMap<u64, u64>,
-    taxonomy: &Taxonomy,
-    total_minimizers: usize,
-    confidence_threshold: f64,
-) -> u64 {
-    let required_score = (confidence_threshold * total_minimizers as f64).ceil() as u64;
-    let mut taxon_scores: HashMap<u64, u64> = HashMap::new();
-
-    // 通过累加祖先节点的命中计数来计算得分
-    for (&taxon, &count) in hit_counts {
-        for ancestor in taxonomy.get_ancestors(taxon) {
-            *taxon_scores.entry(ancestor).or_insert(0) += count;
-        }
-    }
-
-    // 寻找得分最高的节点
-    let (mut max_taxon, mut max_score) = taxon_scores
-        .iter()
-        .max_by_key(|&(_, &score)| score)
-        .map(|(&taxon, &score)| (taxon, score))
-        .unwrap_or((0, 0));
-
-    // 验证得分是否满足置信度要求，并向上寻找满足要求的最近祖先
-    while max_taxon != 0 && max_score < required_score {
-        max_taxon = taxonomy
-            .nodes
-            .get(max_taxon as usize)
-            .map_or(0, |node| node.parent_id);
-        max_score = *taxon_scores.get(&max_taxon).unwrap_or(&0);
-    }
-
-    max_taxon
-}
-
-pub fn add_hitlist_string(taxa: &[u64], taxonomy: &Taxonomy) -> String {
+pub fn add_hitlist_string(taxa: &[u32], taxonomy: &Taxonomy) -> String {
     let mut result = String::new();
     let mut last_code = taxa[0];
     let mut code_count = 1;

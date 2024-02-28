@@ -233,15 +233,17 @@ impl NCBITaxonomy {
 // Taxonomy 类型定义
 #[derive(Debug)]
 pub struct Taxonomy {
+    pub path_cache: HashMap<u32, Vec<u32>>,
     pub nodes: Vec<TaxonomyNode>,
     pub name_data: Vec<u8>, // 字符串数据以 Vec<u8> 存储
     pub rank_data: Vec<u8>, // 字符串数据以 Vec<u8> 存储
-    external_to_internal_id_map: HashMap<u64, u64>,
+    external_to_internal_id_map: HashMap<u64, u32>,
 }
 
 impl Default for Taxonomy {
     fn default() -> Self {
         Taxonomy {
+            path_cache: HashMap::new(),
             nodes: Vec::new(),
             name_data: Vec::new(),
             rank_data: Vec::new(),
@@ -287,10 +289,11 @@ impl Taxonomy {
         let mut external_to_internal_id_map = HashMap::new();
         for (internal_id, node) in nodes.iter().enumerate() {
             let external_id = node.external_id;
-            external_to_internal_id_map.insert(external_id, internal_id as u64);
+            external_to_internal_id_map.insert(external_id, internal_id as u32);
         }
 
         Ok(Taxonomy {
+            path_cache: HashMap::new(),
             nodes,
             name_data,
             rank_data,
@@ -298,7 +301,7 @@ impl Taxonomy {
         })
     }
 
-    pub fn is_a_ancestor_of_b(&self, a: u64, b: u64) -> bool {
+    pub fn is_a_ancestor_of_b(&self, a: u32, b: u32) -> bool {
         if a == 0 || b == 0 {
             return false;
         }
@@ -307,7 +310,7 @@ impl Taxonomy {
 
         while current > a {
             current = match self.nodes.get(current as usize) {
-                Some(node) => node.parent_id,
+                Some(node) => node.parent_id as u32,
                 None => return false,
             };
         }
@@ -315,7 +318,30 @@ impl Taxonomy {
         current == a
     }
 
-    pub fn lowest_common_ancestor(&self, mut a: u64, mut b: u64) -> u64 {
+    // 查找两个节点的最低公共祖先
+    pub fn lca(&self, a: u32, b: u32) -> u32 {
+        if a == 0 || b == 0 {
+            return if a != 0 { a } else { b };
+        }
+
+        let default: Vec<u32> = vec![0];
+        let path_a = self.path_cache.get(&a).unwrap_or(&default);
+        let path_b = self.path_cache.get(&b).unwrap_or(&default);
+
+        let mut i = 0;
+        while i < path_a.len() && i < path_b.len() && path_a[i] == path_b[i] {
+            i += 1;
+        }
+
+        if i == 0 {
+            return 0;
+        }
+
+        // 返回最后一个共同的祖先
+        *path_a.get(i - 1).unwrap_or(&0)
+    }
+
+    pub fn lowest_common_ancestor(&self, mut a: u32, mut b: u32) -> u32 {
         // 如果任何一个节点是 0，返回另一个节点
         if a == 0 || b == 0 {
             return if a != 0 { a } else { b };
@@ -324,28 +350,51 @@ impl Taxonomy {
         // 遍历节点直到找到共同的祖先
         while a != b {
             if a > b {
-                a = self.nodes.get(a as usize).map_or(0, |node| node.parent_id);
+                a = self
+                    .nodes
+                    .get(a as usize)
+                    .map_or(0, |node| node.parent_id as u32);
             } else {
-                b = self.nodes.get(b as usize).map_or(0, |node| node.parent_id);
+                b = self
+                    .nodes
+                    .get(b as usize)
+                    .map_or(0, |node| node.parent_id as u32);
             }
         }
 
         a
     }
 
-    // 获取给定节点的所有祖先节点
-    pub fn get_ancestors(&self, mut taxon: u64) -> Vec<u64> {
-        let mut ancestors = Vec::new();
-        while taxon != 0 {
-            match self.nodes.get(taxon as usize) {
-                Some(node) => {
-                    ancestors.push(taxon); // 添加当前节点到祖先列表
-                    taxon = node.parent_id; // 移动到父节点
-                }
-                None => break,
-            }
+    pub fn build_path_cache(&mut self) {
+        let mut cache: HashMap<u32, Vec<u32>> = HashMap::new();
+        let root_external_id = 1u64;
+        if let Some(&root_internal_id) = self.external_to_internal_id_map.get(&root_external_id) {
+            // 开始从根节点遍历
+            self.build_path_for_node(root_internal_id, &mut cache, Vec::new());
         }
-        ancestors
+        self.path_cache = cache;
+    }
+
+    fn build_path_for_node(
+        &self,
+        node_id: u32,
+        path_cache: &mut HashMap<u32, Vec<u32>>,
+        mut current_path: Vec<u32>,
+    ) {
+        current_path.push(node_id); // 将当前节点添加到路径中
+                                    // 存储当前节点的路径
+        path_cache.insert(node_id, current_path.clone());
+
+        // 获取当前节点的信息
+        let node = &self.nodes[node_id as usize];
+        let first_child_id = node.first_child as u32;
+        let child_count = node.child_count as u32;
+
+        // 遍历所有子节点
+        for i in 0..child_count {
+            let child_internal_id = first_child_id + i; // 这里假设子节点的ID是连续的
+            self.build_path_for_node(child_internal_id, path_cache, current_path.clone());
+        }
     }
 
     pub fn node_count(&self) -> usize {
@@ -353,7 +402,7 @@ impl Taxonomy {
     }
 
     // get_internal_id 函数的优化
-    pub fn get_internal_id(&self, external_id: u64) -> u64 {
+    pub fn get_internal_id(&self, external_id: u64) -> u32 {
         *self
             .external_to_internal_id_map
             .get(&external_id)
@@ -366,7 +415,7 @@ impl Taxonomy {
 
         for (i, node) in self.nodes.iter().enumerate() {
             self.external_to_internal_id_map
-                .insert(node.external_id, i as u64);
+                .insert(node.external_id, i as u32);
         }
     }
 

@@ -268,7 +268,12 @@ fn get_record_id(ref_record: &RefRecord) -> String {
 }
 
 /// 处理fastq文件
-fn process_files(args: Args, idx_opts: IndexOptions, cht: &CompactHashTable, taxonomy: &Taxonomy) {
+fn process_files(
+    args: Args,
+    idx_opts: IndexOptions,
+    cht: &CompactHashTable<u32>,
+    taxonomy: &Taxonomy,
+) {
     let queue_len = if args.num_threads > 2 {
         args.num_threads as usize - 2
     } else {

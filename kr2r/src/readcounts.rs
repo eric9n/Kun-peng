@@ -5,7 +5,7 @@ use std::hash::BuildHasher;
 
 use crate::KBuildHasher;
 
-type TaxId = u64;
+type TaxId = u32;
 pub const TAXID_MAX: TaxId = TaxId::MAX;
 // 定义 taxon_counts_t 类型
 pub type TaxonCounts = HashMap<TaxId, u64>;
