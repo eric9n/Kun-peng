@@ -62,32 +62,41 @@ pub fn classify_seq<'a>(
     for seq in seq_paired {
         let mut last_minimizer = u64::MAX;
         let mut last_taxon = TAXID_MAX;
-        // let seq = mask_low_quality_bases(&record, minimum_quality_score);
         scanner.set_seq_end(&seq);
         while let Some(minimizer) = scanner.next_minimizer(&seq) {
-            let taxon = if last_minimizer != minimizer {
-                let hashed = murmur_hash3(minimizer);
-                let mut taxon = 0;
-                if meros
-                    .min_clear_hash_value
-                    .map_or(true, |min_hash| hashed >= min_hash)
-                {
-                    taxon = cht.get(hashed);
-                    last_minimizer = minimizer;
-                    last_taxon = taxon;
-                    if taxon > 0 {
-                        minimizer_hit_groups += 1;
-                    }
+            // 检查当前minimizer是否与上一个相同，如果相同，直接使用上一个计算的taxon
+            if last_minimizer == minimizer {
+                if last_taxon > 0 {
+                    *hit_counts.entry(last_taxon).or_insert(0) += 1;
+                }
+                taxa.push(last_taxon);
+                continue;
+            }
+
+            // 计算新的minimizer的哈希值
+            let hashed = murmur_hash3(minimizer);
+            // 检查是否满足min_clear_hash_value条件
+            let taxon = if meros
+                .min_clear_hash_value
+                .map_or(true, |min_hash| hashed >= min_hash)
+            {
+                // 获取taxon，更新last_minimizer和last_taxon
+                let taxon = cht.get(hashed);
+                if taxon > 0 {
+                    minimizer_hit_groups += 1;
+                    *hit_counts.entry(taxon).or_insert(0) += 1;
                 }
                 taxon
             } else {
-                last_taxon
+                0 // 如果不满足条件，taxon为0
             };
-            if taxon > 0 {
-                *hit_counts.entry(taxon).or_insert(0) += 1;
-            }
+
+            // 更新last_minimizer和last_taxon，用于下一次迭代
+            last_minimizer = minimizer;
+            last_taxon = taxon;
             taxa.push(taxon);
         }
+
         taxa.push(MATE_PAIR_BORDER_TAXON);
 
         scanner.reset();

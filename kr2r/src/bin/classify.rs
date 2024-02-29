@@ -2,7 +2,6 @@ use clap::Parser;
 use kr2r::compact_hash::CompactHashTable;
 use kr2r::iclassify::{classify_seq, mask_low_quality_bases};
 use kr2r::mmscanner::MinimizerScanner;
-// use kr2r::readcounts::TaxonCounters;
 use kr2r::pair;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
@@ -13,8 +12,6 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::io::{Error, ErrorKind, Result};
-// use std::sync::Mutex;
-// use std::time::Duration;
 
 /// Command line arguments for the classify program.
 ///
@@ -263,32 +260,6 @@ fn process_files(
                     }
                 },
             )
-            // read_parallel(
-            //     reader,
-            //     args.num_threads as u32,
-            //     queue_len,
-            //     |record_set| {
-            //         let mut scanner = MinimizerScanner::new(idx_opts.as_meros());
-            //         for record1 in record_set.into_iter() {
-            //             let dna_id = get_record_id(&record1);
-            //             let record_list = vec![record1];
-            //             classify_seq(
-            //                 &taxonomy,
-            //                 &cht,
-            //                 &mut scanner,
-            //                 &record_list,
-            //                 args.minimum_quality_score,
-            //                 meros,
-            //                 args.confidence_threshold,
-            //                 args.minimum_hit_groups,
-            //                 dna_id.into(),
-            //             );
-            //         }
-            //     },
-            //     |_| {
-            //         // while let Some(Ok((_, _))) = record_sets.next() {}
-            //     },
-            // )
         }
     }
 }
@@ -307,9 +278,6 @@ fn main() -> Result<()> {
             "Paired-end processing requires an even number of input files.",
         ));
     }
-
-    // let file = File::create("out_rust.txt")?;
-    // let mut writer = BufWriter::new(file);
 
     let mut writer: Box<dyn Write> = match &args.kraken_output_filename {
         Some(filename) => {

@@ -2,7 +2,7 @@ use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use kr2r::mmscanner::MinimizerScanner;
 use kr2r::utils::{expand_spaced_seed_mask, find_library_fna_files};
-use kr2r::{sea_hash, KBuildHasher};
+use kr2r::{fmix64 as murmur_hash3, KBuildHasher};
 use kr2r::{Meros, BITS_PER_CHAR, DEFAULT_SPACED_SEED_MASK};
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
@@ -119,7 +119,7 @@ fn process_sequence(
                 let seq = record.seq();
                 scanner.set_seq_end(seq);
                 while let Some(minimizer) = scanner.next_minimizer(seq) {
-                    let hash_v = sea_hash(minimizer);
+                    let hash_v = murmur_hash3(minimizer);
                     if hash_v & RANGE_MASK < args.n as u64 {
                         minimizer_set.insert(hash_v);
                     }
@@ -133,9 +133,6 @@ fn process_sequence(
                 for minimizer in m_set {
                     hllp.insert(&minimizer);
                 }
-                // sets.extend(m_set);
-
-                // counter.fetch_add(count, Ordering::SeqCst);
             }
         },
     );
