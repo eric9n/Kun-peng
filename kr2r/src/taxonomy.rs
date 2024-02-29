@@ -292,13 +292,15 @@ impl Taxonomy {
             external_to_internal_id_map.insert(external_id, internal_id as u32);
         }
 
-        Ok(Taxonomy {
+        let mut taxo = Taxonomy {
             path_cache: HashMap::new(),
             nodes,
             name_data,
             rank_data,
             external_to_internal_id_map,
-        })
+        };
+        taxo.build_path_cache();
+        Ok(taxo)
     }
 
     pub fn _is_a_ancestor_of_b(&self, a: u32, b: u32) -> bool {

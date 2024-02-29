@@ -1,5 +1,7 @@
 // kraken 2 使用的是murmur_hash3 算法的 fmix64作为 hash
-use crate::{canonical_representation, char_to_value, Meros, BITS_PER_CHAR};
+use crate::{
+    canonical_representation, char_to_value, fmix64 as murmur_hash3, Meros, BITS_PER_CHAR,
+};
 use std::collections::VecDeque;
 
 #[inline]
@@ -100,6 +102,18 @@ impl Cursor {
         Self {
             pos: 0,
             end: 0,
+            inner: Vec::with_capacity(meros.l_mer),
+            capacity: meros.l_mer,
+            value: 0,
+            mask: meros.mask,
+            window: MinimizerWindow::new(meros.window_size()),
+        }
+    }
+
+    fn init(meros: &Meros, size: usize) -> Self {
+        Self {
+            pos: 0,
+            end: size,
             inner: Vec::with_capacity(meros.l_mer),
             capacity: meros.l_mer,
             value: 0,
@@ -242,7 +256,7 @@ impl<'a> KmerIterator<'a> {
         KmerIterator {
             seq,
             meros,
-            cursor: Cursor::new(&meros),
+            cursor: Cursor::init(&meros, seq.len()),
             last_minimizer: std::u64::MAX,
         }
     }
@@ -265,7 +279,7 @@ impl<'a> Iterator for KmerIterator<'a> {
             if let Some(minimizer) = self.next_window() {
                 if minimizer != self.last_minimizer {
                     self.last_minimizer = minimizer;
-                    return Some(minimizer ^ self.meros.toggle_mask);
+                    return Some(murmur_hash3(minimizer ^ self.meros.toggle_mask));
                 }
             }
         }

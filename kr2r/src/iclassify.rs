@@ -60,19 +60,8 @@ pub fn classify_seq<'a>(
     let mut minimizer_hit_groups = 0;
 
     for seq in seq_paired {
-        let mut last_minimizer = u64::MAX;
-        let mut last_taxon = TAXID_MAX;
         scanner.set_seq_end(&seq);
         while let Some(minimizer) = scanner.next_minimizer(&seq) {
-            // 检查当前minimizer是否与上一个相同，如果相同，直接使用上一个计算的taxon
-            if last_minimizer == minimizer {
-                if last_taxon > 0 {
-                    *hit_counts.entry(last_taxon).or_insert(0) += 1;
-                }
-                taxa.push(last_taxon);
-                continue;
-            }
-
             // 计算新的minimizer的哈希值
             let hashed = murmur_hash3(minimizer);
             // 检查是否满足min_clear_hash_value条件
@@ -92,8 +81,6 @@ pub fn classify_seq<'a>(
             };
 
             // 更新last_minimizer和last_taxon，用于下一次迭代
-            last_minimizer = minimizer;
-            last_taxon = taxon;
             taxa.push(taxon);
         }
 
@@ -116,6 +103,47 @@ pub fn classify_seq<'a>(
     format!("{}\t{}\t{}", classify, dna_id, ext_call)
 }
 
+pub fn classify_sequence<'a>(
+    taxonomy: &Taxonomy,
+    cht: &CompactHashTable<u32>,
+    seq_paired: &'a Vec<Vec<u64>>,
+    meros: Meros,
+    confidence_threshold: f64,
+    minimum_hit_groups: i32,
+    dna_id: String,
+) -> String {
+    let mut hit_counts = TaxonCounts::new();
+    let mut total_kmers = 0usize;
+    let mut minimizer_hit_groups = 0;
+
+    for hash_keys in seq_paired {
+        for hashed in hash_keys.iter() {
+            let taxon = if meros
+                .min_clear_hash_value
+                .map_or(true, |min_hash| *hashed >= min_hash)
+            {
+                cht.get(*hashed)
+            } else {
+                0
+            };
+            if taxon > 0 {
+                minimizer_hit_groups += 1;
+                *hit_counts.entry(taxon).or_insert(0) += 1;
+            }
+            total_kmers += 1;
+        }
+    }
+
+    let mut call = resolve_tree(&hit_counts, taxonomy, total_kmers, confidence_threshold);
+    if call > 0 && minimizer_hit_groups < minimum_hit_groups {
+        call = 0;
+    };
+
+    let ext_call = taxonomy.nodes[call as usize].external_id;
+    let classify = if call > 0 { "C" } else { "U" };
+    format!("{}\t{}\t{}", classify, dna_id, ext_call)
+}
+
 pub fn trim_pair_info(id: &str) -> String {
     let sz = id.len();
     if sz <= 2 {
@@ -127,6 +155,7 @@ pub fn trim_pair_info(id: &str) -> String {
     id.to_string()
 }
 
+// &HashMap<u32, u64>,
 pub fn resolve_tree(
     hit_counts: &HashMap<u32, u64>,
     taxonomy: &Taxonomy,

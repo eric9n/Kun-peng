@@ -1,7 +1,7 @@
 use clap::Parser;
 use kr2r::compact_hash::CompactHashTable;
-use kr2r::iclassify::{classify_seq, mask_low_quality_bases};
-use kr2r::mmscanner::MinimizerScanner;
+use kr2r::iclassify::{classify_sequence, mask_low_quality_bases};
+use kr2r::mmscanner::KmerIterator;
 use kr2r::pair;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
@@ -12,6 +12,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::io::{Error, ErrorKind, Result};
+use std::time::Instant;
 
 /// Command line arguments for the classify program.
 ///
@@ -151,7 +152,7 @@ fn get_record_id(ref_record: &RefRecord) -> String {
 #[derive(Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct SeqReads {
     pub dna_id: String,
-    pub seq_paired: Vec<Vec<u8>>,
+    pub seq_paired: Vec<Vec<u64>>,
 }
 
 /// 处理fastq文件
@@ -187,7 +188,11 @@ fn process_files(
                         let dna_id = get_record_id(&records.0);
                         let seq1 = mask_low_quality_bases(&records.0, args.minimum_quality_score);
                         let seq2 = mask_low_quality_bases(&records.1, args.minimum_quality_score);
-                        let seq_paired: Vec<Vec<u8>> = vec![seq1, seq2];
+
+                        let kmers1 = KmerIterator::new(&seq1, meros).collect();
+                        let kmers2 = KmerIterator::new(&seq2, meros).collect();
+
+                        let seq_paired: Vec<Vec<u64>> = vec![kmers1, kmers2];
                         seq_pair_set.insert(SeqReads { dna_id, seq_paired });
                     }
                     seq_pair_set
@@ -197,11 +202,9 @@ fn process_files(
                         let results: Vec<String> = seq_pair_set
                             .into_par_iter()
                             .map(|item| {
-                                let mut scanner = MinimizerScanner::new(idx_opts.as_meros());
-                                classify_seq(
+                                classify_sequence(
                                     &taxonomy,
                                     &cht,
-                                    &mut scanner,
                                     &item.seq_paired,
                                     meros,
                                     args.confidence_threshold,
@@ -231,7 +234,8 @@ fn process_files(
                     for records in record_set.into_iter() {
                         let dna_id = get_record_id(&records);
                         let seq1 = mask_low_quality_bases(&records, args.minimum_quality_score);
-                        let seq_paired: Vec<Vec<u8>> = vec![seq1];
+                        let kmers1: Vec<u64> = KmerIterator::new(&seq1, meros).collect();
+                        let seq_paired: Vec<Vec<u64>> = vec![kmers1];
                         seq_pair_set.insert(SeqReads { dna_id, seq_paired });
                     }
                     seq_pair_set
@@ -241,11 +245,9 @@ fn process_files(
                         let results: Vec<String> = seq_pair_set
                             .into_par_iter()
                             .map(|item| {
-                                let mut scanner = MinimizerScanner::new(idx_opts.as_meros());
-                                classify_seq(
+                                classify_sequence(
                                     &taxonomy,
                                     &cht,
-                                    &mut scanner,
                                     &item.seq_paired,
                                     meros,
                                     args.confidence_threshold,
@@ -287,6 +289,14 @@ fn main() -> Result<()> {
         None => Box::new(io::stdout()) as Box<dyn Write>,
     };
 
+    // 开始计时
+    let start = Instant::now();
+
     process_files(args, idx_opts, &cht, &taxo, &mut writer);
+    // 计算持续时间
+    let duration = start.elapsed();
+
+    // 打印运行时间
+    println!("process_files took: {:?}", duration);
     Ok(())
 }

@@ -216,7 +216,7 @@ where
         let step = 1;
         while let Some(cell) = self.table.get(idx) {
             if cell.taxid(self.value_mask) == 0 {
-                break;
+                return 0;
             }
             if cell.compacted_key(self.value_bits) == compacted_key {
                 return cell.taxid(self.value_mask);
@@ -358,6 +358,10 @@ impl<'a> CompactHashTable<'a, AtomicU32> {
         let first_idx = idx;
         let step = 1;
         while let Some(cell1) = self.table.get(idx) {
+            if cell1.taxid(self.value_mask) == 0 {
+                cell1.populate(ci.cell, self.value_bits);
+                break;
+            }
             if cell1.compacted_key(self.value_bits) == ci.cell.compacted_key
                 && cell1.taxid(self.value_mask) != ci.cell.taxid
             {
@@ -366,11 +370,6 @@ impl<'a> CompactHashTable<'a, AtomicU32> {
                     ci.cell.compacted_key,
                     cell1.taxid(self.value_mask),
                 ));
-            }
-
-            if cell1.taxid(self.value_mask) == 0 {
-                cell1.populate(ci.cell, self.value_bits);
-                break;
             }
 
             idx = (idx + step) % self.capacity;
