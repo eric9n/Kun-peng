@@ -1,4 +1,5 @@
 use crate::compact_hash::CompactHashTable;
+use crate::seq::SeqReads;
 use crate::taxonomy::Taxonomy;
 use crate::Meros;
 use crate::TaxonCounts;
@@ -12,17 +13,16 @@ pub const AMBIGUOUS_SPAN_TAXON: u32 = TAXID_MAX - 2;
 pub fn classify_sequence<'a>(
     taxonomy: &Taxonomy,
     cht: &CompactHashTable<u32>,
-    seq_paired: Vec<Vec<u64>>,
+    seq_reads: SeqReads,
     meros: Meros,
     confidence_threshold: f64,
     minimum_hit_groups: i32,
-    dna_id: String,
 ) -> String {
     let mut hit_counts = TaxonCounts::new();
     let mut total_kmers = 0usize;
     let mut minimizer_hit_groups = 0;
 
-    for hash_keys in seq_paired {
+    for hash_keys in seq_reads.seq_paired {
         for hashed in hash_keys.iter() {
             let taxon = if meros
                 .min_clear_hash_value
@@ -47,7 +47,7 @@ pub fn classify_sequence<'a>(
 
     let ext_call = taxonomy.nodes[call as usize].external_id;
     let classify = if call > 0 { "C" } else { "U" };
-    format!("{}\t{}\t{}", classify, dna_id, ext_call)
+    format!("{}\t{}\t{}", classify, seq_reads.dna_id, ext_call)
 }
 
 pub fn trim_pair_info(id: &str) -> String {

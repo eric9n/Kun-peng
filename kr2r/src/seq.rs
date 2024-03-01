@@ -1,17 +1,20 @@
+use crate::mmscanner::KmerIterator;
+use seq_io::fasta;
+use seq_io::fasta::Record as FaRecord;
 use seq_io::fastq;
 use seq_io::fastq::Record as FqRecord;
 
-use seq_io::fasta;
-use seq_io::fasta::Record as FaRecord;
-
 use seq_io::parallel::Reader;
 
+use std::collections::HashSet;
 use std::fs::File;
 use std::io;
 use std::iter;
 use std::path::Path;
 
 use seq_io::policy::StdPolicy;
+
+use crate::Meros;
 
 type DefaultBufPolicy = StdPolicy;
 
@@ -120,5 +123,48 @@ impl<'a> SeqX for fasta::RefRecord<'a> {
     #[allow(unused_variables)]
     fn seq_x(&self, score: i32) -> Vec<u8> {
         self.seq().to_vec()
+    }
+}
+
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SeqReads {
+    pub dna_id: String,
+    pub seq_paired: Vec<Vec<u64>>,
+}
+
+pub trait SeqSet {
+    fn to_seq_reads(&self, score: i32, meros: Meros) -> HashSet<SeqReads>;
+}
+
+impl SeqSet for PairRecordSet {
+    fn to_seq_reads(&self, score: i32, meros: Meros) -> HashSet<SeqReads> {
+        let mut seq_pair_set = HashSet::<SeqReads>::new();
+
+        for records in self.into_iter() {
+            let dna_id = records.0.id().unwrap_or_default().to_string();
+            let seq1 = records.0.seq_x(score);
+            let seq2 = records.1.seq_x(score);
+
+            let kmers1 = KmerIterator::new(&seq1, meros).collect();
+            let kmers2 = KmerIterator::new(&seq2, meros).collect();
+
+            let seq_paired: Vec<Vec<u64>> = vec![kmers1, kmers2];
+            seq_pair_set.insert(SeqReads { dna_id, seq_paired });
+        }
+        seq_pair_set
+    }
+}
+
+impl SeqSet for fastq::RecordSet {
+    fn to_seq_reads(&self, score: i32, meros: Meros) -> HashSet<SeqReads> {
+        let mut seq_pair_set = HashSet::<SeqReads>::new();
+        for records in self.into_iter() {
+            let dna_id = records.id().unwrap_or_default().to_string();
+            let seq1 = records.seq_x(score);
+            let kmers1: Vec<u64> = KmerIterator::new(&seq1, meros).collect();
+            let seq_paired: Vec<Vec<u64>> = vec![kmers1];
+            seq_pair_set.insert(SeqReads { dna_id, seq_paired });
+        }
+        seq_pair_set
     }
 }

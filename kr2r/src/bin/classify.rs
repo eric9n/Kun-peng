@@ -1,15 +1,12 @@
 use clap::Parser;
 use kr2r::compact_hash::CompactHashTable;
 use kr2r::iclassify::classify_sequence;
-use kr2r::mmscanner::KmerIterator;
-use kr2r::pair;
-use kr2r::pair::SeqX;
+use kr2r::seq::{self, SeqSet};
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
 use rayon::prelude::*;
-use seq_io::fastq::{Reader as FqReader, Record};
+use seq_io::fastq::Reader as FqReader;
 use seq_io::parallel::read_parallel;
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::io::{Error, ErrorKind, Result};
@@ -137,10 +134,57 @@ fn check_feature(dna_db: bool) -> Result<()> {
     Ok(())
 }
 
-#[derive(Hash, PartialEq, Eq, PartialOrd, Ord)]
-struct SeqReads {
-    pub dna_id: String,
-    pub seq_paired: Vec<Vec<u64>>,
+macro_rules! process_record_sets {
+    ($record_sets:expr, $taxonomy:expr, $cht:expr, $meros:expr, $args:expr, $writer:expr) => {
+        while let Some(Ok((_, seq_pair_set))) = $record_sets.next() {
+            let results: Vec<String> = seq_pair_set
+                .into_par_iter()
+                .map(|item| {
+                    classify_sequence(
+                        &$taxonomy,
+                        &$cht,
+                        item,
+                        $meros,
+                        $args.confidence_threshold,
+                        $args.minimum_hit_groups,
+                    )
+                })
+                .collect();
+            for result in results {
+                writeln!($writer, "{}", result).expect("Unable to write to file");
+            }
+        }
+    };
+}
+
+macro_rules! process_file_pairs {
+    ($taxonomy:expr, $cht:expr, $args:expr, $meros:expr, $writer:expr, $reader_creator:expr) => {
+        // 对 file1 和 file2 执行分类处理
+        let pair_reader = $reader_creator.expect("Unable to create pair reader from paths");
+        read_parallel(
+            pair_reader,
+            $args.num_threads as u32,
+            $args.num_threads as usize,
+            |record_set| record_set.to_seq_reads($args.minimum_quality_score, $meros),
+            |record_sets| {
+                process_record_sets!(record_sets, $taxonomy, $cht, $meros, $args, $writer)
+            },
+        );
+    };
+
+    ($taxonomy:expr, $cht:expr, $args:expr, $meros:expr, $writer:expr, $reader_creator:expr, $file1:expr) => {
+        // 对 file1 和 file2 执行分类处理
+        let pair_reader = $reader_creator($file1).expect("Unable to create pair reader from paths");
+        read_parallel(
+            pair_reader,
+            $args.num_threads as u32,
+            $args.num_threads as usize,
+            |record_set| record_set.to_seq_reads($args.minimum_quality_score, $meros),
+            |record_sets| {
+                process_record_sets!(record_sets, $taxonomy, $cht, $meros, $args, $writer)
+            },
+        );
+    };
 }
 
 /// 处理fastq文件
@@ -151,11 +195,6 @@ fn process_files(
     taxonomy: &Taxonomy,
     writer: &mut Box<dyn std::io::Write>,
 ) {
-    let queue_len = if args.num_threads > 2 {
-        args.num_threads as usize - 2
-    } else {
-        1
-    };
     let meros = idx_opts.as_meros();
 
     if args.paired_end_processing && !args.single_file_pairs {
@@ -163,93 +202,26 @@ fn process_files(
         for file_pair in args.input_files.chunks(2) {
             let file1 = &file_pair[0];
             let file2 = &file_pair[1];
-            // 对 file1 和 file2 执行分类处理
-            let pair_reader = pair::PairReader::from_path(file1, file2).unwrap();
-            read_parallel(
-                pair_reader,
-                args.num_threads as u32,
-                queue_len,
-                |record_set| {
-                    let mut seq_pair_set = HashSet::<SeqReads>::new();
-
-                    for records in record_set.into_iter() {
-                        let dna_id = records.0.id().unwrap_or_default().to_string();
-                        let seq1 = records.0.seq_x(args.minimum_quality_score);
-                        let seq2 = records.1.seq_x(args.minimum_quality_score);
-
-                        let kmers1 = KmerIterator::new(&seq1, meros).collect();
-                        let kmers2 = KmerIterator::new(&seq2, meros).collect();
-
-                        let seq_paired: Vec<Vec<u64>> = vec![kmers1, kmers2];
-                        seq_pair_set.insert(SeqReads { dna_id, seq_paired });
-                    }
-                    seq_pair_set
-                },
-                |record_sets| {
-                    while let Some(Ok((_, seq_pair_set))) = record_sets.next() {
-                        let results: Vec<String> = seq_pair_set
-                            .into_par_iter()
-                            .map(|item| {
-                                classify_sequence(
-                                    &taxonomy,
-                                    &cht,
-                                    item.seq_paired,
-                                    meros,
-                                    args.confidence_threshold,
-                                    args.minimum_hit_groups,
-                                    item.dna_id,
-                                )
-                            })
-                            .collect();
-                        for result in results {
-                            writeln!(writer, "{}", result).expect("Unable to write to file");
-                        }
-                    }
-                },
-            )
+            process_file_pairs!(
+                taxonomy,
+                cht,
+                args,
+                meros,
+                writer,
+                seq::PairReader::from_path(file1, file2)
+            );
         }
     } else {
         for file in args.input_files {
             // 对 file 执行分类处理
-            let reader = FqReader::from_path(file).unwrap();
-            read_parallel(
-                reader,
-                args.num_threads as u32,
-                queue_len,
-                |record_set| {
-                    let mut seq_pair_set = HashSet::<SeqReads>::new();
-
-                    for records in record_set.into_iter() {
-                        let dna_id = records.id().unwrap_or_default().to_string();
-                        let seq1 = records.seq_x(args.minimum_quality_score);
-                        let kmers1: Vec<u64> = KmerIterator::new(&seq1, meros).collect();
-                        let seq_paired: Vec<Vec<u64>> = vec![kmers1];
-                        seq_pair_set.insert(SeqReads { dna_id, seq_paired });
-                    }
-                    seq_pair_set
-                },
-                |record_sets| {
-                    while let Some(Ok((_, seq_pair_set))) = record_sets.next() {
-                        let results: Vec<String> = seq_pair_set
-                            .into_par_iter()
-                            .map(|item| {
-                                classify_sequence(
-                                    &taxonomy,
-                                    &cht,
-                                    item.seq_paired,
-                                    meros,
-                                    args.confidence_threshold,
-                                    args.minimum_hit_groups,
-                                    item.dna_id,
-                                )
-                            })
-                            .collect();
-                        for result in results {
-                            writeln!(writer, "{}", result).expect("Unable to write to file");
-                        }
-                    }
-                },
-            )
+            process_file_pairs!(
+                taxonomy,
+                cht,
+                args,
+                meros,
+                writer,
+                FqReader::from_path(file)
+            );
         }
     }
 }
