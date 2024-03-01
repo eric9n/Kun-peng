@@ -5,11 +5,13 @@ use kr2r::seq::{self, SeqSet};
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
 use rayon::prelude::*;
+use seq_io::fasta::Reader as FaReader;
 use seq_io::fastq::Reader as FqReader;
 use seq_io::parallel::read_parallel;
 use std::fs::File;
-use std::io::{self, BufWriter, Write};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::io::{Error, ErrorKind, Result};
+use std::path::Path;
 use std::time::Instant;
 
 /// Command line arguments for the classify program.
@@ -134,6 +136,33 @@ fn check_feature(dna_db: bool) -> Result<()> {
     Ok(())
 }
 
+enum FileFormat {
+    Fasta,
+    Fastq,
+}
+
+fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<FileFormat> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = [0; 1]; // 仅分配一个字节的缓冲区
+
+    // 读取文件的第一个字节
+    let bytes_read = reader.read(&mut buffer)?;
+
+    if bytes_read == 0 {
+        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Empty file"));
+    }
+
+    match buffer[0] {
+        b'>' => Ok(FileFormat::Fasta),
+        b'@' => Ok(FileFormat::Fastq),
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Unrecognized file format",
+        )),
+    }
+}
+
 macro_rules! process_record_sets {
     ($record_sets:expr, $taxonomy:expr, $cht:expr, $meros:expr, $args:expr, $writer:expr) => {
         while let Some(Ok((_, seq_pair_set))) = $record_sets.next() {
@@ -160,16 +189,18 @@ macro_rules! process_record_sets {
 macro_rules! process_file_pairs {
     ($taxonomy:expr, $cht:expr, $args:expr, $meros:expr, $writer:expr, $reader_creator:expr) => {
         // 对 file1 和 file2 执行分类处理
-        let pair_reader = $reader_creator.expect("Unable to create pair reader from paths");
-        read_parallel(
-            pair_reader,
-            $args.num_threads as u32,
-            $args.num_threads as usize,
-            |record_set| record_set.to_seq_reads($args.minimum_quality_score, $meros),
-            |record_sets| {
-                process_record_sets!(record_sets, $taxonomy, $cht, $meros, $args, $writer)
-            },
-        );
+        {
+            let pair_reader = $reader_creator.expect("Unable to create pair reader from paths");
+            read_parallel(
+                pair_reader,
+                $args.num_threads as u32,
+                $args.num_threads as usize,
+                |record_set| record_set.to_seq_reads($args.minimum_quality_score, $meros),
+                |record_sets| {
+                    process_record_sets!(record_sets, $taxonomy, $cht, $meros, $args, $writer)
+                },
+            );
+        }
     };
 
     ($taxonomy:expr, $cht:expr, $args:expr, $meros:expr, $writer:expr, $reader_creator:expr, $file1:expr) => {
@@ -194,7 +225,7 @@ fn process_files(
     cht: &CompactHashTable<u32>,
     taxonomy: &Taxonomy,
     writer: &mut Box<dyn std::io::Write>,
-) {
+) -> Result<()> {
     let meros = idx_opts.as_meros();
 
     if args.paired_end_processing && !args.single_file_pairs {
@@ -202,28 +233,54 @@ fn process_files(
         for file_pair in args.input_files.chunks(2) {
             let file1 = &file_pair[0];
             let file2 = &file_pair[1];
-            process_file_pairs!(
-                taxonomy,
-                cht,
-                args,
-                meros,
-                writer,
-                seq::PairReader::from_path(file1, file2)
-            );
+            match detect_file_format(&file1)? {
+                FileFormat::Fastq => {
+                    process_file_pairs!(
+                        taxonomy,
+                        cht,
+                        args,
+                        meros,
+                        writer,
+                        seq::PairFastqReader::from_path(file1, file2)
+                    );
+                }
+                FileFormat::Fasta => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Unrecognized file format(fasta paired)",
+                    ));
+                }
+            }
         }
     } else {
         for file in args.input_files {
             // 对 file 执行分类处理
-            process_file_pairs!(
-                taxonomy,
-                cht,
-                args,
-                meros,
-                writer,
-                FqReader::from_path(file)
-            );
+            match detect_file_format(&file)? {
+                FileFormat::Fastq => {
+                    process_file_pairs!(
+                        taxonomy,
+                        cht,
+                        args,
+                        meros,
+                        writer,
+                        FqReader::from_path(file)
+                    );
+                }
+                FileFormat::Fasta => {
+                    process_file_pairs!(
+                        taxonomy,
+                        cht,
+                        args,
+                        meros,
+                        writer,
+                        FaReader::from_path(file)
+                    );
+                }
+            };
         }
     }
+
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -252,7 +309,7 @@ fn main() -> Result<()> {
     // 开始计时
     let start = Instant::now();
 
-    process_files(args, idx_opts, &cht, &taxo, &mut writer);
+    process_files(args, idx_opts, &cht, &taxo, &mut writer)?;
     // 计算持续时间
     let duration = start.elapsed();
 
