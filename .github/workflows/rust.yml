@@ -9,7 +9,7 @@ on:
 # On each push to the `release` branch it will create or update a GitHub release, build your app, and upload the artifacts to the release.
 env:
   CARGO_TERM_COLOR: always
-  BINARIES_LIST: 'ncbi estimate_capacity'
+  BINARIES_LIST: 'ncbi estimate_capacity build_db classify'
   PROJECT_PREFIX: 'kraken_rust_'
 
 jobs:
