@@ -46,10 +46,9 @@ struct Args {
     )]
     confidence_threshold: f64,
 
-    /// Enable quick mode for faster processing.
-    #[clap(short = 'q', long = "quick-mode", action)]
-    quick_mode: bool,
-
+    // /// Enable quick mode for faster processing.
+    // #[clap(short = 'q', long = "quick-mode", action)]
+    // quick_mode: bool,
     /// The number of threads to use, default is 1.
     #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = 1)]
     num_threads: i32,
@@ -71,38 +70,36 @@ struct Args {
     #[clap(short = 'S', long = "single-file-pairs", action)]
     single_file_pairs: bool,
 
-    /// Use mpa-style report format.
-    #[clap(short = 'm', long = "mpa-style-report", action)]
-    mpa_style_report: bool,
+    // /// Use mpa-style report format.
+    // #[clap(short = 'm', long = "mpa-style-report", action)]
+    // mpa_style_report: bool,
 
-    /// Report k-mer data in the output.
-    #[clap(short = 'K', long = "report-kmer-data", action)]
-    report_kmer_data: bool,
+    // /// Report k-mer data in the output.
+    // #[clap(short = 'K', long = "report-kmer-data", action)]
+    // report_kmer_data: bool,
 
-    /// File path for outputting the report.
-    #[clap(short = 'R', long = "report-filename", value_parser)]
-    report_filename: Option<String>,
+    // /// File path for outputting the report.
+    // #[clap(short = 'R', long = "report-filename", value_parser)]
+    // report_filename: Option<String>,
 
-    /// Report taxa with zero count.
-    #[clap(short = 'z', long = "report-zero-counts", action)]
-    report_zero_counts: bool,
+    // /// Report taxa with zero count.
+    // #[clap(short = 'z', long = "report-zero-counts", action)]
+    // report_zero_counts: bool,
 
-    /// File path for outputting classified sequences.
-    #[clap(short = 'C', long = "classified-output-filename", value_parser)]
-    classified_output_filename: Option<String>,
+    // /// File path for outputting classified sequences.
+    // #[clap(short = 'C', long = "classified-output-filename", value_parser)]
+    // classified_output_filename: Option<String>,
 
-    /// File path for outputting unclassified sequences.
-    #[clap(short = 'U', long = "unclassified-output-filename", value_parser)]
-    unclassified_output_filename: Option<String>,
-
+    // /// File path for outputting unclassified sequences.
+    // #[clap(short = 'U', long = "unclassified-output-filename", value_parser)]
+    // unclassified_output_filename: Option<String>,
     /// File path for outputting normal Kraken output.
     #[clap(short = 'O', long = "kraken-output-filename", value_parser)]
     kraken_output_filename: Option<String>,
 
-    /// Print scientific name instead of taxid in Kraken output.
-    #[clap(short = 'n', long = "print-scientific-name", action)]
-    print_scientific_name: bool,
-
+    // /// Print scientific name instead of taxid in Kraken output.
+    // #[clap(short = 'n', long = "print-scientific-name", action)]
+    // print_scientific_name: bool,
     /// Minimum quality score for FASTQ data, default is 0.
     #[clap(
         short = 'Q',
@@ -111,10 +108,6 @@ struct Args {
         default_value_t = 0
     )]
     minimum_quality_score: i32,
-
-    /// Use memory mapping to access hash and taxonomy data.
-    #[clap(short = 'M', long = "use-memory-mapping", action)]
-    use_memory_mapping: bool,
 
     /// Input files for processing.
     ///

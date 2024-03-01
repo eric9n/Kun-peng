@@ -47,9 +47,11 @@ struct Args {
     #[clap(short = 'T', long, value_parser = parse_binary)]
     toggle_mask: Option<u64>,
 
-    /// Read block size
-    #[clap(short = 'B', long, default_value = "31457280")]
-    block_size: usize,
+    /// Proportion of the hash table to be populated
+    /// (build task only; def: 0.7, must be
+    ///    between 0 and 1).
+    #[clap(long, long, default_value_t = 0.7)]
+    load_factor: f64,
 
     /// Number of threads
     #[clap(short = 'p', long, default_value = "4")]
@@ -145,6 +147,23 @@ fn process_sequence(
     hllp
 }
 
+fn format_bytes(size: f64) -> String {
+    let suffixes = ["B", "kB", "MB", "GB", "TB", "PB", "EB"];
+    let mut size = size;
+    let mut current_suffix = &suffixes[0];
+
+    for suffix in &suffixes[1..] {
+        if size >= 1024.0 {
+            current_suffix = suffix;
+            size /= 1024.0;
+        } else {
+            break;
+        }
+    }
+
+    format!("{:.2}{}", size, current_suffix)
+}
+
 fn main() {
     let mut args = Args::parse();
     if args.k_mer < args.l_mer as u64 {
@@ -182,5 +201,11 @@ fn main() {
 
     let hllp_count = (hllp.count() * RANGE_SECTIONS as f64 / args.n as f64).round() as u64;
     // println!("Final count: {:?}", final_count);
-    println!("estimate count: {:?}", hllp_count);
+    let required_capacity = (hllp_count + 8192) as f64 / args.load_factor;
+    println!(
+        "estimate count: {:?}, required capacity: {:?}, Estimated hash table requirement: {:?}",
+        hllp_count,
+        required_capacity.ceil(),
+        format_bytes(required_capacity)
+    );
 }

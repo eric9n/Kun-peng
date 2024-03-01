@@ -17,14 +17,6 @@ path = "src/bin/build_db.rs"
 name = "classify"
 path = "src/bin/classify.rs"
 
-[[bin]]
-name = "cht"
-path = "src/bin/cht.rs"
-
-[[bin]]
-name = "taxo"
-path = "src/bin/taxo.rs"
-
 
 [features]
 default = ["dna"]
