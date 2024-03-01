@@ -106,7 +106,7 @@ pub fn classify_seq<'a>(
 pub fn classify_sequence<'a>(
     taxonomy: &Taxonomy,
     cht: &CompactHashTable<u32>,
-    seq_paired: &'a Vec<Vec<u64>>,
+    seq_paired: Vec<Vec<u64>>,
     meros: Meros,
     confidence_threshold: f64,
     minimum_hit_groups: i32,

@@ -205,7 +205,7 @@ fn process_files(
                                 classify_sequence(
                                     &taxonomy,
                                     &cht,
-                                    &item.seq_paired,
+                                    item.seq_paired,
                                     meros,
                                     args.confidence_threshold,
                                     args.minimum_hit_groups,
@@ -248,7 +248,7 @@ fn process_files(
                                 classify_sequence(
                                     &taxonomy,
                                     &cht,
-                                    &item.seq_paired,
+                                    item.seq_paired,
                                     meros,
                                     args.confidence_threshold,
                                     args.minimum_hit_groups,

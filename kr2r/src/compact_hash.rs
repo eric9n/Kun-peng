@@ -238,7 +238,7 @@ impl<'a> CompactHashTable<'a, u32> {
             .create(true)
             .open(&filename)?;
 
-        let mmap = unsafe { MmapMut::map_mut(&file)? };
+        let mmap = unsafe { MmapOptions::new().populate().map_mut(&file)? };
 
         let capacity = LittleEndian::read_u64(&mmap[0..8]) as usize;
         let size = LittleEndian::read_u64(&mmap[8..16]) as usize;
