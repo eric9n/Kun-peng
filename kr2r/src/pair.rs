@@ -1,4 +1,9 @@
 use seq_io::fastq;
+use seq_io::fastq::Record as FqRecord;
+
+use seq_io::fasta;
+use seq_io::fasta::Record as FaRecord;
+
 use seq_io::parallel::Reader;
 
 use std::fs::File;
@@ -83,5 +88,37 @@ where
 
         // If both reads are successful, return Ok(())
         Some(Ok(()))
+    }
+}
+
+pub trait SeqX {
+    fn seq_x(&self, score: i32) -> Vec<u8>;
+}
+
+impl<'a> SeqX for fastq::RefRecord<'a> {
+    fn seq_x(&self, score: i32) -> Vec<u8> {
+        if score <= 0 {
+            return self.seq().to_vec();
+        }
+
+        let qual = self.qual();
+        self.seq()
+            .iter()
+            .zip(qual.iter())
+            .map(|(&base, &qscore)| {
+                if (qscore as i32 - '!' as i32) < score {
+                    b'x'
+                } else {
+                    base
+                }
+            })
+            .collect::<Vec<u8>>()
+    }
+}
+
+impl<'a> SeqX for fasta::RefRecord<'a> {
+    #[allow(unused_variables)]
+    fn seq_x(&self, score: i32) -> Vec<u8> {
+        self.seq().to_vec()
     }
 }

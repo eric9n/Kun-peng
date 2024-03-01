@@ -1,12 +1,13 @@
 use clap::Parser;
 use kr2r::compact_hash::CompactHashTable;
-use kr2r::iclassify::{classify_sequence, mask_low_quality_bases};
+use kr2r::iclassify::classify_sequence;
 use kr2r::mmscanner::KmerIterator;
 use kr2r::pair;
+use kr2r::pair::SeqX;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
 use rayon::prelude::*;
-use seq_io::fastq::{Reader as FqReader, Record, RefRecord};
+use seq_io::fastq::{Reader as FqReader, Record};
 use seq_io::parallel::read_parallel;
 use std::collections::HashSet;
 use std::fs::File;
@@ -136,12 +137,6 @@ fn check_feature(dna_db: bool) -> Result<()> {
     Ok(())
 }
 
-fn get_record_id(ref_record: &RefRecord) -> String {
-    std::str::from_utf8(ref_record.head().split(|b| *b == b' ').next().unwrap())
-        .unwrap_or_default()
-        .into()
-}
-
 #[derive(Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct SeqReads {
     pub dna_id: String,
@@ -178,9 +173,9 @@ fn process_files(
                     let mut seq_pair_set = HashSet::<SeqReads>::new();
 
                     for records in record_set.into_iter() {
-                        let dna_id = get_record_id(&records.0);
-                        let seq1 = mask_low_quality_bases(&records.0, args.minimum_quality_score);
-                        let seq2 = mask_low_quality_bases(&records.1, args.minimum_quality_score);
+                        let dna_id = records.0.id().unwrap_or_default().to_string();
+                        let seq1 = records.0.seq_x(args.minimum_quality_score);
+                        let seq2 = records.1.seq_x(args.minimum_quality_score);
 
                         let kmers1 = KmerIterator::new(&seq1, meros).collect();
                         let kmers2 = KmerIterator::new(&seq2, meros).collect();
@@ -225,8 +220,8 @@ fn process_files(
                     let mut seq_pair_set = HashSet::<SeqReads>::new();
 
                     for records in record_set.into_iter() {
-                        let dna_id = get_record_id(&records);
-                        let seq1 = mask_low_quality_bases(&records, args.minimum_quality_score);
+                        let dna_id = records.id().unwrap_or_default().to_string();
+                        let seq1 = records.seq_x(args.minimum_quality_score);
                         let kmers1: Vec<u64> = KmerIterator::new(&seq1, meros).collect();
                         let seq_paired: Vec<Vec<u64>> = vec![kmers1];
                         seq_pair_set.insert(SeqReads { dna_id, seq_paired });

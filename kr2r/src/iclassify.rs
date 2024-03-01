@@ -1,107 +1,13 @@
 use crate::compact_hash::CompactHashTable;
-use crate::mmscanner::MinimizerScanner;
 use crate::taxonomy::Taxonomy;
 use crate::Meros;
 use crate::TaxonCounts;
-use seq_io::fastq::{Record, RefRecord};
-// kraken 2 使用的是murmur_hash3 算法的 fmix64作为 hash
-use crate::fmix64 as murmur_hash3;
 use std::collections::HashMap;
 
 pub const TAXID_MAX: u32 = u32::MAX - 1;
 pub const MATE_PAIR_BORDER_TAXON: u32 = TAXID_MAX;
 pub const READING_FRAME_BORDER_TAXON: u32 = TAXID_MAX - 1;
 pub const AMBIGUOUS_SPAN_TAXON: u32 = TAXID_MAX - 2;
-
-pub fn mask_low_quality_bases<'a>(
-    ref_record: &'a RefRecord,
-    minimum_quality_score: i32,
-) -> Vec<u8> {
-    let seq = ref_record.seq();
-    let qual = ref_record.qual();
-
-    if minimum_quality_score <= 0 {
-        return seq.to_vec();
-    }
-    // // 确保 minimum_quality_score 在 0 到 255 范围内
-    // let min_qual = if minimum_quality_score < 0 {
-    //     0
-    // } else if minimum_quality_score > 255 {
-    //     255
-    // } else {
-    //     minimum_quality_score as u8
-    // };
-
-    seq.iter()
-        .zip(qual.iter())
-        .map(|(&base, &qscore)| {
-            if (qscore as i32 - '!' as i32) < minimum_quality_score as i32 {
-                b'x'
-            } else {
-                base
-            }
-        })
-        .collect()
-}
-
-pub fn classify_seq<'a>(
-    taxonomy: &Taxonomy,
-    cht: &CompactHashTable<u32>,
-    scanner: &mut MinimizerScanner,
-    seq_paired: &'a Vec<Vec<u8>>,
-    // minimum_quality_score: i32,
-    meros: Meros,
-    confidence_threshold: f64,
-    minimum_hit_groups: i32,
-    dna_id: String,
-) -> String {
-    let mut hit_counts = TaxonCounts::new();
-    let mut taxa = Vec::<u32>::new();
-    let mut minimizer_hit_groups = 0;
-
-    for seq in seq_paired {
-        scanner.set_seq_end(&seq);
-        while let Some(minimizer) = scanner.next_minimizer(&seq) {
-            // 计算新的minimizer的哈希值
-            let hashed = murmur_hash3(minimizer);
-            // 检查是否满足min_clear_hash_value条件
-            let taxon = if meros
-                .min_clear_hash_value
-                .map_or(true, |min_hash| hashed >= min_hash)
-            {
-                // 获取taxon，更新last_minimizer和last_taxon
-                let taxon = cht.get(hashed);
-                if taxon > 0 {
-                    minimizer_hit_groups += 1;
-                    *hit_counts.entry(taxon).or_insert(0) += 1;
-                }
-                taxon
-            } else {
-                0 // 如果不满足条件，taxon为0
-            };
-
-            // 更新last_minimizer和last_taxon，用于下一次迭代
-            taxa.push(taxon);
-        }
-
-        taxa.push(MATE_PAIR_BORDER_TAXON);
-
-        scanner.reset();
-    }
-    let total_kmers = if seq_paired.len() > 1 {
-        taxa.len() - 2
-    } else {
-        taxa.len() - 1
-    };
-    let mut call = resolve_tree(&hit_counts, taxonomy, total_kmers, confidence_threshold);
-    if call > 0 && minimizer_hit_groups < minimum_hit_groups {
-        call = 0;
-    }
-
-    let ext_call = taxonomy.nodes[call as usize].external_id;
-    let classify = if call > 0 { "C" } else { "U" };
-    format!("{}\t{}\t{}", classify, dna_id, ext_call)
-}
 
 pub fn classify_sequence<'a>(
     taxonomy: &Taxonomy,
@@ -201,45 +107,6 @@ pub fn resolve_tree(
     }
 
     max_taxon
-}
-
-pub fn resolve_tree_optimized(
-    hit_counts: &HashMap<u64, u64>,
-    taxonomy: &Taxonomy,
-    total_minimizers: usize,
-    confidence_threshold: f64,
-) -> u64 {
-    let required_score = (confidence_threshold * total_minimizers as f64).ceil() as u64;
-    let mut score_cache: HashMap<u64, u64> = HashMap::new();
-
-    // 为每个taxon及其所有祖先累加得分
-    for (&taxon, &count) in hit_counts {
-        let mut ancestors = vec![taxon];
-        let mut current_taxon = taxon;
-        // 循环遍历当前taxon的所有祖先
-        while current_taxon != 0 {
-            let parent_id = taxonomy.nodes[current_taxon as usize].parent_id;
-            if parent_id != 0 {
-                ancestors.push(parent_id);
-                current_taxon = parent_id;
-            } else {
-                break; // 如果父节点是0，则结束循环
-            }
-        }
-
-        // 累加得分到score_cache
-        for ancestor in ancestors {
-            *score_cache.entry(ancestor).or_insert(0) += count;
-        }
-    }
-
-    // 找到得分最高的taxon，其得分满足所需阈值
-    score_cache
-        .into_iter()
-        .filter(|&(_, score)| score >= required_score)
-        .max_by_key(|&(_, score)| score)
-        .map(|(taxon, _)| taxon)
-        .unwrap_or(0)
 }
 
 pub fn add_hitlist_string(taxa: &[u32], taxonomy: &Taxonomy) -> String {
