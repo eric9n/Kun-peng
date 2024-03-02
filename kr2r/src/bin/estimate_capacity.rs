@@ -2,8 +2,8 @@ use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use kr2r::mmscanner::MinimizerScanner;
 use kr2r::utils::{expand_spaced_seed_mask, find_library_fna_files};
+use kr2r::{construct_seed_template, Meros, BITS_PER_CHAR, DEFAULT_MINIMIZER_SPACES};
 use kr2r::{fmix64 as murmur_hash3, KBuildHasher};
-use kr2r::{Meros, BITS_PER_CHAR, DEFAULT_SPACED_SEED_MASK};
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
 use serde_json;
@@ -39,9 +39,12 @@ struct Args {
     #[clap(short, long, default_value = "4")]
     n: usize,
 
-    /// Spaced seed mask
-    #[clap(short = 'S', long, default_value= "0", value_parser = parse_binary)]
-    spaced_seed_mask: u64,
+    // /// Spaced seed mask
+    // #[clap(short = 'S', long, default_value= "0", value_parser = parse_binary)]
+    // spaced_seed_mask: u64,
+    /// Number of characters in minimizer that are ignored in comparisons
+    #[clap(long, default_value_t = DEFAULT_MINIMIZER_SPACES)]
+    minimizer_spaces: u8,
 
     /// Minimizer ordering toggle mask
     #[clap(short = 'T', long, value_parser = parse_binary)]
@@ -80,6 +83,7 @@ fn process_sequence(
     fna_file: &str,
     // hllp: &mut HyperLogLogPlus<u64, KBuildHasher>,
     args: Args,
+    spaced_seed_mask: u64,
 ) -> HyperLogLogPlus<u64, KBuildHasher> {
     // 构建预期的 JSON 文件路径
     let json_path = build_output_path(fna_file, "hllp.json");
@@ -106,13 +110,7 @@ fn process_sequence(
         args.threads as u32,
         args.threads - 2 as usize,
         |record_set| {
-            let meros = Meros::new(
-                k_mer,
-                l_mer,
-                Some(args.spaced_seed_mask),
-                args.toggle_mask,
-                None,
-            );
+            let meros = Meros::new(k_mer, l_mer, Some(spaced_seed_mask), args.toggle_mask, None);
 
             let mut scanner = MinimizerScanner::new(meros);
 
@@ -165,15 +163,23 @@ fn format_bytes(size: f64) -> String {
 }
 
 fn main() {
-    let mut args = Args::parse();
+    let args = Args::parse();
     if args.k_mer < args.l_mer as u64 {
         let err = Error::raw(ErrorKind::ValueValidation, "k cannot be less than l");
         err.exit();
     }
-    if args.spaced_seed_mask != DEFAULT_SPACED_SEED_MASK {
-        args.spaced_seed_mask =
-            expand_spaced_seed_mask(args.spaced_seed_mask, BITS_PER_CHAR as u64);
-    }
+
+    let seed = construct_seed_template(
+        args.l_mer.clone() as usize,
+        args.minimizer_spaces.clone() as usize,
+    );
+    let spaced_seed_mask = parse_binary(&seed).unwrap();
+    let spaced_seed_mask = expand_spaced_seed_mask(spaced_seed_mask, BITS_PER_CHAR as u64);
+
+    // if args.spaced_seed_mask != DEFAULT_SPACED_SEED_MASK {
+    //     args.spaced_seed_mask =
+    //         expand_spaced_seed_mask(args.spaced_seed_mask, BITS_PER_CHAR as u64);
+    // }
 
     let mut hllp: HyperLogLogPlus<u64, KBuildHasher> =
         HyperLogLogPlus::new(16, KBuildHasher::default()).unwrap();
@@ -191,7 +197,7 @@ fn main() {
             source: source.clone(),
             ..args
         };
-        let local_hllp = process_sequence(&fna_file, args_clone);
+        let local_hllp = process_sequence(&fna_file, args_clone, spaced_seed_mask);
         if let Err(e) = hllp.merge(&local_hllp) {
             println!("hllp merge err {:?}", e);
         }
