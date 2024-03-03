@@ -244,7 +244,6 @@ impl<'a> CompactHashTable<'a, u32> {
         let size = LittleEndian::read_u64(&mmap[8..16]) as usize;
         // let _ = LittleEndian::read_u64(&mmap[16..24]) as usize;
         let value_bits = LittleEndian::read_u64(&mmap[24..32]) as usize;
-
         let table =
             unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(32) as *const u32, capacity) };
         let chtm = CompactHashTable {
@@ -309,7 +308,7 @@ impl<'a> CompactHashTable<'a, AtomicU32> {
             .open(&hash_file)?;
         file.set_len(file_len as u64)?;
 
-        let mut mut_mmap = unsafe { MmapOptions::new().len(file_len).populate().map_mut(&file)? };
+        let mut mut_mmap = unsafe { MmapOptions::new().len(file_len).map_mut(&file)? };
 
         let size: usize = 0;
 
@@ -343,6 +342,13 @@ impl<'a> CompactHashTable<'a, AtomicU32> {
             std::ptr::copy_nonoverlapping(size_bytes.as_ptr(), size_ptr, size_bytes.len());
         }
         self.mmap.flush().expect("Failed to flush mmap");
+    }
+
+    /// 在原始size的基础上再加上size
+    pub fn add_size(&self, size: usize) {
+        let old_size = LittleEndian::read_u64(&self.mmap[8..16]) as usize;
+        let new_size = old_size + size;
+        self.update_size(new_size);
     }
 
     // 直接更新

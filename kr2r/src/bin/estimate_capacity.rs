@@ -3,7 +3,10 @@ use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use kr2r::mmscanner::MinimizerScanner;
 use kr2r::utils::{expand_spaced_seed_mask, find_library_fna_files};
 use kr2r::KBuildHasher;
-use kr2r::{construct_seed_template, Meros, BITS_PER_CHAR, DEFAULT_MINIMIZER_SPACES};
+use kr2r::{
+    construct_seed_template, Meros, BITS_PER_CHAR, DEFAULT_KMER_LENGTH, DEFAULT_MINIMIZER_LENGTH,
+    DEFAULT_MINIMIZER_SPACES,
+};
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
 use serde_json;
@@ -24,15 +27,15 @@ struct Args {
     source: PathBuf,
 
     /// estimate capacity from cache if exists
-    #[arg(long, default_value = "false")]
+    #[arg(long, default_value_t = true)]
     cache: bool,
 
     /// Set length of k-mers, k must be positive integer, k=35, k cannot be less than l
-    #[clap(short, long, value_parser = clap::value_parser!(u64).range(1..), required = true)]
+    #[clap(short, long, value_parser = clap::value_parser!(u64).range(1..), default_value_t = DEFAULT_KMER_LENGTH)]
     k_mer: u64,
 
     /// Set length of minimizers, 1 <= l <= 31
-    #[clap(short, long, value_parser = clap::value_parser!(u8).range(1..=31), required = true)]
+    #[clap(short, long, value_parser = clap::value_parser!(u8).range(1..=31), default_value_t = DEFAULT_MINIMIZER_LENGTH)]
     l_mer: u8,
 
     /// Set maximum qualifying hash code
@@ -206,7 +209,7 @@ fn main() {
     // println!("Final count: {:?}", final_count);
     let required_capacity = (hllp_count + 8192) as f64 / args.load_factor;
     println!(
-        "estimate count: {:?}, required capacity: {:?}, Estimated hash table requirement: {:?}",
+        "estimate count: {:?}, required capacity: {:?}, Estimated hash table requirement: {:}",
         hllp_count,
         required_capacity.ceil(),
         format_bytes(required_capacity * 4f64)

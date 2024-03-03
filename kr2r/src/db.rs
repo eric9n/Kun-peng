@@ -41,8 +41,8 @@ pub fn process_sequence<P: AsRef<Path>>(
             for record in record_set.into_iter() {
                 seq_counter.fetch_add(1, Ordering::SeqCst);
                 if let Ok(seq_id) = record.id() {
-                    // let seq_count = seq_counter.load(Ordering::SeqCst);
-                    // println!("seq_id {:?}, seq_count: {:?}", seq_id, seq_count);
+                    let seq_count = seq_counter.load(Ordering::SeqCst);
+                    println!("seq_id {:?}, seq_count: {:?}", seq_id, seq_count);
 
                     if let Some(ext_taxid) = id_to_taxon_map.get(seq_id) {
                         let taxid = taxonomy.get_internal_id(*ext_taxid);
@@ -88,7 +88,7 @@ pub fn process_sequence<P: AsRef<Path>>(
     println!("seq_count {:?}", seq_count);
     println!("size_count {:?}", size_count);
     println!("total_count {:?}", total_count);
-    chtm.update_size(size_count);
+    chtm.add_size(size_count);
 }
 
 pub fn generate_taxonomy(
