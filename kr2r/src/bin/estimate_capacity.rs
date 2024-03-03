@@ -2,8 +2,8 @@ use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use kr2r::mmscanner::MinimizerScanner;
 use kr2r::utils::{expand_spaced_seed_mask, find_library_fna_files};
+use kr2r::KBuildHasher;
 use kr2r::{construct_seed_template, Meros, BITS_PER_CHAR, DEFAULT_MINIMIZER_SPACES};
-use kr2r::{fmix64 as murmur_hash3, KBuildHasher};
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
 use serde_json;
@@ -105,6 +105,7 @@ fn process_sequence(
         HyperLogLogPlus::new(16, KBuildHasher::default()).unwrap();
 
     let reader = Reader::from_path(fna_file).unwrap();
+    let range_n = args.n as u64;
     read_parallel(
         reader,
         args.threads as u32,
@@ -112,19 +113,15 @@ fn process_sequence(
         |record_set| {
             let meros = Meros::new(k_mer, l_mer, Some(spaced_seed_mask), args.toggle_mask, None);
 
-            let mut scanner = MinimizerScanner::new(meros);
-
             let mut minimizer_set = HashSet::new();
             for record in record_set.into_iter() {
                 let seq = record.seq();
-                scanner.set_seq_end(seq);
-                while let Some(minimizer) = scanner.next_minimizer(seq) {
-                    let hash_v = murmur_hash3(minimizer);
-                    if hash_v & RANGE_MASK < args.n as u64 {
-                        minimizer_set.insert(hash_v);
-                    }
-                }
-                scanner.reset();
+                let kmer_iter = MinimizerScanner::new(seq, meros)
+                    .into_iter()
+                    .filter(|hash_key| hash_key & RANGE_MASK < range_n)
+                    .collect::<HashSet<u64>>();
+
+                minimizer_set.extend(kmer_iter);
             }
             minimizer_set
         },

@@ -101,9 +101,8 @@ pub fn resolve_tree(
 
         if max_score >= required_score {
             break;
-        } else {
-            max_taxon = taxonomy.nodes[max_taxon as usize].parent_id as u32;
         }
+        max_taxon = taxonomy.nodes[max_taxon as usize].parent_id as u32;
     }
 
     max_taxon

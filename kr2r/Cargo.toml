@@ -18,6 +18,11 @@ name = "classify"
 path = "src/bin/classify.rs"
 
 
+[[bin]]
+name = "inspect"
+path = "src/bin/inspect.rs"
+
+
 [features]
 default = ["dna"]
 dna = []

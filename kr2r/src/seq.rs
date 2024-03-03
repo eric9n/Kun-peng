@@ -1,4 +1,4 @@
-use crate::mmscanner::KmerIterator;
+use crate::mmscanner::MinimizerScanner;
 use seq_io::fasta;
 use seq_io::fasta::Record as FaRecord;
 use seq_io::fastq;
@@ -145,8 +145,8 @@ impl SeqSet for PairFastqRecordSet {
             let seq1 = records.0.seq_x(score);
             let seq2 = records.1.seq_x(score);
 
-            let kmers1 = KmerIterator::new(&seq1, meros).collect();
-            let kmers2 = KmerIterator::new(&seq2, meros).collect();
+            let kmers1 = MinimizerScanner::new(&seq1, meros).collect();
+            let kmers2 = MinimizerScanner::new(&seq2, meros).collect();
 
             let seq_paired: Vec<Vec<u64>> = vec![kmers1, kmers2];
             seq_pair_set.insert(SeqReads { dna_id, seq_paired });
@@ -161,7 +161,7 @@ impl SeqSet for fastq::RecordSet {
         for records in self.into_iter() {
             let dna_id = records.id().unwrap_or_default().to_string();
             let seq1 = records.seq_x(score);
-            let kmers1: Vec<u64> = KmerIterator::new(&seq1, meros).collect();
+            let kmers1: Vec<u64> = MinimizerScanner::new(&seq1, meros).collect();
             let seq_paired: Vec<Vec<u64>> = vec![kmers1];
             seq_pair_set.insert(SeqReads { dna_id, seq_paired });
         }
@@ -175,7 +175,7 @@ impl SeqSet for fasta::RecordSet {
         for records in self.into_iter() {
             let dna_id = records.id().unwrap_or_default().to_string();
             let seq1 = records.seq_x(score);
-            let kmers1: Vec<u64> = KmerIterator::new(&seq1, meros).collect();
+            let kmers1: Vec<u64> = MinimizerScanner::new(&seq1, meros).collect();
             let seq_paired: Vec<Vec<u64>> = vec![kmers1];
             seq_pair_set.insert(SeqReads { dna_id, seq_paired });
         }

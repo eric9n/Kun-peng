@@ -98,19 +98,7 @@ struct Cursor {
 }
 
 impl Cursor {
-    fn new(meros: &Meros) -> Self {
-        Self {
-            pos: 0,
-            end: 0,
-            inner: Vec::with_capacity(meros.l_mer),
-            capacity: meros.l_mer,
-            value: 0,
-            mask: meros.mask,
-            window: MinimizerWindow::new(meros.window_size()),
-        }
-    }
-
-    fn init(meros: &Meros, size: usize) -> Self {
+    fn new(meros: &Meros, size: usize) -> Self {
         Self {
             pos: 0,
             end: size,
@@ -180,69 +168,7 @@ impl Cursor {
     }
 }
 
-pub struct MinimizerScanner {
-    meros: Meros,
-    // l_mer: usize,
-    cursor: Cursor,
-    /// 存最近一个最小值
-    last_minimizer: u64,
-}
-
-impl MinimizerScanner {
-    pub fn reset(&mut self) {
-        self.cursor.clear();
-        self.last_minimizer = std::u64::MAX;
-    }
-
-    pub fn new(meros: Meros) -> Self {
-        Self {
-            meros,
-            cursor: Cursor::new(&meros),
-            last_minimizer: std::u64::MAX,
-        }
-    }
-
-    pub fn set_seq_end(&mut self, seq: &[u8]) {
-        self.cursor.pos = 0;
-        self.cursor.end = seq.len();
-    }
-
-    fn get_last_minimizer(&mut self) -> Option<u64> {
-        None
-        // self.cursor
-        //     .window
-        //     .get_last_minimizer()
-        //     .map(|minimizer| minimizer ^ self.toggle_mask)
-    }
-
-    /// 在一个序列上滑动一个光标（可能是为了找到下一个有意义的片段或窗口），
-    /// 并对滑动得到的片段进行某种转换或处理。如果光标无法继续滑动（例如到达序列的末尾），则返回 None。
-    fn next_window(&mut self, seq: &[u8]) -> Option<u64> {
-        self.cursor.slide(seq).and_then(|lmer| {
-            let candidate_lmer = to_candidate_lmer(&self.meros, lmer);
-            self.cursor.next_candidate_lmer(candidate_lmer)
-        })
-    }
-
-    /// 去除重复的值
-    pub fn next_minimizer(&mut self, seq: &[u8]) -> Option<u64> {
-        while self.cursor.has_next() {
-            if let Some(minimizer) = self.next_window(&seq) {
-                if minimizer != self.last_minimizer {
-                    self.last_minimizer = minimizer;
-                    return Some(minimizer ^ self.meros.toggle_mask);
-                }
-            }
-        }
-        // 检查滑动队列中是否存在值
-        let last_minimizer = self.get_last_minimizer();
-        // 清空所有的值，等下次换取时，必然等于 None
-        self.cursor.clear();
-        last_minimizer
-    }
-}
-
-pub struct KmerIterator<'a> {
+pub struct MinimizerScanner<'a> {
     seq: &'a [u8],
     meros: Meros,
     // l_mer: usize,
@@ -251,12 +177,12 @@ pub struct KmerIterator<'a> {
     last_minimizer: u64,
 }
 
-impl<'a> KmerIterator<'a> {
+impl<'a> MinimizerScanner<'a> {
     pub fn new(seq: &'a [u8], meros: Meros) -> Self {
-        KmerIterator {
+        MinimizerScanner {
             seq,
             meros,
-            cursor: Cursor::init(&meros, seq.len()),
+            cursor: Cursor::new(&meros, seq.len()),
             last_minimizer: std::u64::MAX,
         }
     }
@@ -271,7 +197,7 @@ impl<'a> KmerIterator<'a> {
     }
 }
 
-impl<'a> Iterator for KmerIterator<'a> {
+impl<'a> Iterator for MinimizerScanner<'a> {
     type Item = u64;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -290,24 +216,6 @@ impl<'a> Iterator for KmerIterator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // 编写测试函数
-    #[test]
-    fn test_minimizer_scanner() {
-        // 在这里编写测试代码
-        // 使用 assert_eq!、assert!、assert_ne! 等宏来断言测试条件是否为真
-        // 如果条件不为真，测试将失败
-        let seq: Vec<u8> = b"ACGATCGACGACG".to_vec();
-        let meros = Meros::new(10, 5, None, None, None);
-        let mut scanner = MinimizerScanner::new(meros);
-        scanner.set_seq_end(&seq);
-        let m1 = scanner.next_minimizer(&seq);
-        let mm1 = format!("{:016x}", m1.unwrap());
-        assert_eq!(mm1, "00000000000002d8");
-        let m2 = scanner.next_minimizer(&seq);
-        let mm2 = format!("{:016x}", m2.unwrap());
-        assert_eq!(mm2, "0000000000000218");
-    }
 
     #[test]
     fn test_minimizer() {

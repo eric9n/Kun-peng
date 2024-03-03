@@ -362,9 +362,7 @@ impl<'a> CompactHashTable<'a, AtomicU32> {
                 cell1.populate(ci.cell, self.value_bits);
                 break;
             }
-            if cell1.compacted_key(self.value_bits) == ci.cell.compacted_key
-                && cell1.taxid(self.value_mask) != ci.cell.taxid
-            {
+            if cell1.compacted_key(self.value_bits) == ci.cell.compacted_key {
                 return Some(CellIndex::new(
                     idx,
                     ci.cell.compacted_key,

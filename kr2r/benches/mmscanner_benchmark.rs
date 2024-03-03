@@ -6,12 +6,11 @@ use kr2r::Meros;
 fn performance_test(c: &mut Criterion) {
     let seq: Vec<u8> = b"ACGATCGACGACG".to_vec();
     let meros = Meros::new(10, 5, None, None, None);
-    let mut scanner = MinimizerScanner::new(meros);
-    scanner.set_seq_end(&seq);
+    let mut scanner = MinimizerScanner::new(&seq, meros);
     // 这里执行需要测试性能的操作，例如多次调用 next_minimizer
-    c.bench_function("next_minimizer", |b| {
+    c.bench_function("next", |b| {
         b.iter(|| {
-            let _ = scanner.next_minimizer(&seq);
+            let _ = scanner.next();
             // let _ = scanner.next_minimizer(&seq);
         });
     });

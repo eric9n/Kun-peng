@@ -1,6 +1,5 @@
 // 使用时需要引用模块路径
 use crate::compact_hash::{CellIndex, Compact, CompactHashTable};
-use crate::fmix64 as murmur_hash3;
 use crate::mmscanner::MinimizerScanner;
 use crate::taxonomy::{NCBITaxonomy, Taxonomy};
 use crate::Meros;
@@ -27,7 +26,7 @@ pub fn process_sequence<P: AsRef<Path>>(
     let total_counter = AtomicUsize::new(0);
     let size_counter = AtomicUsize::new(0);
     let seq_counter = AtomicUsize::new(0);
-    let update_counter = AtomicUsize::new(0);
+    // let update_counter = AtomicUsize::new(0);
 
     let capacity = chtm.capacity;
     let value_bits = chtm.value_bits;
@@ -37,32 +36,29 @@ pub fn process_sequence<P: AsRef<Path>>(
         threads,
         queue_len,
         |record_set| {
-            let mut scanner = MinimizerScanner::new(meros);
             let mut hash_set = BTreeSet::<CellIndex>::new();
 
             for record in record_set.into_iter() {
                 seq_counter.fetch_add(1, Ordering::SeqCst);
-                let seq = record.seq();
                 if let Ok(seq_id) = record.id() {
+                    // let seq_count = seq_counter.load(Ordering::SeqCst);
+                    // println!("seq_id {:?}, seq_count: {:?}", seq_id, seq_count);
+
                     if let Some(ext_taxid) = id_to_taxon_map.get(seq_id) {
                         let taxid = taxonomy.get_internal_id(*ext_taxid);
+                        let kmer_iter = MinimizerScanner::new(record.seq(), meros)
+                            .into_iter()
+                            .map(|hash_key| {
+                                CellIndex::new(
+                                    hash_key.index(capacity),
+                                    hash_key.compacted(value_bits),
+                                    taxid as u32,
+                                )
+                            })
+                            .collect::<BTreeSet<CellIndex>>();
 
-                        scanner.set_seq_end(seq);
-                        while let Some(minimizer) = scanner.next_minimizer(seq) {
-                            let hash_key = murmur_hash3(minimizer);
-
-                            let ci = CellIndex::new(
-                                hash_key.index(capacity),
-                                hash_key.compacted(value_bits),
-                                taxid as u32,
-                            );
-
-                            hash_set.insert(ci);
-
-                            total_counter.fetch_add(1, Ordering::SeqCst);
-                        }
-
-                        scanner.reset();
+                        total_counter.fetch_add(kmer_iter.len(), Ordering::SeqCst);
+                        hash_set.extend(kmer_iter);
                     };
                 }
             }
@@ -76,7 +72,7 @@ pub fn process_sequence<P: AsRef<Path>>(
                         if ci.cell.taxid != new_taxid {
                             ci.cell.taxid = new_taxid;
                             chtm.update_cell(ci);
-                            update_counter.fetch_add(1, Ordering::SeqCst);
+                            // update_counter.fetch_add(1, Ordering::SeqCst);
                         }
                     } else {
                         size_counter.fetch_add(1, Ordering::SeqCst);
@@ -88,11 +84,10 @@ pub fn process_sequence<P: AsRef<Path>>(
     let size_count = size_counter.load(Ordering::SeqCst);
     let seq_count = seq_counter.load(Ordering::SeqCst);
     let total_count = total_counter.load(Ordering::SeqCst);
-    let update_count = update_counter.load(Ordering::SeqCst);
+    // let update_count = update_counter.load(Ordering::SeqCst);
     println!("seq_count {:?}", seq_count);
     println!("size_count {:?}", size_count);
     println!("total_count {:?}", total_count);
-    println!("update_count {:?}", update_count);
     chtm.update_size(size_count);
 }
 

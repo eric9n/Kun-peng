@@ -11,6 +11,7 @@ use kr2r::{
 use kr2r::db::{generate_taxonomy, get_bits_for_taxid, process_sequence};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
+use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, about = "build database")]
@@ -81,14 +82,6 @@ impl Build {
         )
     }
 }
-
-// fn set_minimizer_lca(hash: &mut CompactHashTableMut, minimizer: u64, taxid: u64, tax: &Taxonomy) {
-//     let mut old_value: u32 = 0;
-//     let mut new_value: u64 = taxid;
-//     // while !hash.compare_and_set(minimizer, new_value as u32, &mut old_value) {
-//     //     new_value = tax.lowest_common_ancestor(old_value as u64, taxid);
-//     // }
-// }
 
 // // This function exists to deal with NCBI's use of \x01 characters to denote
 // // the start of a new FASTA header in the same line (for non-redundant DBs).
@@ -164,6 +157,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     println!("start...");
+    // 开始计时
+    let start = Instant::now();
     for fna_file in fna_files {
         process_sequence(
             fna_file,
@@ -174,7 +169,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             args.threads as u32,
         )
     }
-    println!("success...");
+    // 计算持续时间
+    let duration = start.elapsed();
+    // 打印运行时间
+    println!("build db took: {:?}", duration);
 
     let idx_opts = IndexOptions::new(
         args.k_mer as usize,

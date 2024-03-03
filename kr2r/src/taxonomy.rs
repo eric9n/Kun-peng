@@ -336,7 +336,7 @@ impl Taxonomy {
 
     // 查找两个节点的最低公共祖先
     pub fn lca(&self, a: u32, b: u32) -> u32 {
-        if a == 0 || b == 0 {
+        if a == 0 || b == 0 || a == b {
             return if a != 0 { a } else { b };
         }
 
@@ -359,7 +359,7 @@ impl Taxonomy {
 
     pub fn lowest_common_ancestor(&self, mut a: u32, mut b: u32) -> u32 {
         // 如果任何一个节点是 0，返回另一个节点
-        if a == 0 || b == 0 {
+        if a == 0 || b == 0 || a == b {
             return if a != 0 { a } else { b };
         }
 
