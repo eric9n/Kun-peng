@@ -212,6 +212,6 @@ fn main() {
         "estimate count: {:?}, required capacity: {:?}, Estimated hash table requirement: {:?}",
         hllp_count,
         required_capacity.ceil(),
-        format_bytes(required_capacity)
+        format_bytes(required_capacity * 4f64)
     );
 }
