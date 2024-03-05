@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 pub trait Compact {
     fn compacted(&self, value_bits: usize) -> u32;
     fn index(&self, capacity: usize) -> usize;
+    fn combined_value(&self, value_bits: usize, taxid: u32) -> u32;
 }
 
 impl Compact for u64 {
@@ -21,6 +22,10 @@ impl Compact for u64 {
 
     fn index(&self, capacity: usize) -> usize {
         *self as usize % capacity
+    }
+
+    fn combined_value(&self, value_bits: usize, taxid: u32) -> u32 {
+        self.compacted(value_bits) << value_bits | taxid
     }
 }
 
@@ -50,8 +55,8 @@ impl Cell {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CellIndex {
-    pub cell: Cell,
     pub index: usize,
+    pub cell: Cell,
 }
 
 impl CellIndex {
@@ -60,6 +65,28 @@ impl CellIndex {
             index,
             cell: Cell::new(compacted_key, taxid),
         }
+    }
+}
+
+#[repr(C)]
+pub struct K2Cell {
+    pub index: u32,
+    value: u32,
+}
+
+impl K2Cell {
+    pub fn new(index: u32, combined_value: u32) -> Self {
+        Self {
+            index,
+            value: combined_value,
+        }
+    }
+
+    pub fn to_cellindex(&self, value_bits: usize, value_mask: u32) -> CellIndex {
+        let index = self.index as usize;
+        let compacted_key = self.value.compacted_key(value_bits);
+        let taxid = self.value.taxid(value_mask);
+        CellIndex::new(index, compacted_key, taxid)
     }
 }
 
@@ -162,7 +189,9 @@ where
     // value_mask = ((1 << value_bits) - 1);
     pub value_mask: u32,
     // 存储哈希单元的向量。
-    pub table: &'a [T],
+    pub table: &'a mut [T],
+
+    pub pages: Vec<u32>,
 }
 
 impl<'a, T> fmt::Debug for CompactHashTable<'a, T>
@@ -238,14 +267,20 @@ impl<'a> CompactHashTable<'a, u32> {
             .create(true)
             .open(&filename)?;
 
-        let mmap = unsafe { MmapOptions::new().populate().map_mut(&file)? };
+        let mut mmap = unsafe { MmapOptions::new().populate().map_mut(&file)? };
 
         let capacity = LittleEndian::read_u64(&mmap[0..8]) as usize;
         let size = LittleEndian::read_u64(&mmap[8..16]) as usize;
         // let _ = LittleEndian::read_u64(&mmap[16..24]) as usize;
         let value_bits = LittleEndian::read_u64(&mmap[24..32]) as usize;
-        let table =
-            unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(32) as *const u32, capacity) };
+        let pages = vec![];
+
+        // let table =
+        //     unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(32) as *const u32, capacity) };
+
+        let table = unsafe {
+            std::slice::from_raw_parts_mut(mmap.as_mut_ptr().add(32) as *mut u32, capacity)
+        };
         let chtm = CompactHashTable {
             value_mask: (1 << value_bits) - 1,
             capacity,
@@ -253,6 +288,7 @@ impl<'a> CompactHashTable<'a, u32> {
             value_bits,
             table,
             mmap,
+            pages,
         };
         Ok(chtm)
     }
@@ -286,12 +322,12 @@ impl<'a> CompactHashTable<'a, u32> {
     }
 }
 
-impl<'a> CompactHashTable<'a, AtomicU32> {
+impl<'a> CompactHashTable<'a, u32> {
     pub fn new<P: AsRef<Path>>(
         hash_file: P,
         capacity: usize,
         value_bits: usize,
-    ) -> Result<CompactHashTable<'a, AtomicU32>> {
+    ) -> Result<CompactHashTable<'a, u32>> {
         let key_bits = 32 - value_bits;
         if key_bits == 0 || value_bits == 0 {
             return Err(Error::new(
@@ -318,12 +354,18 @@ impl<'a> CompactHashTable<'a, AtomicU32> {
         mut_mmap[24..32].copy_from_slice(&value_bits.to_le_bytes());
 
         let table = unsafe {
-            std::slice::from_raw_parts_mut(
-                mut_mmap.as_mut_ptr().add(32) as *mut AtomicU32,
-                capacity,
-            )
+            std::slice::from_raw_parts_mut(mut_mmap.as_mut_ptr().add(32) as *mut u32, capacity)
         };
+        let mut pages = Vec::new();
+        // let half = capacity / 2;
+        pages.extend_from_slice(&table);
 
+        // let mut destination_mmap = MmapOptions::new()
+        //     .len(capacity)
+        //     .map_anon()
+        //     .expect("Failed to create destination mmap");
+
+        // println!("destination_mmap {:?}", destination_mmap.len());
         let chtm = Self {
             value_mask: (1 << value_bits) - 1,
             capacity,
@@ -331,6 +373,7 @@ impl<'a> CompactHashTable<'a, AtomicU32> {
             value_bits,
             table,
             mmap: mut_mmap,
+            pages,
         };
         Ok(chtm)
     }
@@ -345,27 +388,28 @@ impl<'a> CompactHashTable<'a, AtomicU32> {
     }
 
     /// 在原始size的基础上再加上size
-    pub fn add_size(&self, size: usize) {
+    pub fn add_size(&mut self, size: usize) {
+        self.table.copy_from_slice(&self.pages);
         let old_size = LittleEndian::read_u64(&self.mmap[8..16]) as usize;
         let new_size = old_size + size;
         self.update_size(new_size);
     }
 
     // 直接更新
-    pub fn update_cell(&self, ci: CellIndex) {
-        let cell = &self.table[ci.index];
-        cell.populate(ci.cell, self.value_bits);
+    pub fn update_cell(&mut self, ci: CellIndex) {
+        self.pages[ci.index] = (ci.cell.compacted_key << self.value_bits) | ci.cell.taxid;
     }
 
     /// 设置单元格内容
     /// 如果已经存在 compacted_key, 但是taxid不一致,就返回文件中的内容,重新lca之后再更新
-    pub fn set_cell(&self, ci: CellIndex) -> Option<CellIndex> {
+    pub fn set_cell(&mut self, ci: CellIndex) -> Option<CellIndex> {
         let mut idx = ci.index;
         let first_idx = idx;
         let step = 1;
-        while let Some(cell1) = self.table.get(idx) {
+        while let Some(cell1) = self.pages.get_mut(idx) {
             if cell1.taxid(self.value_mask) == 0 {
-                cell1.populate(ci.cell, self.value_bits);
+                let val = (ci.cell.compacted_key << self.value_bits) | ci.cell.taxid;
+                *cell1 = val;
                 break;
             }
             if cell1.compacted_key(self.value_bits) == ci.cell.compacted_key {

@@ -23,6 +23,11 @@ name = "inspect"
 path = "src/bin/inspect.rs"
 
 
+[[bin]]
+name = "trans"
+path = "src/bin/trans.rs"
+
+
 [features]
 default = ["dna"]
 dna = []
@@ -41,7 +46,7 @@ memmap2 = "0.9.4"
 byteorder = "1.4"
 walkdir = "2"
 rayon = "1.8"
-
+libc = "0.2"
 
 [dev-dependencies]
 criterion = "0.5.1"

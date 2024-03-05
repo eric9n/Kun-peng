@@ -4,18 +4,16 @@ use crate::mmscanner::MinimizerScanner;
 use crate::taxonomy::{NCBITaxonomy, Taxonomy};
 use crate::Meros;
 
-use rayon::prelude::*;
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// 处理fasta文件,构建数据库
 pub fn process_sequence<P: AsRef<Path>>(
     fna_file: P,
     meros: Meros,
-    chtm: &CompactHashTable<AtomicU32>,
+    chtm: &mut CompactHashTable<u32>,
     taxonomy: &Taxonomy,
     id_to_taxon_map: &HashMap<String, u64>,
     threads: u32,
@@ -66,7 +64,7 @@ pub fn process_sequence<P: AsRef<Path>>(
         },
         |record_sets| {
             while let Some(Ok((_, hash_set))) = record_sets.next() {
-                hash_set.into_par_iter().for_each(|item| {
+                hash_set.into_iter().for_each(|item| {
                     if let Some(mut ci) = &chtm.set_cell(item) {
                         let new_taxid = taxonomy.lca(item.cell.taxid, ci.cell.taxid);
                         if ci.cell.taxid != new_taxid {

@@ -19,3 +19,6 @@ pub use kr2r_data::*;
 pub use kv_store::*;
 // pub use mmscanner::{Meros, CURRENT_REVCOM_VERSION, DEFAULT_TOGGLE_MASK};
 pub use readcounts::TaxonCounts;
+
+pub mod table;
+pub mod tansform;
