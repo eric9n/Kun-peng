@@ -20,4 +20,4 @@ pub use kv_store::*;
 pub use readcounts::TaxonCounts;
 
 pub mod args;
-pub mod table;
+pub mod compact_hash;

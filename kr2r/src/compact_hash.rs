@@ -6,8 +6,6 @@ use std::io::{Error, ErrorKind, Result};
 use std::marker::PhantomData;
 use std::path::Path;
 
-pub const U32MAX: usize = u32::MAX as usize;
-
 pub trait CompactValue: Default + PartialEq + Clone + Copy + PartialEq + Eq + Sized {
     fn compacted(hash_key: u64, value_bits: usize) -> Self;
     fn hash_value(hash_key: u64, value_bits: usize, value: Self) -> Self;

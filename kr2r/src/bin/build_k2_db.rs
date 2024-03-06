@@ -1,12 +1,12 @@
 // 使用时需要引用模块路径
 use clap::Parser;
 use kr2r::args::Build;
+use kr2r::compact_hash::{CHTableMut, HashConfig};
 use kr2r::db::{
     convert_fna_to_k2_format, create_partition_files, generate_taxonomy, get_bits_for_taxid,
     process_k2file,
 };
 use kr2r::db::{create_partition_writers, get_file_limit};
-use kr2r::table::{CHTableMut, HashConfig};
 use kr2r::utils::{find_library_fna_files, read_id_to_taxon_map};
 use kr2r::IndexOptions;
 use std::path::PathBuf;
@@ -29,6 +29,9 @@ fn format_bytes(size: f64) -> String {
     format!("{:.2}{}", size, current_suffix)
 }
 
+pub const U32MAX: u64 = u32::MAX as u64;
+pub const ONEGB: u64 = 1073741824;
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
@@ -39,6 +42,9 @@ struct Args {
     /// 新增的参数
     #[clap(long)]
     chunk_dir: PathBuf,
+
+    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAX), default_value_t = ONEGB as usize)]
+    chunk_size: usize,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -63,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let capacity = args.build.required_capacity as usize;
 
-    let chunk_size = 1073741824usize;
+    let chunk_size = args.chunk_size;
 
     // 使用整数数学向上取整
     let partition = (capacity + chunk_size - 1) / chunk_size;
@@ -102,7 +108,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let hash_filename = args.build.hashtable_filename.clone();
     for i in 0..2 {
-        println!("chunk_files[i] {:?}", chunk_files[i]);
         let mut chtm = CHTableMut::new(&hash_filename, hash_config, i, chunk_size)?;
         process_k2file(&chunk_files[i], &mut chtm, &taxonomy)?;
     }

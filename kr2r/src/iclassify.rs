@@ -1,5 +1,5 @@
+use crate::compact_hash::CHTable;
 use crate::seq::SeqReads;
-use crate::table::CHTable;
 use crate::taxonomy::Taxonomy;
 use crate::Meros;
 use crate::TaxonCounts;

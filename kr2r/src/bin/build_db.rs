@@ -1,6 +1,6 @@
 // 使用时需要引用模块路径
 use clap::Parser;
-use kr2r::table::{CHTableMut, HashConfig};
+use kr2r::compact_hash::{CHTableMut, HashConfig};
 use kr2r::utils::{find_library_fna_files, read_id_to_taxon_map};
 use kr2r::IndexOptions;
 // use std::collections::HashMap;

@@ -1,7 +1,7 @@
 use clap::Parser;
+use kr2r::compact_hash::CHTable;
 use kr2r::iclassify::classify_sequence;
 use kr2r::seq::{self, SeqSet};
-use kr2r::table::CHTable;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
 use rayon::prelude::*;

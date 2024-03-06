@@ -1,5 +1,5 @@
 use clap::Parser;
-use kr2r::table::HashConfig;
+use kr2r::compact_hash::HashConfig;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
 use std::io::Result;
