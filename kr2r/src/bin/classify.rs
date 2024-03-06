@@ -1,7 +1,7 @@
 use clap::Parser;
-use kr2r::compact_hash::CompactHashTable;
 use kr2r::iclassify::classify_sequence;
 use kr2r::seq::{self, SeqSet};
+use kr2r::table::CHTable;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
 use rayon::prelude::*;
@@ -222,7 +222,7 @@ macro_rules! process_file_pairs {
 fn process_files(
     args: Args,
     idx_opts: IndexOptions,
-    cht: &CompactHashTable<u32>,
+    cht: &CHTable<u32>,
     taxonomy: &Taxonomy,
     writer: &mut Box<dyn std::io::Write>,
 ) -> Result<()> {
@@ -288,7 +288,7 @@ fn main() -> Result<()> {
     let idx_opts = IndexOptions::read_index_options(args.options_filename.clone())?;
     check_feature(idx_opts.dna_db)?;
     let taxo = Taxonomy::from_file(&args.taxonomy_filename)?;
-    let cht = CompactHashTable::from(args.index_filename.clone())?;
+    let cht = CHTable::from(args.index_filename.clone())?;
 
     if args.paired_end_processing && !args.single_file_pairs && args.input_files.len() % 2 != 0 {
         // 验证文件列表是否为偶数个
@@ -314,6 +314,6 @@ fn main() -> Result<()> {
     let duration = start.elapsed();
 
     // 打印运行时间
-    println!("process_files took: {:?}", duration);
+    println!("classify took: {:?}", duration);
     Ok(())
 }

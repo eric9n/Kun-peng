@@ -1,5 +1,5 @@
 use clap::Parser;
-use kr2r::compact_hash::CompactHashTable;
+use kr2r::table::HashConfig;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
 use std::io::Result;
@@ -28,10 +28,10 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let idx_opts = IndexOptions::read_index_options(args.options_filename.clone())?;
     let taxo = Taxonomy::from_file(&args.taxonomy_filename)?;
-    let cht = CompactHashTable::from(args.index_filename.clone())?;
+    let config = HashConfig::<u32>::from(args.index_filename.clone())?;
     println!("index option {:?}", idx_opts);
     println!("taxonomy node count {:?}", taxo.node_count());
-    println!("compact hash table {:?}", cht);
+    println!("compact hash table {:?}", config);
 
     Ok(())
 }

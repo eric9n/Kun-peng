@@ -1,4 +1,3 @@
-pub mod compact_hash;
 pub mod iclassify;
 pub mod kr2r_data;
 mod kv_store;
@@ -20,5 +19,5 @@ pub use kv_store::*;
 // pub use mmscanner::{Meros, CURRENT_REVCOM_VERSION, DEFAULT_TOGGLE_MASK};
 pub use readcounts::TaxonCounts;
 
+pub mod args;
 pub mod table;
-pub mod tansform;

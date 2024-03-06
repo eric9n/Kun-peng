@@ -24,8 +24,8 @@ path = "src/bin/inspect.rs"
 
 
 [[bin]]
-name = "trans"
-path = "src/bin/trans.rs"
+name = "build_k2_db"
+path = "src/bin/build_k2_db.rs"
 
 
 [features]

@@ -137,6 +137,17 @@ impl IndexOptions {
         Ok(())
     }
 
+    pub fn from_meros(meros: Meros) -> Self {
+        Self::new(
+            meros.k_mer,
+            meros.l_mer,
+            meros.spaced_seed_mask,
+            meros.toggle_mask,
+            true,
+            meros.min_clear_hash_value.unwrap_or_default(),
+        )
+    }
+
     pub fn as_meros(&self) -> Meros {
         Meros::new(
             self.k,

@@ -1,5 +1,5 @@
-use crate::compact_hash::CompactHashTable;
 use crate::seq::SeqReads;
+use crate::table::CHTable;
 use crate::taxonomy::Taxonomy;
 use crate::Meros;
 use crate::TaxonCounts;
@@ -12,7 +12,7 @@ pub const AMBIGUOUS_SPAN_TAXON: u32 = TAXID_MAX - 2;
 
 pub fn classify_sequence<'a>(
     taxonomy: &Taxonomy,
-    cht: &CompactHashTable<u32>,
+    cht: &CHTable<u32>,
     seq_reads: SeqReads,
     meros: Meros,
     confidence_threshold: f64,
