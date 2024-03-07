@@ -266,12 +266,16 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
     );
 }
 
-pub fn create_partition_files<P: AsRef<Path>>(partition: usize, base_path: P) -> Vec<PathBuf> {
+pub fn create_partition_files<P: AsRef<Path>>(
+    partition: usize,
+    base_path: P,
+    prefix: &str,
+) -> Vec<PathBuf> {
     let file_path = base_path.as_ref();
 
     (0..partition)
         .into_iter()
-        .map(|item| file_path.join(format!("chunk_{}.k2", item)))
+        .map(|item| file_path.join(format!("{}_{}.k2", prefix, item)))
         .collect()
 }
 

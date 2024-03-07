@@ -64,11 +64,6 @@ pub struct Build {
     /// Number of threads
     #[clap(short = 'p', long, default_value_t = 4)]
     pub threads: usize,
-
-    /// Step 1: Convert .fna file to .k2 format for optimized data handling.
-    /// Step 2: Use the .k2 file to build the database for efficient querying.
-    #[clap(long, default_value_t = false)]
-    batch: bool,
 }
 
 impl Build {

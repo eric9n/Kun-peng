@@ -39,12 +39,16 @@ struct Args {
     #[clap(flatten)]
     build: Build,
 
-    /// 新增的参数
+    /// chunk directory
     #[clap(long)]
     chunk_dir: PathBuf,
 
-    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAX), default_value_t = ONEGB as usize)]
-    chunk_size: usize,
+    /// chunk size
+    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAX), default_value_t = ONEGB)]
+    chunk_size: u64,
+
+    #[clap(long, default_value = "chunk")]
+    chunk_prefix: String,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -69,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let capacity = args.build.required_capacity as usize;
 
-    let chunk_size = args.chunk_size;
+    let chunk_size = args.chunk_size as usize;
 
     // 使用整数数学向上取整
     let partition = (capacity + chunk_size - 1) / chunk_size;
@@ -77,7 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("Exceeds File Number Limit");
     }
 
-    let chunk_files = create_partition_files(partition, &args.chunk_dir);
+    let chunk_files = create_partition_files(partition, &args.chunk_dir, &args.chunk_prefix);
     let mut writers = create_partition_writers(&chunk_files);
 
     println!("chunk_size {:?}", format_bytes(chunk_size as f64));
