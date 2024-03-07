@@ -6,7 +6,7 @@ use kr2r::db::{
     convert_fna_to_k2_format, create_partition_files, generate_taxonomy, get_bits_for_taxid,
     process_k2file,
 };
-use kr2r::db::{create_partition_writers, get_file_limit};
+use kr2r::db::{create_partition_writers, find_and_sort_files, get_file_limit};
 use kr2r::utils::{find_library_fna_files, read_id_to_taxon_map};
 use kr2r::IndexOptions;
 use std::path::PathBuf;
@@ -29,7 +29,7 @@ fn format_bytes(size: f64) -> String {
     format!("{:.2}{}", size, current_suffix)
 }
 
-pub const U32MAX: u64 = u32::MAX as u64;
+pub const U32MAXPLUS: u64 = u32::MAX as u64 + 2;
 pub const ONEGB: u64 = 1073741824;
 
 #[derive(Parser, Debug)]
@@ -43,12 +43,16 @@ struct Args {
     #[clap(long)]
     chunk_dir: PathBuf,
 
-    /// chunk size
-    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAX), default_value_t = ONEGB)]
+    /// chunk size 1-4(GB)
+    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS), default_value_t = 1)]
     chunk_size: u64,
 
     #[clap(long, default_value = "chunk")]
     chunk_prefix: String,
+
+    /// process k2 file only
+    #[clap(long, default_value_t = false)]
+    only_k2: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -72,44 +76,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .expect("more bits required for storing taxid");
 
     let capacity = args.build.required_capacity as usize;
-
+    let hash_config = HashConfig::new(capacity, value_bits, 0);
     let chunk_size = args.chunk_size as usize;
 
-    // 使用整数数学向上取整
     let partition = (capacity + chunk_size - 1) / chunk_size;
-    if partition >= file_num_limit {
-        panic!("Exceeds File Number Limit");
-    }
-
-    let chunk_files = create_partition_files(partition, &args.chunk_dir, &args.chunk_prefix);
-    let mut writers = create_partition_writers(&chunk_files);
-
-    println!("chunk_size {:?}", format_bytes(chunk_size as f64));
-
-    let source: PathBuf = args.build.source.clone();
-    let fna_files = if source.is_file() {
-        vec![source.to_string_lossy().to_string()]
-    } else {
-        find_library_fna_files(args.build.source)
-    };
-
     println!("start...");
     // 开始计时
     let start = Instant::now();
-    let hash_config = HashConfig::new(capacity, value_bits, 0);
-    for fna_file in &fna_files {
-        convert_fna_to_k2_format(
-            fna_file,
-            meros,
-            &taxonomy,
-            &id_to_taxon_map,
-            hash_config,
-            &mut writers,
-            chunk_size,
-            args.build.threads as u32,
-        );
-    }
-    println!("convert finished {:?}", &fna_files);
+
+    let chunk_files = if !args.only_k2 {
+        if partition >= file_num_limit {
+            panic!("Exceeds File Number Limit");
+        }
+
+        let chunk_files = create_partition_files(partition, &args.chunk_dir, &args.chunk_prefix);
+        let mut writers = create_partition_writers(&chunk_files);
+
+        println!("chunk_size {:?}", format_bytes(chunk_size as f64));
+
+        let source: PathBuf = args.build.source.clone();
+        let fna_files = if source.is_file() {
+            vec![source.to_string_lossy().to_string()]
+        } else {
+            find_library_fna_files(args.build.source)
+        };
+
+        for fna_file in &fna_files {
+            convert_fna_to_k2_format(
+                fna_file,
+                meros,
+                &taxonomy,
+                &id_to_taxon_map,
+                hash_config,
+                &mut writers,
+                chunk_size,
+                args.build.threads as u32,
+            );
+        }
+        println!("convert finished {:?}", &fna_files);
+
+        chunk_files
+    } else {
+        find_and_sort_files(&args.chunk_dir, &args.chunk_prefix, ".k2")?
+    };
+    println!("chunk_files {:?}", chunk_files);
 
     let hash_filename = args.build.hashtable_filename.clone();
     for i in 0..partition {

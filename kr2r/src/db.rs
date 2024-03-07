@@ -4,13 +4,16 @@ use crate::mmscanner::MinimizerScanner;
 use crate::taxonomy::{NCBITaxonomy, Taxonomy};
 use crate::Meros;
 
+use regex::Regex;
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
 use std::collections::{BTreeSet, HashMap};
-use std::fs::{File, OpenOptions};
-use std::io::{BufReader, BufWriter, Read, Result as IOResult, Write};
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, BufReader, BufWriter, Read, Result as IOResult, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[cfg(unix)]
 extern crate libc;
 
 #[cfg(unix)]
@@ -39,6 +42,53 @@ pub fn get_file_limit() -> usize {
 #[cfg(windows)]
 pub fn get_file_limit() -> usize {
     8192
+}
+
+// 函数定义
+pub fn find_and_sort_files(directory: &Path, prefix: &str, suffix: &str) -> IOResult<Vec<PathBuf>> {
+    // 构建正则表达式以匹配文件名中的数字
+    let pattern = format!(r"{}_(\d+){}", prefix, suffix);
+    let re = Regex::new(&pattern).unwrap();
+
+    // 读取指定目录下的所有条目
+    let entries = fs::read_dir(directory)?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .map_or(false, |s| s.starts_with(prefix) && s.ends_with(suffix))
+        })
+        .collect::<Vec<PathBuf>>();
+
+    // 使用正则表达式提取数字并排序
+    let mut sorted_entries = entries
+        .into_iter()
+        .filter_map(|path| {
+            re.captures(path.file_name()?.to_str()?)
+                .and_then(|caps| caps.get(1).map(|m| m.as_str().parse::<i32>().ok()))
+                .flatten()
+                .map(|num| (path, num))
+        })
+        .collect::<Vec<(PathBuf, i32)>>();
+
+    sorted_entries.sort_by_key(|k| k.1);
+
+    // 检查数字是否从0开始连续
+    for (i, (_, num)) in sorted_entries.iter().enumerate() {
+        if i as i32 != *num {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "File numbers are not continuous starting from 0.",
+            ));
+        }
+    }
+
+    // 返回排序后的文件路径
+    Ok(sorted_entries.into_iter().map(|(path, _)| path).collect())
 }
 
 // 定义每批次处理的 Cell 数量

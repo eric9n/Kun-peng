@@ -47,6 +47,8 @@ byteorder = "1.4"
 walkdir = "2"
 rayon = "1.8"
 libc = "0.2"
+regex = "1.5.4"
+
 
 [dev-dependencies]
 criterion = "0.5.1"
