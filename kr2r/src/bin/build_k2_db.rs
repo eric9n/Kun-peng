@@ -44,7 +44,7 @@ struct Args {
     chunk_dir: PathBuf,
 
     /// chunk size 1-4(GB)
-    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS), default_value_t = 1)]
+    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS), default_value_t = ONEGB)]
     chunk_size: u64,
 
     #[clap(long, default_value = "chunk")]
