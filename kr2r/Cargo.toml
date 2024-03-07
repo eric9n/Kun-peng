@@ -22,6 +22,9 @@ path = "src/bin/classify.rs"
 name = "inspect"
 path = "src/bin/inspect.rs"
 
+[[bin]]
+name = "seqid2taxid"
+path = "src/bin/seqid2taxid.rs"
 
 [[bin]]
 name = "build_k2_db"
