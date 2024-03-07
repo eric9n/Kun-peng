@@ -51,7 +51,7 @@ struct Args {
     chunk_prefix: String,
 
     /// process k2 file only
-    #[clap(long, default_value_t = false)]
+    #[clap(long)]
     only_k2: bool,
 }
 

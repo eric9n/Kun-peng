@@ -169,7 +169,9 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+use std::fmt;
+
+#[derive(Clone, Copy)]
 pub struct HashConfig<B>
 where
     B: BitN,
@@ -183,6 +185,22 @@ where
     // 哈希表中当前存储的元素数量。
     pub size: usize,
     _phantom: PhantomData<B>,
+}
+
+// 为HashConfig手动实现Debug trait
+impl<B> fmt::Debug for HashConfig<B>
+where
+    B: BitN,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CompactHashTableConfig")
+            .field("value_mask", &self.value_mask)
+            .field("value_bits", &self.value_bits)
+            .field("capacity", &self.capacity)
+            .field("size", &self.size)
+            // 注意，我们没有包括_phantom字段
+            .finish()
+    }
 }
 
 impl<B> HashConfig<B>
@@ -289,6 +307,13 @@ where
             mmap,
         };
         Ok(chtm)
+    }
+
+    pub fn get_none_counts(&self) -> usize {
+        self.table
+            .iter()
+            .filter(|&&item| item == B::default())
+            .count()
     }
 
     pub fn get(&self, hash_key: u64) -> B {
