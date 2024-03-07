@@ -97,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 开始计时
     let start = Instant::now();
     let hash_config = HashConfig::new(capacity, value_bits, 0);
-    for fna_file in fna_files {
+    for fna_file in &fna_files {
         convert_fna_to_k2_format(
             fna_file,
             meros,
@@ -109,9 +109,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             args.build.threads as u32,
         );
     }
+    println!("convert finished {:?}", &fna_files);
 
     let hash_filename = args.build.hashtable_filename.clone();
-    for i in 0..2 {
+    for i in 0..partition {
         let mut chtm = CHTableMut::new(&hash_filename, hash_config, i, chunk_size)?;
         process_k2file(&chunk_files[i], &mut chtm, &taxonomy)?;
     }

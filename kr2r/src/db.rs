@@ -261,6 +261,10 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
                         writer.write_all(cell.1.as_slice()).unwrap();
                     }
                 }
+
+                // for writer in writers.into_iter() {
+                //     writer.flush().expect("io error");
+                // }
             }
         },
     );
