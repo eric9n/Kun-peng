@@ -37,7 +37,7 @@ pub fn get_file_limit() -> usize {
 }
 
 #[cfg(windows)]
-fn get_file_limit() -> usize {
+pub fn get_file_limit() -> usize {
     8192
 }
 
