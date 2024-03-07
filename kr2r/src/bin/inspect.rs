@@ -16,21 +16,26 @@ struct Args {
     index_filename: String,
 
     /// The file path for the Kraken 2 taxonomy.
-    #[clap(short = 't', long = "taxonomy-filename", value_parser, required = true)]
-    taxonomy_filename: String,
+    #[clap(short = 't', long = "taxonomy-filename", value_parser)]
+    taxonomy_filename: Option<String>,
 
     /// The file path for the Kraken 2 options.
-    #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
-    options_filename: String,
+    #[clap(short = 'o', long = "options-filename", value_parser)]
+    options_filename: Option<String>,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let idx_opts = IndexOptions::read_index_options(args.options_filename.clone())?;
-    let taxo = Taxonomy::from_file(&args.taxonomy_filename)?;
+    if let Some(option_filename) = args.options_filename {
+        let idx_opts = IndexOptions::read_index_options(option_filename)?;
+        println!("index option {:?}", idx_opts);
+    }
+    if let Some(taxonomy_filename) = args.taxonomy_filename {
+        let taxo = Taxonomy::from_file(&taxonomy_filename)?;
+        println!("taxonomy node count {:?}", taxo.node_count());
+    }
+
     let config = HashConfig::<u32>::from(args.index_filename.clone())?;
-    println!("index option {:?}", idx_opts);
-    println!("taxonomy node count {:?}", taxo.node_count());
     println!("compact hash table {:?}", config);
 
     Ok(())

@@ -77,14 +77,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let capacity = args.build.required_capacity as usize;
     let hash_config = HashConfig::new(capacity, value_bits, 0);
-    let chunk_size = args.chunk_size as usize;
 
-    let partition = (capacity + chunk_size - 1) / chunk_size;
-    println!("start...");
     // 开始计时
     let start = Instant::now();
 
+    let chunk_size = args.chunk_size as usize;
+
     let chunk_files = if !args.only_k2 {
+        let partition = (capacity + chunk_size - 1) / chunk_size;
+        println!("start...");
+
         if partition >= file_num_limit {
             panic!("Exceeds File Number Limit");
         }
@@ -122,7 +124,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("chunk_files {:?}", chunk_files);
 
     let hash_filename = args.build.hashtable_filename.clone();
+    let partition = chunk_files.len();
     for i in 0..partition {
+        println!("chunk file {:?}", &chunk_files[i]);
         let mut chtm = CHTableMut::new(&hash_filename, hash_config, i, chunk_size)?;
         process_k2file(&chunk_files[i], &mut chtm, &taxonomy)?;
     }
