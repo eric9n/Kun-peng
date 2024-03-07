@@ -13,8 +13,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 extern crate libc;
 
+#[cfg(unix)]
 use libc::{getrlimit, rlimit, RLIMIT_NOFILE};
 
+#[cfg(unix)]
 pub fn get_file_limit() -> usize {
     let mut limits = rlimit {
         rlim_cur: 0, // 当前（软）限制
@@ -32,6 +34,11 @@ pub fn get_file_limit() -> usize {
         eprintln!("Failed to get file limit");
         0
     }
+}
+
+#[cfg(windows)]
+fn get_file_limit() -> usize {
+    8192
 }
 
 // 定义每批次处理的 Cell 数量
