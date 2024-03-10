@@ -95,9 +95,9 @@ pub fn find_and_sort_files(directory: &Path, prefix: &str, suffix: &str) -> IORe
 const BATCH_SIZE: usize = 81920;
 
 /// 处理k2格式的临时文件,构建数据库
-pub fn process_k2file<P: AsRef<Path>>(
+pub fn process_k2file<P: AsRef<Path>, B: BitN>(
     chunk_file: P,
-    chtm: &mut CHTableMut<u32>,
+    chtm: &mut CHTableMut<B>,
     taxonomy: &Taxonomy,
 ) -> IOResult<()> {
     let total_counter = AtomicUsize::new(0);
@@ -109,7 +109,7 @@ pub fn process_k2file<P: AsRef<Path>>(
     let file = File::open(chunk_file)?;
     let mut reader = BufReader::new(file);
 
-    let cell_size = std::mem::size_of::<Cell<u32>>();
+    let cell_size = std::mem::size_of::<Cell<B>>();
     let batch_buffer_size = cell_size * BATCH_SIZE;
     let mut batch_buffer = vec![0u8; batch_buffer_size];
 
@@ -122,17 +122,17 @@ pub fn process_k2file<P: AsRef<Path>>(
         let cells_in_batch = bytes_read / cell_size;
 
         let cells = unsafe {
-            std::slice::from_raw_parts(batch_buffer.as_ptr() as *const Cell<u32>, cells_in_batch)
+            std::slice::from_raw_parts(batch_buffer.as_ptr() as *const Cell<B>, cells_in_batch)
         };
 
         cells.into_iter().for_each(|cell| {
             let item = cell.as_slot();
-            let item_taxid = item.value.right(value_mask);
+            let item_taxid: u32 = item.value.right(value_mask).to_u32();
             if let Some(mut slot) = &chtm.set_page_cell(item) {
-                let slot_taxid = slot.value.right(value_mask);
+                let slot_taxid = slot.value.right(value_mask).to_u32();
                 let new_taxid = taxonomy.lca(item_taxid, slot_taxid);
                 if slot_taxid != new_taxid {
-                    slot.update_right(new_taxid, value_bits);
+                    slot.update_right(B::from_u32(new_taxid), value_bits);
                     chtm.update_cell(slot);
                 }
             } else {
@@ -266,12 +266,12 @@ pub fn get_bits_for_taxid(
 }
 
 /// 将fna文件转换成k2格式的临时文件
-pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
+pub fn convert_fna_to_k2_format<P: AsRef<Path>, B: BitN>(
     fna_file: P,
     meros: Meros,
     taxonomy: &Taxonomy,
     id_to_taxon_map: &HashMap<String, u64>,
-    hash_config: HashConfig<u32>,
+    hash_config: HashConfig<B>,
     writers: &mut Vec<BufWriter<File>>,
     chunk_size: usize,
     threads: u32,
@@ -294,8 +294,10 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
                             let index: usize = hash_config.index(hash_key);
                             let idx = index % chunk_size;
                             let partition_index = index / chunk_size;
-                            let cell =
-                                Cell::new(idx as u32, u32::hash_value(hash_key, value_bits, taxid));
+                            let cell = Cell::new(
+                                idx as u32,
+                                B::hash_value(hash_key, value_bits, B::from_u32(taxid)),
+                            );
                             k2_cell_list.push((partition_index, cell));
                         }
                     };

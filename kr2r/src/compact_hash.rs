@@ -6,7 +6,9 @@ use std::io::{Error, ErrorKind, Result};
 use std::marker::PhantomData;
 use std::path::Path;
 
-pub trait CompactValue: Default + PartialEq + Clone + Copy + PartialEq + Eq + Sized {
+pub trait CompactValue:
+    Default + PartialEq + Clone + Copy + PartialEq + Eq + Sized + Send + Sync
+{
     fn compacted(hash_key: u64, value_bits: usize) -> Self;
     fn hash_value(hash_key: u64, value_bits: usize, value: Self) -> Self;
 }
@@ -16,6 +18,8 @@ pub trait BitN: CompactValue {
     fn left(&self, value_bits: usize) -> Self;
     fn right(&self, value_mask: u32) -> Self;
     fn combined(left: Self, right: Self, value_bits: usize) -> Self;
+    fn to_u32(&self) -> u32;
+    fn from_u32(value: u32) -> Self;
 }
 
 impl CompactValue for u32 {
@@ -38,6 +42,71 @@ impl BitN for u32 {
     }
     fn combined(left: Self, right: Self, value_bits: usize) -> Self {
         left << value_bits | right
+    }
+
+    fn to_u32(&self) -> u32 {
+        *self
+    }
+    fn from_u32(value: u32) -> Self {
+        value
+    }
+}
+
+impl CompactValue for u16 {
+    fn hash_value(hash_key: u64, value_bits: usize, value: u16) -> u16 {
+        Self::compacted(hash_key, value_bits) << value_bits | value
+    }
+    fn compacted(value: u64, value_bits: usize) -> u16 {
+        (value >> (48 + value_bits)) as u16
+    }
+}
+
+impl BitN for u16 {
+    fn left(&self, value_bits: usize) -> u16 {
+        *self >> value_bits
+    }
+
+    fn right(&self, value_mask: u32) -> u16 {
+        *self & (value_mask as u16)
+    }
+    fn combined(left: Self, right: Self, value_bits: usize) -> Self {
+        left << value_bits | right
+    }
+
+    fn to_u32(&self) -> u32 {
+        *self as u32
+    }
+    fn from_u32(value: u32) -> Self {
+        value as u16
+    }
+}
+
+impl CompactValue for u8 {
+    fn hash_value(hash_key: u64, value_bits: usize, value: u8) -> u8 {
+        Self::compacted(hash_key, value_bits) << value_bits | value
+    }
+    fn compacted(value: u64, value_bits: usize) -> u8 {
+        (value >> (56 + value_bits)) as u8
+    }
+}
+
+impl BitN for u8 {
+    fn left(&self, value_bits: usize) -> u8 {
+        *self >> value_bits
+    }
+
+    fn right(&self, value_mask: u32) -> u8 {
+        *self & (value_mask as u8)
+    }
+    fn combined(left: Self, right: Self, value_bits: usize) -> Self {
+        left << value_bits | right
+    }
+
+    fn to_u32(&self) -> u32 {
+        *self as u32
+    }
+    fn from_u32(value: u32) -> Self {
+        value as u8
     }
 }
 
@@ -63,6 +132,16 @@ impl BitN for bool {
     }
     fn combined(left: Self, right: Self, value_bits: usize) -> Self {
         right
+    }
+    fn to_u32(&self) -> u32 {
+        0
+    }
+    fn from_u32(value: u32) -> Self {
+        if value == 0 {
+            false
+        } else {
+            true
+        }
     }
 }
 

@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .expect("more bits required for storing taxid");
 
     let capacity = args.build.required_capacity as usize;
-    let hash_config = HashConfig::new(capacity, value_bits, 0);
+    let hash_config = HashConfig::<u32>::new(capacity, value_bits, 0);
 
     // 开始计时
     let start = Instant::now();
