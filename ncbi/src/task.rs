@@ -58,6 +58,7 @@ async fn process_assembly_tasks(
     site: &str,
     group: &str,
     data_dir: &PathBuf,
+    asm_levels: &Vec<&str>,
     tx: mpsc::Sender<NcbiFile>,
 ) -> Result<usize> {
     let counter = Arc::new(AtomicUsize::new(0));
@@ -65,7 +66,7 @@ async fn process_assembly_tasks(
     match assembly.run().await {
         Ok(_) => {
             let result = assembly
-                .process_summary_and_apply(site, data_dir, |file: NcbiFile| {
+                .process_summary_and_apply(site, data_dir, asm_levels, |file: NcbiFile| {
                     let tx_clone = tx.clone();
                     let counter_clone = counter.clone();
                     async move {
@@ -90,12 +91,13 @@ pub async fn run_task(
     site: &str,
     group: &str,
     data_dir: &PathBuf,
+    asm_levels: &Vec<&str>,
     num_threads: usize,
 ) -> Result<()> {
     log::info!("{} {} download assembly file start...", group, site);
     let (tx, rx) = mpsc::channel(4096); // 通道大小可以根据需要调整
     let (tx1, rx1) = mpsc::channel(4096); // 通道大小可以根据需要调整
-    let assembly_tasks = process_assembly_tasks(site, group, data_dir, tx);
+    let assembly_tasks = process_assembly_tasks(site, group, data_dir, asm_levels, tx);
     let download_handle = process_tasks("run".to_string(), num_threads, rx, Some(tx1));
     let md5_handle = process_tasks("check".to_string(), num_threads, rx1, None);
     // // 等待处理任务完成
@@ -116,11 +118,12 @@ pub async fn run_check(
     site: &str,
     group: &str,
     data_dir: &PathBuf,
+    asm_levels: &Vec<&str>,
     num_threads: usize,
 ) -> Result<()> {
     log::info!("{} {} check md5 start...", group, site);
     let (tx, rx) = mpsc::channel(4096); // 通道大小可以根据需要调整
-    let assembly_tasks = process_assembly_tasks(site, group, data_dir, tx);
+    let assembly_tasks = process_assembly_tasks(site, group, data_dir, asm_levels, tx);
     let md5_handle = process_tasks("check".to_string(), num_threads, rx, None);
     // // 等待处理任务完成
     let (ably_res, md5_res) = tokio::join!(assembly_tasks, md5_handle);
@@ -162,7 +165,12 @@ pub async fn run_download_file(site: &str, data_dir: &PathBuf, fna_url: &str) ->
     Ok(())
 }
 
-pub async fn run_assembly(site: &str, group: &str, data_dir: &PathBuf) -> Result<()> {
+pub async fn run_assembly(
+    site: &str,
+    group: &str,
+    asm_levels: &Vec<&str>,
+    data_dir: &PathBuf,
+) -> Result<()> {
     let assembly = NcbiFile::from_group(group, data_dir, site).await;
     if !assembly.file_exists() {
         let _ = assembly.run().await;
@@ -170,7 +178,7 @@ pub async fn run_assembly(site: &str, group: &str, data_dir: &PathBuf) -> Result
     let total_counter = Arc::new(AtomicUsize::new(0));
     let counter = Arc::new(AtomicUsize::new(0));
     let result = assembly
-        .process_summary_and_apply(site, data_dir, |file: NcbiFile| {
+        .process_summary_and_apply(site, data_dir, asm_levels, |file: NcbiFile| {
             let counter_clone = counter.clone();
             let total_counter_clone = total_counter.clone();
             async move {

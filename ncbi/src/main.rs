@@ -1,9 +1,11 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
+use lazy_static::lazy_static;
 use ncbi::fna::write_to_fna;
 use ncbi::meta::{init_meta, save_meta};
 use ncbi::task;
 use ncbi::utils;
+use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
 use tokio::runtime::Builder;
@@ -11,6 +13,23 @@ use tokio::runtime::Builder;
 const NCBI_LIBRARY: &'static [&str] = &[
     "archaea", "bacteria", "viral", "fungi", "plant", "human", "protozoa",
 ];
+
+lazy_static! {
+    static ref NCBI_ASM_LEVELS: HashMap<String, Vec<&'static str>> = {
+        let mut m = HashMap::new();
+        m.insert("complete_genome".to_string(), vec!["Complete Genome"]);
+        m.insert("chromosome".to_string(), vec!["Chromosome"]);
+        m.insert("scaffold".to_string(), vec!["Scaffold"]);
+        m.insert("contig".into(), vec!["Contig"]);
+        m.insert("basic".into(), vec!["Complete Genome", "Chromosome"]);
+        m.insert("uncomplete".into(), vec!["Scaffold", "Contig"]);
+        m.insert(
+            "all".into(),
+            vec!["Complete Genome", "Chromosome", "Scaffold", "Contig"],
+        );
+        m
+    };
+}
 
 fn validate_group(group: &str) -> Result<String, String> {
     let groups = utils::parse_comma_separated_list(&group);
@@ -94,6 +113,9 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = Site::Refseq)]
         site: Site,
 
+        #[arg(long, default_value = "basic")]
+        asm_level: String,
+
         /// 从 NCBI 站点上下载某个种类的数据信息，可以是逗号分隔的多个, archaea,bacteria,viral,fungi,plant,human,protozoa
         #[arg(short, long, value_parser = validate_group)]
         group: String,
@@ -114,7 +136,12 @@ async fn async_run(args: Args) -> Result<()> {
             utils::create_dir(&data_dir)?;
             let _ = task::run_taxo(&data_dir).await;
         }
-        Commands::Genomes { site, group, mode } => {
+        Commands::Genomes {
+            site,
+            group,
+            asm_level,
+            mode,
+        } => {
             let site = site.to_string();
             let groups = utils::parse_comma_separated_list(&group);
             for grp in groups {
@@ -127,10 +154,18 @@ async fn async_run(args: Args) -> Result<()> {
                     grp.to_string()
                 };
 
+                let levels = NCBI_ASM_LEVELS.get(&asm_level).unwrap();
+
                 match &mode {
                     Some(Mode::Md5) => {
-                        let _ =
-                            task::run_check(&site, &trans_group, &data_dir, args.num_threads).await;
+                        let _ = task::run_check(
+                            &site,
+                            &trans_group,
+                            &data_dir,
+                            &levels,
+                            args.num_threads,
+                        )
+                        .await;
                     }
                     Some(Mode::Fna { out_dir }) => {
                         let fna_out_dir = out_dir.join("library").join(grp.clone());
@@ -138,7 +173,7 @@ async fn async_run(args: Args) -> Result<()> {
                         let _ = write_to_fna(&site, &trans_group, &data_dir, &fna_out_dir).await;
                     }
                     Some(Mode::Assembly) => {
-                        let _ = task::run_assembly(&site, &trans_group, &data_dir).await;
+                        let _ = task::run_assembly(&site, &trans_group, &levels, &data_dir).await;
                     }
                     Some(Mode::Url { url }) => {
                         let result = task::run_download_file(&site, &data_dir, &url).await;
@@ -147,8 +182,14 @@ async fn async_run(args: Args) -> Result<()> {
                         }
                     }
                     None => {
-                        let _ =
-                            task::run_task(&site, &trans_group, &data_dir, args.num_threads).await;
+                        let _ = task::run_task(
+                            &site,
+                            &trans_group,
+                            &data_dir,
+                            &&levels,
+                            args.num_threads,
+                        )
+                        .await;
                     }
                 }
             }

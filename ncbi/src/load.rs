@@ -185,6 +185,7 @@ impl NcbiFile {
         &self,
         site: &str,
         data_dir: &PathBuf,
+        asm_levels: &Vec<&str>,
         callback: F,
     ) -> Result<()>
     where
@@ -208,11 +209,15 @@ impl NcbiFile {
                     if fields.len() > 19 {
                         let (_, asm_level, ftp_path) = (fields[5], fields[11], fields[19]);
 
-                        if !["Complete Genome", "Chromosome"].contains(&asm_level)
-                            || ftp_path == "na"
-                        {
+                        if ftp_path == "na" {
                             continue;
                         }
+                        if !asm_levels.contains(&asm_level) {
+                            continue;
+                        }
+                        // if !["Complete Genome", "Chromosome"].contains(&asm_level) {
+                        //     continue;
+                        // }
 
                         let fna_file_name = format!(
                             "{}_genomic.fna.gz",
