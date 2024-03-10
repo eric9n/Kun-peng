@@ -11,7 +11,16 @@ use std::path::PathBuf;
 use tokio::runtime::Builder;
 
 const NCBI_LIBRARY: &'static [&str] = &[
-    "archaea", "bacteria", "viral", "fungi", "plant", "human", "protozoa",
+    "archaea",
+    "bacteria",
+    "viral",
+    "fungi",
+    "plant",
+    "human",
+    "protozoa",
+    "vertebrate_mammalian",
+    "vertebrate_other",
+    "invertebrate",
 ];
 
 lazy_static! {
@@ -116,7 +125,7 @@ enum Commands {
         #[arg(long, default_value = "basic")]
         asm_level: String,
 
-        /// 从 NCBI 站点上下载某个种类的数据信息，可以是逗号分隔的多个, archaea,bacteria,viral,fungi,plant,human,protozoa
+        /// 从 NCBI 站点上下载某个种类的数据信息，可以是逗号分隔的多个, archaea,bacteria,viral,fungi,plant,human,protozoa,vertebrate_mammalian,vertebrate_other,invertebrate
         #[arg(short, long, value_parser = validate_group)]
         group: String,
 
