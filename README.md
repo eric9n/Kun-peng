@@ -31,7 +31,7 @@ ncbi genomes [OPTIONS] --group <GROUP> [COMMAND]
 * --site <SITE>: Choose the NCBI site directory to download from (RefSeq or GenBank). Defaults to refseq. Possible values are:
 * genbank: Download genbank resources.
 * refseq: Download refseq resources.
-* --asm-level <ASM_LEVEL>: Set the assembly level for the download. Default is basic.
+* --asm-level <ASM_LEVEL>: Set the assembly level for the download. Default is `basic`. ["Complete Genome", "Chromosome"]. `all` is ["Complete Genome", "Chromosome", "Scaffold", "Contig"].
 * -g, --group <GROUP>: Specifies the category of data to download from the NCBI site. The group can be one or a comma-separated list of the following: archaea, bacteria, viral, fungi, plant, human, protozoa, vertebrate_mammalian, vertebrate_other, invertebrate.
 * -h, --help: Print help information (for a summary, use '-h').
 
