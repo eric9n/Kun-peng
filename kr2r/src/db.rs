@@ -1,5 +1,5 @@
 // 使用时需要引用模块路径
-use crate::compact_hash::{BitN, CHTableMut, Cell, CompactValue, HashConfig, Slot};
+use crate::compact_hash::{BitN, CHTableMut, Cell, HashConfig, Slot};
 use crate::mmscanner::MinimizerScanner;
 use crate::taxonomy::{NCBITaxonomy, Taxonomy};
 use crate::Meros;

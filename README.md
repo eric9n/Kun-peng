@@ -69,7 +69,53 @@ ncbi gen --site all -g archaea fna
 ```
 
 
-## 2. Estimate Capacity Tool
+## 2. Seqid2taxid Tool
+
+The seqid2taxid tool is a utility within the kr2r package designed to facilitate the mapping of sequence identifiers (seqid) to taxonomic identifiers (taxid). This tool is essential for researchers and bioinformaticians working with genomic data, enabling them to easily relate sequence data to taxonomic information.
+
+### Usage
+
+```bash
+seqid2taxid -h
+
+Usage: seqid2taxid [OPTIONS] --source <SOURCE>
+
+Options:
+      --source <SOURCE>      the database directory
+  -f, --map-file <MAP_FILE>  seqid2taxid.map file path, default = $source/seqid2taxid.map
+  -h, --help                 Print help
+  -V, --version              Print version
+
+```
+
+To use the seqid2taxid tool, execute it with the required and optional arguments as follows:
+
+```bash
+seqid2taxid [OPTIONS] --source <SOURCE>
+```
+
+### Required Options
+* --source <SOURCE>: Specifies the database directory containing the sequence and taxonomic data.
+
+### Optional Options
+* -f, --map-file <MAP_FILE>: Path to the seqid2taxid.map file. If not specified, the tool defaults to using $source/seqid2taxid.map, where $source is the path provided by the * --source option.
+* -h, --help: Displays help information about the tool and its options.
+* -V, --version: Prints the version of the seqid2taxid tool.
+
+### Example Command
+To run the seqid2taxid tool with a specific source directory:
+
+```bash
+seqid2taxid --source /path/to/database
+```
+
+To specify a custom map file path:
+
+```bash
+seqid2taxid --source /path/to/database -f /path/to/custom/seqid2taxid.map
+```
+
+## 3. Estimate Capacity Tool
 
 The estimate_capacity tool is designed for estimating the capacity required for building a database from genomic data. It takes into consideration various parameters related to the genomic data processing, such as k-mer length, minimizer length, and hash table load factor, to provide an efficient estimate of the necessary resources.
 

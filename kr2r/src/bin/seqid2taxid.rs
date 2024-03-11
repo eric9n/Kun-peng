@@ -25,7 +25,8 @@ fn main() -> Result<()> {
     } else {
         args.source.join("seqid2taxid.map")
     };
-    create_seqid2taxid_file(prelim_file, map_file)?;
+    create_seqid2taxid_file(prelim_file, map_file.clone())?;
 
+    println!("finished {:?}", &map_file);
     Ok(())
 }

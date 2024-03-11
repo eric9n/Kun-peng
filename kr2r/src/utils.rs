@@ -111,7 +111,7 @@ pub fn summary_prelim_map_files<P: AsRef<Path>>(data_dir: P) -> Result<PathBuf> 
 pub fn create_seqid2taxid_file<P: AsRef<Path>>(prelim_map_file: P, output_file: P) -> Result<()> {
     let file = File::open(prelim_map_file)?;
     let reader = BufReader::new(file);
-    let mut output = File::create(output_file)?;
+    let mut output = File::create(output_file).unwrap();
 
     for line in reader.lines() {
         let line = line?;
