@@ -33,8 +33,10 @@ ncbi genomes [OPTIONS] --group <GROUP> [COMMAND]
 
 ### Options
 * --site <SITE>: Choose the NCBI site directory to download from (RefSeq or GenBank). Defaults to refseq. Possible values are:
-* genbank: Download genbank resources.
-* refseq: Download refseq resources.
+*genbank*: Download genbank resources.
+*refseq*: Download refseq resources.
+*all*: Download genbank and refseq resources.
+
 * --asm-level <ASM_LEVEL>: Set the assembly level for the download. Default is `basic`. ["Complete Genome", "Chromosome"]. `all` is ["Complete Genome", "Chromosome", "Scaffold", "Contig"].
 * -g, --group <GROUP>: Specifies the category of data to download from the NCBI site. The group can be one or a comma-separated list of the following: archaea, bacteria, viral, fungi, plant, human, protozoa, vertebrate_mammalian, vertebrate_other, invertebrate.
 * -h, --help: Print help information (for a summary, use '-h').
@@ -58,3 +60,49 @@ ncbi help genomes
 ```
 
 This tool simplifies the process of downloading and processing genome data from NCBI, making it accessible for various research and analysis purposes.
+
+
+### Generate fna file
+
+```bash
+ncbi gen --site all -g archaea fna
+```
+
+
+## 2. Estimate Capacity Tool
+
+The estimate_capacity tool is designed for estimating the capacity required for building a database from genomic data. It takes into consideration various parameters related to the genomic data processing, such as k-mer length, minimizer length, and hash table load factor, to provide an efficient estimate of the necessary resources.
+
+### Usage
+
+To use the estimate_capacity tool, execute it from the command line with the desired options:
+
+```bash
+estimate_capacity [OPTIONS]
+```
+
+Options
+* --source <SOURCE>: Specifies the build database directory or file. Default is lib.
+* --cache: Estimates capacity from cache if exists.
+* -k, --k-mer <K_MER>: Sets the length of k-mers. K must be a positive integer (default is 35). K cannot be less than L.
+* -l, --l-mer <L_MER>: Sets the length of minimizers. L must be between 1 and 31 (default is 31).
+* -n, --n <N>: Sets the maximum qualifying hash code (default is 4).
+* --minimizer-spaces <MINIMIZER_SPACES>: Specifies the number of characters in the minimizer that are ignored in comparisons (default is 7).
+* -T, --toggle-mask <TOGGLE_MASK>: Defines the minimizer ordering toggle mask.
+* --load-factor <LOAD_FACTOR>: Sets the proportion of the hash table to be populated (only for build task; default is 0.7, must be between 0 and 1).
+* -p, --threads <THREADS>: Specifies the number of threads to use (default is 4).
+* -h, --help: Prints help information (for more details, use '--help').
+* -V, --version: Prints the version of the tool.
+
+### Example
+
+```bash
+estimate_capacity -k 35 -l 31 --source /data/ncbi/path -p 10 --load-factor 0.7
+```
+
+### Output
+
+```bash
+estimate count: 1213069985, required capacity: 1732968825.0, Estimated hash table requirement: 6.46GB
+```
+

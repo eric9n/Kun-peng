@@ -36,7 +36,11 @@ pub async fn decompress_and_extract_tar_gz(
     Ok(())
 }
 
-pub async fn parse_assembly_fna(site: &str, data_dir: &PathBuf) -> Result<HashMap<String, String>> {
+pub async fn parse_assembly_fna(
+    site: &str,
+    data_dir: &PathBuf,
+    asm_levels: &Vec<&str>,
+) -> Result<HashMap<String, String>> {
     let mut gz_files: HashMap<String, String> = HashMap::new();
     let file_name = format!("assembly_summary_{}.txt", site);
     let file_path = data_dir.join(file_name);
@@ -53,12 +57,17 @@ pub async fn parse_assembly_fna(site: &str, data_dir: &PathBuf) -> Result<HashMa
         if fields.len() > 19 {
             let (taxid, asm_level, ftp_path) = (fields[5], fields[11], fields[19]);
 
-            if !["Complete Genome", "Chromosome"].contains(&asm_level) || ftp_path == "na" {
+            if ftp_path == "na" {
+                continue;
+            }
+
+            if !asm_levels.contains(&asm_level) {
                 continue;
             }
 
             let fna_file_name = format!(
-                "{}_genomic.fna.gz",
+                "{}/{}_genomic.fna.gz",
+                site,
                 ftp_path.split('/').last().unwrap_or_default()
             );
             gz_files.insert(fna_file_name, taxid.into());
@@ -70,12 +79,20 @@ pub async fn parse_assembly_fna(site: &str, data_dir: &PathBuf) -> Result<HashMa
 pub async fn write_to_fna(
     site: &str,
     group: &str,
+    asm_levels: &Vec<&str>,
     data_dir: &PathBuf,
     out_dir: &PathBuf,
 ) -> Result<()> {
     log::info!("{} {} write to fna...", group, site);
 
-    let gz_files = parse_assembly_fna(site, data_dir).await?;
+    let gz_files = if site == "all" {
+        let mut gz_files = parse_assembly_fna("genbank", data_dir, asm_levels).await?;
+        let ref_gz_files = parse_assembly_fna("refseq", data_dir, asm_levels).await?;
+        gz_files.extend(ref_gz_files);
+        gz_files
+    } else {
+        parse_assembly_fna(site, data_dir, asm_levels).await?
+    };
     let library_fna_path = out_dir.join("library.fna");
     let prelim_map_path = out_dir.join("prelim_map.txt");
 
@@ -97,7 +114,7 @@ pub async fn write_to_fna(
     let re: Regex = Regex::new(r"^>(\S+)").unwrap();
 
     for (gz_path, taxid) in gz_files {
-        let gz_file = data_dir.join(&site).join(gz_path);
+        let gz_file = data_dir.join(gz_path);
         let file = File::open(gz_file).await?;
         let decompressor = GzipDecoder::new(BufReader::new(file));
         let mut reader = BufReader::new(decompressor);

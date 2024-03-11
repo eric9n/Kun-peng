@@ -56,6 +56,8 @@ enum Site {
     Genbank,
     /// 下载 refseq 资源
     Refseq,
+    /// genbank and refseq
+    All,
 }
 
 impl fmt::Display for Site {
@@ -66,6 +68,7 @@ impl fmt::Display for Site {
             match self {
                 Site::Genbank => "genbank",
                 Site::Refseq => "refseq",
+                Site::All => "all",
             }
         )
     }
@@ -153,11 +156,20 @@ async fn async_run(args: Args) -> Result<()> {
             asm_level,
             mode,
         } => {
-            let site = site.to_string();
+            // let site_str = site.to_string();
             let groups = utils::parse_comma_separated_list(&group);
             for grp in groups {
                 let data_dir: PathBuf = db_path.join("library").join(grp.clone());
-                utils::create_dir(&data_dir.join(&site))?;
+                match site {
+                    Site::All => {
+                        for s in [Site::Genbank, Site::Refseq].iter() {
+                            utils::create_dir(&data_dir.join(&s.to_string()))?;
+                        }
+                    }
+                    _ => {
+                        utils::create_dir(&data_dir.join(&site.to_string()))?;
+                    }
+                }
 
                 let trans_group = if &grp == "human" {
                     "vertebrate_mammalian/Homo_sapiens".to_string()
@@ -168,40 +180,99 @@ async fn async_run(args: Args) -> Result<()> {
                 let levels = NCBI_ASM_LEVELS.get(&asm_level).unwrap();
 
                 match &mode {
-                    Some(Mode::Md5) => {
-                        let _ = task::run_check(
-                            &site,
-                            &trans_group,
-                            &data_dir,
-                            &levels,
-                            args.num_threads,
-                        )
-                        .await;
-                    }
+                    Some(Mode::Md5) => match site {
+                        Site::All => {
+                            for site in [Site::Genbank, Site::Refseq].iter() {
+                                let _ = task::run_check(
+                                    &site.to_string(),
+                                    &trans_group,
+                                    &data_dir,
+                                    &levels,
+                                    args.num_threads,
+                                )
+                                .await;
+                            }
+                        }
+                        _ => {
+                            let _ = task::run_check(
+                                &site.to_string(),
+                                &trans_group,
+                                &data_dir,
+                                &levels,
+                                args.num_threads,
+                            )
+                            .await;
+                        }
+                    },
                     Some(Mode::Fna { out_dir }) => {
                         let fna_out_dir = out_dir.join("library").join(grp.clone());
                         utils::create_dir(&fna_out_dir)?;
-                        let _ = write_to_fna(&site, &trans_group, &data_dir, &fna_out_dir).await;
-                    }
-                    Some(Mode::Assembly) => {
-                        let _ = task::run_assembly(&site, &trans_group, &levels, &data_dir).await;
-                    }
-                    Some(Mode::Url { url }) => {
-                        let result = task::run_download_file(&site, &data_dir, &url).await;
-                        if result.is_err() {
-                            log::error!("下载文件失败... {:?}", result);
-                        }
-                    }
-                    None => {
-                        let _ = task::run_task(
-                            &site,
+                        let _ = write_to_fna(
+                            &site.to_string(),
                             &trans_group,
+                            &levels,
                             &data_dir,
-                            &&levels,
-                            args.num_threads,
+                            &fna_out_dir,
                         )
                         .await;
                     }
+                    Some(Mode::Assembly) => match site {
+                        Site::All => {
+                            for s in [Site::Genbank, Site::Refseq].iter() {
+                                let _ = task::run_assembly(
+                                    &s.to_string(),
+                                    &trans_group,
+                                    &levels,
+                                    &data_dir,
+                                )
+                                .await;
+                            }
+                        }
+                        _ => {
+                            let _ = task::run_assembly(
+                                &site.to_string(),
+                                &trans_group,
+                                &levels,
+                                &data_dir,
+                            )
+                            .await;
+                        }
+                    },
+                    Some(Mode::Url { url }) => {
+                        if site == Site::All {
+                            log::error!("必须指定合适的site");
+                        } else {
+                            let result =
+                                task::run_download_file(&site.to_string(), &data_dir, &url).await;
+                            if result.is_err() {
+                                log::error!("下载文件失败... {:?}", result);
+                            }
+                        }
+                    }
+                    None => match site {
+                        Site::All => {
+                            for s in [Site::Genbank, Site::Refseq].iter() {
+                                let _ = task::run_task(
+                                    &s.to_string(),
+                                    &trans_group,
+                                    &data_dir,
+                                    &&levels,
+                                    args.num_threads,
+                                )
+                                .await;
+                            }
+                        }
+                        _ => {
+                            let _ = task::run_task(
+                                &site.to_string(),
+                                &trans_group,
+                                &data_dir,
+                                &&levels,
+                                args.num_threads,
+                            )
+                            .await;
+                        }
+                    },
                 }
             }
         }
