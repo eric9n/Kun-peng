@@ -152,3 +152,90 @@ estimate_capacity -k 35 -l 31 --source /data/ncbi/path -p 10 --load-factor 0.7
 estimate count: 1213069985, required capacity: 1732968825.0, Estimated hash table requirement: 6.46GB
 ```
 
+
+## 4. build_k2_db
+
+The build_k2_db command-line tool facilitates the construction of a Kraken 2 database. It requires specific filenames for the hash table, taxonomy, and the sequence ID to taxon map, among other parameters.
+
+
+### Introduction
+The build_k2_db tool introduces a novel approach to constructing Kraken 2-compatible databases, specifically addressing the challenges associated with the large memory requirements of previous methods. This documentation outlines the process flow, working principles, and the inherent advantages of using the build_k2_db tool for genomic database construction.
+
+The build_k2_db tool revolutionizes the process of building genomic databases for Kraken 2 by introducing a novel, two-step approach to database construction. This method significantly mitigates the challenges associated with the large memory requirements of traditional database building processes, particularly vital for constructing databases like the NCBI RefSeq, which are substantial in size.
+
+### Working Principle
+#### Step 1: Preprocessing and Generation of k2 Formatted Files
+Initially, the tool preprocesses .fna files to generate intermediary files in a k2 format. This step involves scanning the .fna files to extract relevant k-mer and minimizer information, mapping these to taxonomic IDs, and then hashing these elements to produce indexed intermediary data. These intermediary files are crucial for the next step of the process, as they contain indexed positions and taxonomic IDs necessary for constructing the hash table efficiently.
+
+#### Step 2: Iterative Construction of the Hash Table
+In the second phase, the tool iteratively processes the k2 formatted intermediary files to build segments of the hash table. This method involves reading the intermediary files in batches, resolving any taxonomic ID conflicts using a Lowest Common Ancestor (LCA) algorithm, and updating the hash table with the resolved IDs. This step-by-step processing significantly reduces the memory footprint compared to loading the entire hash table into memory at once.
+
+#### Efficiency and Advantages
+The build_k2_db tool introduces several advantages over traditional database building methods:
+
+* Memory Efficiency: By generating intermediary files and processing these in chunks, the tool drastically reduces the required memory, enabling the construction of large databases on systems with limited memory capacity.
+* Scalability: The approach is highly scalable, thanks to parallel processing and efficient handling of large .fna files, making it suitable for building extensive databases.
+Time Efficiency: Despite the intermediary files being substantially larger than the final hash table, the overall time taken to build the database is comparable to methods that process all data at once.
+Performance Insights
+In a performance test involving the NCBI RefSeq database, approximately 500GB of .fna files were processed to generate 850GB of k2 intermediary files. The final hash table size amounted to 188GB. Utilizing a machine equipped with a 16-core CPU and 32GB of memory, the entire database construction process was completed in just 9 hours and 42 minutes. This showcases the tool's ability to handle large datasets efficiently, both in terms of time and hardware resource requirements.
+
+#### Comparative Analysis with Kraken 2 C++ Version in Fast Mode
+
+In addition to the innovative build_k2_db Rust-based tool, it's informative to compare its performance and resource utilization with that of the traditional Kraken 2 C++ version, particularly in its fast mode operation. Such a comparison underscores the advancements and efficiencies introduced by the Rust implementation.
+
+#### Kraken 2 C++ Version in Fast Mode:
+For processing the same dataset from the NCBI RefSeq database (~500GB of .fna files), the Kraken 2 C++ version in fast mode presents the following resource requirements and performance metrics:
+
+CPU and Memory Usage: Requires a machine with a 16-core CPU and 200GB of memory, indicating a significantly higher demand for memory resources compared to the Rust-based build_k2_db tool.
+Time Efficiency: Completes the database construction process in approximately 9 hours and 32 minutes. This duration is slightly shorter than that of the build_k2_db tool but at the cost of substantially higher memory requirements.
+
+
+#### Key Insights and Implications:
+Memory Optimization: The build_k2_db tool demonstrates exceptional memory efficiency by requiring only 32GB of memory to process and construct a database from a large genomic dataset. In contrast, the C++ version's fast mode requires 200GB of memory, highlighting the Rust-based tool's optimization in memory usage.
+Comparable Time Efficiency: Despite the vast difference in memory consumption, the time taken to build the database is remarkably similar between the two tools, with the Rust version completing the task in 9 hours and 42 minutes versus 9 hours and 32 minutes for the C++ version.
+Accessibility and Cost-effectiveness: By drastically reducing the memory requirement, the build_k2_db tool makes the process of building large genomic databases more accessible to researchers and institutions with limited hardware resources. This can significantly lower the computational costs associated with database construction in bioinformatics research.
+
+
+####  Conclusion
+The build_k2_db tool stands out for its innovative approach to genomic database construction, offering a memory-efficient, scalable, and time-effective solution. Its ability to preprocess data into intermediary files before iteratively constructing the hash table addresses the significant challenges of working with large-scale genomic databases, making it an invaluable asset in the field of bioinformatics.
+
+The build_k2_db tool not only matches the Kraken 2 C++ version in terms of processing time but does so with far less memory, making it a highly efficient and accessible option for constructing large genomic databases. Its innovative approach, leveraging Rust's performance and memory management capabilities, offers a more practical solution for the bioinformatics community, particularly when handling extensive datasets like the NCBI RefSeq database.
+
+
+
+### Usage
+To build the Kraken 2 database, you must specify source, hash table, taxonomy, ID to taxon map filenames, Kraken 2 options filename, NCBI taxonomy directory, required capacity, and chunk directory.
+
+```bash
+build_k2_db [OPTIONS] --source <SOURCE> -H <HASHTABLE_FILENAME> -t <TAXONOMY_FILENAME> -m <ID_TO_TAXON_MAP_FILENAME> -o <OPTIONS_FILENAME> --ncbi-taxonomy-directory <NCBI_TAXONOMY_DIRECTORY> --required-capacity <REQUIRED_CAPACITY> --chunk-dir <CHUNK_DIR>
+```
+
+### Options
+
+* --source <SOURCE>: Directory or file for database build.
+* -H <HASHTABLE_FILENAME>: Filename for the Kraken 2 hash table.
+* -t <TAXONOMY_FILENAME>: Filename for the Kraken 2 taxonomy.
+* -m <ID_TO_TAXON_MAP_FILENAME>: Filename for the sequence ID to taxon map.
+* -o <OPTIONS_FILENAME>: Filename for Kraken 2 options.
+* -n, --ncbi-taxonomy-directory <NCBI_TAXONOMY_DIRECTORY>: Directory name for NCBI taxonomy.
+* -k, --k-mer <K_MER>: Length of k-mers (default: 35).
+* -l, --l-mer <L_MER>: Length of minimizers (default: 31).
+* -r, --requested-bits-for-taxid <REQUESTED_BITS_FOR_TAXID>: Bit storage for taxid (default: 0).
+* -T, --toggle-mask <TOGGLE_MASK>: Minimizer ordering toggle mask (default: 16392584516609989165).
+* --minimizer-spaces <MINIMIZER_SPACES>: Characters in minimizer ignored in comparisons (default: 7).
+* -c, --required-capacity <REQUIRED_CAPACITY>: Required capacity for the database.
+* -p, --threads <THREADS>: Number of threads (default: 4).
+* --chunk-dir <CHUNK_DIR>: Directory for chunks.
+* --chunk-size <CHUNK_SIZE>: Size of chunks in GB (default: 1GB).
+* --chunk-prefix <CHUNK_PREFIX>: Prefix for chunk files (default: chunk).
+* --only-k2: Process only k2 file.
+* -h, --help: Prints help information.
+* -V, --version: Prints the version of the tool.
+
+### Example
+
+Building a database with custom parameters:
+
+```bash
+build_k2_db --source /path/to/source -H hash_table.k2 -t taxonomy.k2 -m id_to_taxon.map -o options.k2 --ncbi-taxonomy-directory /path/to/ncbi/taxonomy --required-capacity 1000000 --chunk-dir /path/to/chunks
+```
