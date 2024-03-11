@@ -1,5 +1,9 @@
 # kraken2-rust
 
+
+
+## 1. NCBI download tool
+
 Downloading Genome Data with NCBI Tool
 The ncbi command-line tool offers functionality to download genome data from the NCBI database. This can be done for various groups including archaea, bacteria, viral, fungi, plant, human, protozoa, vertebrate mammalian, vertebrate other, and invertebrate.
 
