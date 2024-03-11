@@ -122,6 +122,8 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = Site::Refseq)]
         site: Site,
 
+        /// Assembly level: the highest level of assembly for any object in the genome
+        /// all, complete_genome, chromosome, scaffold, contig. basic: [complete_genome, chromosome]
         #[arg(long, default_value = "basic")]
         asm_level: String,
 
