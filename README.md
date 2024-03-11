@@ -239,3 +239,63 @@ Building a database with custom parameters:
 ```bash
 build_k2_db --source /path/to/source -H hash_table.k2 -t taxonomy.k2 -m id_to_taxon.map -o options.k2 --ncbi-taxonomy-directory /path/to/ncbi/taxonomy --required-capacity 1000000 --chunk-dir /path/to/chunks
 ```
+
+
+## 5. classify
+
+The classify tool is a powerful sequence classification program designed for rapid and accurate classification of nucleotide sequences. It leverages the Kraken 2 indexing and taxonomy systems to efficiently assign taxonomic labels to sequences from FASTA/FASTQ files. This document provides a comprehensive guide on how to use the classify tool, including its options and arguments.
+
+### Usage
+
+To classify sequences using the classify tool, execute the command with the required options and input files:
+
+```bash
+classify [OPTIONS] --index-filename <INDEX_FILENAME> --taxonomy-filename <TAXONOMY_FILENAME> --options-filename <OPTIONS_FILENAME> [INPUT_FILES]...
+```
+
+#### Arguments
+
+* [INPUT_FILES]...: Specifies a list of input file paths. These files should be in FASTA or FASTQ format and contain the sequences to be classified.
+
+#### Options
+
+* -H, --index-filename <INDEX_FILENAME>: Path to the Kraken 2 index file. This file is essential for the classification process.
+* -t, --taxonomy-filename <TAXONOMY_FILENAME>: Path to the Kraken 2 taxonomy file. This file contains taxonomic information used for classification.
+* -o, --options-filename <OPTIONS_FILENAME>: Path to the Kraken 2 options file. This file includes additional configuration options for Kraken 2.
+* -T, --confidence-threshold <CONFIDENCE_THRESHOLD>: Sets the confidence score threshold for classification. Sequences with a confidence score below this threshold will not be * classified. The default value is 0.0.
+* -p, --num-threads <NUM_THREADS>: Specifies the number of threads to use for processing. Increasing the number of threads can speed up the classification process. The default is 1.
+* -g, --minimum-hit-groups <MINIMUM_HIT_GROUPS>: The minimum number of hit groups required for a classification call. The default is 2.
+* -P, --paired-end-processing: Enables processing of paired-end reads. This option should be used if your input files contain paired-end sequence data.
+* -S, --single-file-pairs: Indicates that pairs with mates are located in the same file. This option is relevant for paired-end processing.
+* -O, --kraken-output-filename <KRAKEN_OUTPUT_FILENAME>: Specifies the file path for outputting the standard Kraken output. This output includes the classification results for * each sequence.
+* -Q, --minimum-quality-score <MINIMUM_QUALITY_SCORE>: Sets the minimum quality score for FASTQ data. Sequences with a quality score below this threshold will not be classified. * The default is 0.
+* -h, --help: Prints help information, providing a summary of options and usage.
+* -V, --version: Displays the version of the classify tool.
+
+#### Example
+
+To classify sequences from a FASTQ file using 4 threads and a confidence threshold of 0.5:
+
+```bash
+classify --index-filename path/to/index --taxonomy-filename path/to/taxonomy --options-filename path/to/options -T 0.5 -p 4 input_file.fastq
+```
+
+
+## 6. inspect
+
+The inspect tool is designed for analyzing the content of hash table files used by Kraken 2. It provides insights into the index file, allowing users to verify and understand the structure and statistics of their Kraken 2 databases.
+
+### Usage
+To utilize the inspect tool, execute the command with the necessary options:
+
+```bash
+inspect [OPTIONS] --index-filename <INDEX_FILENAME>
+```
+
+### Options
+* -H, --index-filename <INDEX_FILENAME>: Specifies the file path to the Kraken 2 index file. This option is required as it directs the tool to the hash table file that needs to be inspected.
+* -t, --taxonomy-filename <TAXONOMY_FILENAME>: Provides the file path to the Kraken 2 taxonomy file. This file contains the taxonomy information that corresponds to the data in the index file. Including this option allows for a more comprehensive inspection that may involve taxonomy data.
+* -o, --options-filename <OPTIONS_FILENAME>: Indicates the file path to the Kraken 2 options file. This file can contain various configurations and options used by Kraken 2. * Specifying this option can help understand the configurations under which the index was created or used.
+* -v, --value-count: This flag, when set, instructs the tool to iterate through the index file and count the values. It is useful for users who wish to understand the * distribution of data within their Kraken 2 index file.
+* -h, --help: Prints out help information, providing a brief summary of all the available options and their usage.
+* -V, --version: Displays the version of the inspect tool, helping users to identify the tool's version they are currently using.

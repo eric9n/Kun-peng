@@ -4,10 +4,7 @@ use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
 use std::io::Result;
 
-/// Command line arguments for the classify program.
-///
-/// This structure defines the command line arguments that are accepted by the classify program.
-/// It uses the `clap` crate for parsing command line arguments.
+/// inspects the contents of a Kraken 2 hash table file
 #[derive(Parser, Debug, Clone)]
 #[clap(version, about = "inspect")]
 struct Args {
