@@ -1,8 +1,9 @@
-use crate::compact_hash::CHTable;
+use crate::compact_hash::{BitN, CHTable};
 use crate::seq::SeqReads;
 use crate::taxonomy::Taxonomy;
 use crate::Meros;
 use crate::TaxonCounts;
+// use rayon::prelude::*;
 use std::collections::HashMap;
 
 pub const TAXID_MAX: u32 = u32::MAX - 1;
@@ -10,9 +11,42 @@ pub const MATE_PAIR_BORDER_TAXON: u32 = TAXID_MAX;
 pub const READING_FRAME_BORDER_TAXON: u32 = TAXID_MAX - 1;
 pub const AMBIGUOUS_SPAN_TAXON: u32 = TAXID_MAX - 2;
 
-pub fn classify_sequence<'a>(
+pub fn classify_sequence_bool<'a>(
+    cht: &CHTable<bool>,
+    seq_reads: SeqReads,
+    meros: Meros,
+    minimum_hit_groups: i32,
+) -> String {
+    let mut minimizer_hit_groups = 0;
+
+    for hash_keys in seq_reads.seq_paired {
+        for hashed in hash_keys.iter() {
+            let taxon = if meros
+                .min_clear_hash_value
+                .map_or(true, |min_hash| *hashed >= min_hash)
+            {
+                cht.get(*hashed)
+            } else {
+                false
+            };
+            if taxon {
+                minimizer_hit_groups += 1;
+            }
+        }
+    }
+
+    let classify = if minimizer_hit_groups > minimum_hit_groups {
+        "C"
+    } else {
+        "U"
+    };
+    format!("{}\t{}", classify, trim_pair_info(&seq_reads.dna_id),)
+}
+
+/// classify sequence
+pub fn classify_sequence<'a, B: BitN>(
     taxonomy: &Taxonomy,
-    cht: &CHTable<u32>,
+    cht: &CHTable<B>,
     seq_reads: SeqReads,
     meros: Meros,
     confidence_threshold: f64,
@@ -28,7 +62,7 @@ pub fn classify_sequence<'a>(
                 .min_clear_hash_value
                 .map_or(true, |min_hash| *hashed >= min_hash)
             {
-                cht.get(*hashed)
+                cht.get(*hashed).to_u32()
             } else {
                 0
             };
@@ -47,7 +81,12 @@ pub fn classify_sequence<'a>(
 
     let ext_call = taxonomy.nodes[call as usize].external_id;
     let classify = if call > 0 { "C" } else { "U" };
-    format!("{}\t{}\t{}", classify, seq_reads.dna_id, ext_call)
+    format!(
+        "{}\t{}\t{}",
+        classify,
+        trim_pair_info(&seq_reads.dna_id),
+        ext_call
+    )
 }
 
 pub fn trim_pair_info(id: &str) -> String {

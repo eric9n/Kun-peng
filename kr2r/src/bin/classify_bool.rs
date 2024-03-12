@@ -1,8 +1,7 @@
 use clap::Parser;
 use kr2r::compact_hash::CHTable;
-use kr2r::iclassify::classify_sequence;
+use kr2r::iclassify::classify_sequence_bool;
 use kr2r::seq::{self, SeqSet};
-use kr2r::taxonomy::Taxonomy;
 use kr2r::utils::{detect_file_format, FileFormat};
 use kr2r::IndexOptions;
 use rayon::prelude::*;
@@ -29,22 +28,9 @@ struct Args {
     #[clap(short = 'H', long = "index-filename", value_parser, required = true)]
     index_filename: String,
 
-    /// The file path for the Kraken 2 taxonomy.
-    #[clap(short = 't', long = "taxonomy-filename", value_parser, required = true)]
-    taxonomy_filename: String,
-
     /// The file path for the Kraken 2 options.
     #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
     options_filename: String,
-
-    /// Confidence score threshold, default is 0.0.
-    #[clap(
-        short = 'T',
-        long = "confidence-threshold",
-        value_parser,
-        default_value_t = 0.0
-    )]
-    confidence_threshold: f64,
 
     // /// Enable quick mode for faster processing.
     // #[clap(short = 'q', long = "quick-mode", action)]
@@ -137,20 +123,11 @@ fn check_feature(dna_db: bool) -> Result<()> {
 }
 
 macro_rules! process_record_sets {
-    ($record_sets:expr, $taxonomy:expr, $cht:expr, $meros:expr, $args:expr, $writer:expr) => {
+    ($record_sets:expr, $cht:expr, $meros:expr, $args:expr, $writer:expr) => {
         while let Some(Ok((_, seq_pair_set))) = $record_sets.next() {
             let results: Vec<String> = seq_pair_set
                 .into_par_iter()
-                .map(|item| {
-                    classify_sequence(
-                        &$taxonomy,
-                        &$cht,
-                        item,
-                        $meros,
-                        $args.confidence_threshold,
-                        $args.minimum_hit_groups,
-                    )
-                })
+                .map(|item| classify_sequence_bool(&$cht, item, $meros, $args.minimum_hit_groups))
                 .collect();
             for result in results {
                 writeln!($writer, "{}", result).expect("Unable to write to file");
@@ -160,7 +137,7 @@ macro_rules! process_record_sets {
 }
 
 macro_rules! process_file_pairs {
-    ($taxonomy:expr, $cht:expr, $args:expr, $meros:expr, $writer:expr, $reader_creator:expr) => {
+    ($cht:expr, $args:expr, $meros:expr, $writer:expr, $reader_creator:expr) => {
         // 对 file1 和 file2 执行分类处理
         {
             let pair_reader = $reader_creator.expect("Unable to create pair reader from paths");
@@ -169,14 +146,12 @@ macro_rules! process_file_pairs {
                 $args.num_threads as u32,
                 $args.num_threads as usize,
                 |record_set| record_set.to_seq_reads($args.minimum_quality_score, $meros),
-                |record_sets| {
-                    process_record_sets!(record_sets, $taxonomy, $cht, $meros, $args, $writer)
-                },
+                |record_sets| process_record_sets!(record_sets, $cht, $meros, $args, $writer),
             );
         }
     };
 
-    ($taxonomy:expr, $cht:expr, $args:expr, $meros:expr, $writer:expr, $reader_creator:expr, $file1:expr) => {
+    ($cht:expr, $args:expr, $meros:expr, $writer:expr, $reader_creator:expr, $file1:expr) => {
         // 对 file1 和 file2 执行分类处理
         let pair_reader = $reader_creator($file1).expect("Unable to create pair reader from paths");
         read_parallel(
@@ -184,9 +159,7 @@ macro_rules! process_file_pairs {
             $args.num_threads as u32,
             $args.num_threads as usize,
             |record_set| record_set.to_seq_reads($args.minimum_quality_score, $meros),
-            |record_sets| {
-                process_record_sets!(record_sets, $taxonomy, $cht, $meros, $args, $writer)
-            },
+            |record_sets| process_record_sets!(record_sets, $cht, $meros, $args, $writer),
         );
     };
 }
@@ -195,8 +168,7 @@ macro_rules! process_file_pairs {
 fn process_files(
     args: Args,
     idx_opts: IndexOptions,
-    cht: &CHTable<u32>,
-    taxonomy: &Taxonomy,
+    cht: &CHTable<bool>,
     writer: &mut Box<dyn std::io::Write>,
 ) -> Result<()> {
     let meros = idx_opts.as_meros();
@@ -209,7 +181,6 @@ fn process_files(
             match detect_file_format(&file1)? {
                 FileFormat::Fastq => {
                     process_file_pairs!(
-                        taxonomy,
                         cht,
                         args,
                         meros,
@@ -230,24 +201,10 @@ fn process_files(
             // 对 file 执行分类处理
             match detect_file_format(&file)? {
                 FileFormat::Fastq => {
-                    process_file_pairs!(
-                        taxonomy,
-                        cht,
-                        args,
-                        meros,
-                        writer,
-                        FqReader::from_path(file)
-                    );
+                    process_file_pairs!(cht, args, meros, writer, FqReader::from_path(file));
                 }
                 FileFormat::Fasta => {
-                    process_file_pairs!(
-                        taxonomy,
-                        cht,
-                        args,
-                        meros,
-                        writer,
-                        FaReader::from_path(file)
-                    );
+                    process_file_pairs!(cht, args, meros, writer, FaReader::from_path(file));
                 }
             };
         }
@@ -260,7 +217,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let idx_opts = IndexOptions::read_index_options(args.options_filename.clone())?;
     check_feature(idx_opts.dna_db)?;
-    let taxo = Taxonomy::from_file(&args.taxonomy_filename)?;
+    // let taxo = Taxonomy::from_file(&args.taxonomy_filename)?;
     let cht = CHTable::from(args.index_filename.clone())?;
 
     if args.paired_end_processing && !args.single_file_pairs && args.input_files.len() % 2 != 0 {
@@ -282,7 +239,7 @@ fn main() -> Result<()> {
     // 开始计时
     let start = Instant::now();
 
-    process_files(args, idx_opts, &cht, &taxo, &mut writer)?;
+    process_files(args, idx_opts, &cht, &mut writer)?;
     // 计算持续时间
     let duration = start.elapsed();
 

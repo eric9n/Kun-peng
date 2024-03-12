@@ -127,7 +127,6 @@ impl BitN for bool {
     }
 
     fn right(&self, value_mask: u32) -> bool {
-        // 为 u32 类型实现 right 方法
         *self
     }
     fn combined(left: Self, right: Self, value_bits: usize) -> Self {

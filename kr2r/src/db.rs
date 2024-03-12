@@ -1,5 +1,5 @@
 // 使用时需要引用模块路径
-use crate::compact_hash::{BitN, CHTableMut, Cell, HashConfig, Slot};
+use crate::compact_hash::{BitN, CHTableMut, Cell, CompactValue, HashConfig, Slot};
 use crate::mmscanner::MinimizerScanner;
 use crate::taxonomy::{NCBITaxonomy, Taxonomy};
 use crate::Meros;
@@ -153,6 +153,55 @@ pub fn process_k2file<P: AsRef<Path>, B: BitN>(
     Ok(())
 }
 
+/// 处理k2格式的临时文件,构建数据库
+pub fn process_k2file_bool<P: AsRef<Path>>(
+    chunk_file: P,
+    chtm: &mut CHTableMut<bool>,
+) -> IOResult<()> {
+    // let total_counter = AtomicUsize::new(0);
+    let size_counter = AtomicUsize::new(0);
+
+    // let value_mask = chtm.config.value_mask;
+    // let value_bits = chtm.config.value_bits;
+
+    let file = File::open(chunk_file)?;
+    let mut reader = BufReader::new(file);
+
+    let cell_size = std::mem::size_of::<Cell<bool>>();
+    let batch_buffer_size = cell_size * BATCH_SIZE;
+    let mut batch_buffer = vec![0u8; batch_buffer_size];
+
+    while let Ok(bytes_read) = reader.read(&mut batch_buffer) {
+        if bytes_read == 0 {
+            break;
+        } // 文件末尾
+
+        // 处理读取的数据批次
+        let cells_in_batch = bytes_read / cell_size;
+
+        let cells = unsafe {
+            std::slice::from_raw_parts(batch_buffer.as_ptr() as *const Cell<bool>, cells_in_batch)
+        };
+
+        cells.into_iter().for_each(|cell| {
+            let item = cell.as_slot();
+            chtm.update_cell(item);
+        });
+        size_counter.fetch_add(cells.len(), Ordering::SeqCst);
+        // total_counter.fetch_add(cells.len(), Ordering::SeqCst);
+    }
+
+    chtm.copy_from_page();
+
+    let size_count = size_counter.load(Ordering::SeqCst);
+    // let total_count = total_counter.load(Ordering::SeqCst);
+    println!("size_count {:?}", size_count);
+    // println!("total_count {:?}", total_count);
+    chtm.add_size(size_count);
+
+    Ok(())
+}
+
 /// 直接处理fna文件构建数据库
 pub fn process_fna<P: AsRef<Path>>(
     fna_file: P,
@@ -263,6 +312,53 @@ pub fn get_bits_for_taxid(
     }
 
     Ok(bits_needed_for_value.max(requested_bits_for_taxid))
+}
+
+/// 将fna文件转换成k2格式的临时文件
+pub fn convert_fna_to_k2_format_bool<P: AsRef<Path>>(
+    fna_file: P,
+    meros: Meros,
+    hash_config: HashConfig<bool>,
+    writers: &mut Vec<BufWriter<File>>,
+    chunk_size: usize,
+    threads: u32,
+) {
+    let reader = Reader::from_path(fna_file).unwrap();
+    let queue_len = (threads - 2) as usize;
+    let value_bits = hash_config.value_bits;
+
+    read_parallel(
+        reader,
+        threads,
+        queue_len,
+        |record_set| {
+            let mut k2_cell_list = Vec::new();
+            for record in record_set.into_iter() {
+                for hash_key in MinimizerScanner::new(record.seq(), meros).into_iter() {
+                    let index: usize = hash_config.index(hash_key);
+                    let idx = index % chunk_size;
+                    let partition_index = index / chunk_size;
+                    let cell = Cell::new(idx as u32, bool::hash_value(hash_key, value_bits, true));
+                    k2_cell_list.push((partition_index, cell));
+                }
+            }
+            k2_cell_list
+        },
+        |record_sets| {
+            while let Some(Ok((_, k2_cell_list))) = record_sets.next() {
+                for cell in k2_cell_list {
+                    let partition_index = cell.0;
+                    if let Some(writer) = writers.get_mut(partition_index) {
+                        writer.write_all(cell.1.as_slice()).unwrap();
+                    }
+                }
+
+                // for writer in writers.into_iter() {
+                //     writer.flush().expect("io error");
+                // }
+            }
+        },
+    );
 }
 
 /// 将fna文件转换成k2格式的临时文件

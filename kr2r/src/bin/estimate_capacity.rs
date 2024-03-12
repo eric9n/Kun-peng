@@ -1,7 +1,7 @@
 use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use kr2r::mmscanner::MinimizerScanner;
-use kr2r::utils::{expand_spaced_seed_mask, find_library_fna_files};
+use kr2r::utils::{expand_spaced_seed_mask, find_library_fna_files, format_bytes};
 use kr2r::KBuildHasher;
 use kr2r::{
     construct_seed_template, Meros, BITS_PER_CHAR, DEFAULT_KMER_LENGTH, DEFAULT_MINIMIZER_LENGTH,
@@ -143,23 +143,6 @@ fn process_sequence(
     file.write_all(serialized_hllp.as_bytes()).unwrap();
 
     hllp
-}
-
-fn format_bytes(size: f64) -> String {
-    let suffixes = ["B", "kB", "MB", "GB", "TB", "PB", "EB"];
-    let mut size = size;
-    let mut current_suffix = &suffixes[0];
-
-    for suffix in &suffixes[1..] {
-        if size >= 1024.0 {
-            current_suffix = suffix;
-            size /= 1024.0;
-        } else {
-            break;
-        }
-    }
-
-    format!("{:.2}{}", size, current_suffix)
 }
 
 fn main() {

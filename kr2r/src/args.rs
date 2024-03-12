@@ -19,21 +19,9 @@ pub struct Build {
     #[clap(short = 'H', required = true)]
     pub hashtable_filename: PathBuf,
 
-    /// Kraken 2 taxonomy filename
-    #[clap(short = 't', required = true)]
-    pub taxonomy_filename: PathBuf,
-
-    /// Sequence ID to taxon map filename
-    #[clap(short = 'm', required = true)]
-    pub id_to_taxon_map_filename: PathBuf,
-
     /// Kraken 2 options filename
     #[clap(short = 'o', required = true)]
     pub options_filename: PathBuf,
-
-    /// NCBI taxonomy directory name
-    #[clap(short, long, required = true)]
-    pub ncbi_taxonomy_directory: PathBuf,
 
     /// Set length of k-mers, k must be positive integer, k=35, k cannot be less than l
     #[clap(short, long, value_parser = clap::value_parser!(u64).range(1..), default_value_t = DEFAULT_KMER_LENGTH)]
@@ -80,4 +68,20 @@ impl Build {
             Some(0),
         )
     }
+}
+
+#[derive(Parser, Debug, Clone)]
+#[clap(version, about = "taxonomy")]
+pub struct Taxo {
+    /// Kraken 2 taxonomy filename
+    #[clap(short = 't', required = true)]
+    pub taxonomy_filename: PathBuf,
+
+    /// Sequence ID to taxon map filename
+    #[clap(short = 'm', required = true)]
+    pub id_to_taxon_map_filename: PathBuf,
+
+    /// NCBI taxonomy directory name
+    #[clap(short, long, required = true)]
+    pub ncbi_taxonomy_directory: PathBuf,
 }

@@ -1,13 +1,10 @@
 // 使用时需要引用模块路径
 use clap::Parser;
-use kr2r::args::{Build, Taxo};
+use kr2r::args::Build;
 use kr2r::compact_hash::{CHTableMut, HashConfig};
-use kr2r::db::{
-    convert_fna_to_k2_format, create_partition_files, generate_taxonomy, get_bits_for_taxid,
-    process_k2file,
-};
+use kr2r::db::{convert_fna_to_k2_format_bool, create_partition_files, process_k2file_bool};
 use kr2r::db::{create_partition_writers, find_and_sort_files, get_file_limit};
-use kr2r::utils::{find_library_fna_files, format_bytes, read_id_to_taxon_map};
+use kr2r::utils::{find_library_fna_files, format_bytes};
 use kr2r::IndexOptions;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -21,9 +18,6 @@ struct Args {
     /// 包含原始配置
     #[clap(flatten)]
     build: Build,
-
-    #[clap(flatten)]
-    taxo: Taxo,
 
     /// chunk directory
     #[clap(long)]
@@ -51,22 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let meros = args.build.as_meros();
 
-    let id_to_taxon_map = read_id_to_taxon_map(&args.taxo.id_to_taxon_map_filename)?;
-
-    let taxonomy = generate_taxonomy(
-        &args.taxo.ncbi_taxonomy_directory,
-        &args.taxo.taxonomy_filename,
-        &id_to_taxon_map,
-    )?;
-
-    let value_bits = get_bits_for_taxid(
-        args.build.requested_bits_for_taxid as usize,
-        taxonomy.node_count() as f64,
-    )
-    .expect("more bits required for storing taxid");
-
     let capacity = args.build.required_capacity as usize;
-    let hash_config = HashConfig::<u32>::new(capacity, value_bits, 0);
+    let hash_config = HashConfig::<bool>::new(capacity, 1, 0);
 
     // 开始计时
     let start = Instant::now();
@@ -94,11 +74,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         for fna_file in &fna_files {
-            convert_fna_to_k2_format(
+            convert_fna_to_k2_format_bool(
                 fna_file,
                 meros,
-                &taxonomy,
-                &id_to_taxon_map,
                 hash_config,
                 &mut writers,
                 chunk_size,
@@ -119,12 +97,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for i in 0..partition {
             println!("chunk file {:?}", &chunk_files[i]);
             let mut chtm = CHTableMut::new(&hash_filename, hash_config, i, chunk_size)?;
-            process_k2file(&chunk_files[i], &mut chtm, &taxonomy)?;
+            process_k2file_bool(&chunk_files[i], &mut chtm)?;
         }
         // 计算持续时间
         let duration = start.elapsed();
         // 打印运行时间
-        println!("build k2 db took: {:?}", duration);
+        println!("build bool db took: {:?}", duration);
 
         let idx_opts = IndexOptions::from_meros(meros);
         idx_opts.write_to_file(args.build.options_filename)?;

@@ -31,6 +31,15 @@ name = "build_k2_db"
 path = "src/bin/build_k2_db.rs"
 
 
+[[bin]]
+name = "build_bool_db"
+path = "src/bin/build_bool_db.rs"
+
+
+[[bin]]
+name = "classify_bool"
+path = "src/bin/classify_bool.rs"
+
 [features]
 default = ["dna"]
 dna = []

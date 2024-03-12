@@ -124,3 +124,49 @@ pub fn create_seqid2taxid_file<P: AsRef<Path>>(prelim_map_file: P, output_file: 
 
     Ok(())
 }
+
+pub fn format_bytes(size: f64) -> String {
+    let suffixes = ["B", "kB", "MB", "GB", "TB", "PB", "EB"];
+    let mut size = size;
+    let mut current_suffix = &suffixes[0];
+
+    for suffix in &suffixes[1..] {
+        if size >= 1024.0 {
+            current_suffix = suffix;
+            size /= 1024.0;
+        } else {
+            break;
+        }
+    }
+
+    format!("{:.2}{}", size, current_suffix)
+}
+
+pub enum FileFormat {
+    Fasta,
+    Fastq,
+}
+
+use std::io::{self, Read};
+
+pub fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<FileFormat> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = [0; 1]; // 仅分配一个字节的缓冲区
+
+    // 读取文件的第一个字节
+    let bytes_read = reader.read(&mut buffer)?;
+
+    if bytes_read == 0 {
+        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Empty file"));
+    }
+
+    match buffer[0] {
+        b'>' => Ok(FileFormat::Fasta),
+        b'@' => Ok(FileFormat::Fastq),
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Unrecognized file format",
+        )),
+    }
+}
