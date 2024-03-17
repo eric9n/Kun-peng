@@ -17,7 +17,6 @@ path = "src/bin/build_db.rs"
 name = "classify"
 path = "src/bin/classify.rs"
 
-
 [[bin]]
 name = "inspect"
 path = "src/bin/inspect.rs"
@@ -30,15 +29,14 @@ path = "src/bin/seqid2taxid.rs"
 name = "build_k2_db"
 path = "src/bin/build_k2_db.rs"
 
+[[bin]]
+name = "splitr"
+path = "src/bin/splitr.rs"
 
 [[bin]]
-name = "build_bool_db"
-path = "src/bin/build_bool_db.rs"
+name = "squid"
+path = "src/bin/squid.rs"
 
-
-[[bin]]
-name = "classify_bool"
-path = "src/bin/classify_bool.rs"
 
 [features]
 default = ["dna"]

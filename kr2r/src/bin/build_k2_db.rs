@@ -2,12 +2,11 @@
 use clap::Parser;
 use kr2r::args::{Build, Taxo};
 use kr2r::compact_hash::{CHTableMut, HashConfig};
-use kr2r::db::{
-    convert_fna_to_k2_format, create_partition_files, generate_taxonomy, get_bits_for_taxid,
-    process_k2file,
+use kr2r::db::{convert_fna_to_k2_format, generate_taxonomy, get_bits_for_taxid, process_k2file};
+use kr2r::utils::{
+    create_partition_files, create_partition_writers, find_and_sort_files, find_library_fna_files,
+    format_bytes, get_file_limit, read_id_to_taxon_map,
 };
-use kr2r::db::{create_partition_writers, find_and_sort_files, get_file_limit};
-use kr2r::utils::{find_library_fna_files, format_bytes, read_id_to_taxon_map};
 use kr2r::IndexOptions;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -119,7 +118,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for i in 0..partition {
             println!("chunk file {:?}", &chunk_files[i]);
             let mut chtm = CHTableMut::new(&hash_filename, hash_config, i, chunk_size)?;
-            process_k2file(&chunk_files[i], &mut chtm, &taxonomy)?;
+            process_k2file(&chunk_files[i], i, &mut chtm, &taxonomy)?;
         }
         // 计算持续时间
         let duration = start.elapsed();

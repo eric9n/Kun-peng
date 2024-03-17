@@ -43,6 +43,26 @@ impl<'a> SeqX for fastq::RefRecord<'a> {
     }
 }
 
+impl SeqX for fastq::OwnedRecord {
+    fn seq_x(&self, score: i32) -> Vec<u8> {
+        if score <= 0 {
+            return self.seq().to_vec();
+        }
+        let qual = self.qual();
+        self.seq()
+            .iter()
+            .zip(qual.iter())
+            .map(|(&base, &qscore)| {
+                if (qscore as i32 - '!' as i32) < score {
+                    b'x'
+                } else {
+                    base
+                }
+            })
+            .collect::<Vec<u8>>()
+    }
+}
+
 impl<'a> SeqX for fasta::RefRecord<'a> {
     #[allow(unused_variables)]
     fn seq_x(&self, score: i32) -> Vec<u8> {
@@ -63,6 +83,7 @@ pub trait SeqSet {
 pub struct PairFastqReader<R: io::Read, P = DefaultBufPolicy> {
     reader1: fastq::Reader<R, P>,
     reader2: fastq::Reader<R, P>,
+    index: usize, // 新增索引字段
 }
 
 impl Default for PairFastqRecordSet {
@@ -71,7 +92,7 @@ impl Default for PairFastqRecordSet {
     }
 }
 
-impl PairFastqReader<File, DefaultBufPolicy> {
+impl<'a> PairFastqReader<File, DefaultBufPolicy> {
     /// Creates a reader from a file path.
     #[inline]
     pub fn from_path<P: AsRef<Path>>(path1: P, path2: P) -> io::Result<PairFastqReader<File>> {
@@ -84,9 +105,31 @@ impl PairFastqReader<File, DefaultBufPolicy> {
         let reader2 = fastq::Reader::new(file2);
 
         // 使用这两个实例构造一个 PairFastqReader 对象
-        Ok(PairFastqReader { reader1, reader2 })
+        Ok(PairFastqReader {
+            reader1,
+            reader2,
+            index: 0,
+        })
+    }
+
+    pub fn next(&mut self) -> Option<PairFastqRecord> {
+        let ref_record1 = self
+            .reader1
+            .next()?
+            .expect("fastq file error")
+            .to_owned_record();
+        let ref_recrod2 = self
+            .reader2
+            .next()?
+            .expect("fastq file error")
+            .to_owned_record();
+
+        self.index += 1;
+        Some(PairFastqRecord(self.index, ref_record1, ref_recrod2))
     }
 }
+
+pub struct PairFastqRecord(pub usize, pub fastq::OwnedRecord, pub fastq::OwnedRecord);
 
 pub struct PairFastqRecordSet(fastq::RecordSet, fastq::RecordSet);
 

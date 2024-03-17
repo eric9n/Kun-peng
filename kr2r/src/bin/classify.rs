@@ -136,33 +136,17 @@ fn check_feature(dna_db: bool) -> Result<()> {
     Ok(())
 }
 
-macro_rules! process_record_sets {
-    ($record_sets:expr, $taxonomy:expr, $cht:expr, $meros:expr, $args:expr, $writer:expr) => {
-        while let Some(Ok((_, seq_pair_set))) = $record_sets.next() {
-            let results: Vec<String> = seq_pair_set
-                .into_par_iter()
-                .map(|item| {
-                    classify_sequence(
-                        &$taxonomy,
-                        &$cht,
-                        item,
-                        $meros,
-                        $args.confidence_threshold,
-                        $args.minimum_hit_groups,
-                    )
-                })
-                .collect();
-            for result in results {
-                writeln!($writer, "{}", result).expect("Unable to write to file");
-            }
-        }
-    };
-}
-
 macro_rules! process_file_pairs {
-    ($taxonomy:expr, $cht:expr, $args:expr, $meros:expr, $writer:expr, $reader_creator:expr) => {
+    ($taxonomy:expr, $cht:expr, $args:expr, $meros:expr, $reader_creator:expr) => {
         // 对 file1 和 file2 执行分类处理
         {
+            let mut writer: Box<dyn Write> = match $args.kraken_output_filename {
+                Some(ref filename) => {
+                    let file = File::create(filename)?;
+                    Box::new(BufWriter::new(file)) as Box<dyn Write>
+                }
+                None => Box::new(io::stdout()) as Box<dyn Write>,
+            };
             let pair_reader = $reader_creator.expect("Unable to create pair reader from paths");
             read_parallel(
                 pair_reader,
@@ -170,24 +154,27 @@ macro_rules! process_file_pairs {
                 $args.num_threads as usize,
                 |record_set| record_set.to_seq_reads($args.minimum_quality_score, $meros),
                 |record_sets| {
-                    process_record_sets!(record_sets, $taxonomy, $cht, $meros, $args, $writer)
+                    while let Some(Ok((_, seq_pair_set))) = record_sets.next() {
+                        let results: Vec<String> = seq_pair_set
+                            .into_par_iter()
+                            .map(|item| {
+                                classify_sequence(
+                                    &$taxonomy,
+                                    &$cht,
+                                    item,
+                                    $meros,
+                                    $args.confidence_threshold,
+                                    $args.minimum_hit_groups,
+                                )
+                            })
+                            .collect();
+                        for result in results {
+                            writeln!(writer, "{}", result).expect("Unable to write to file");
+                        }
+                    }
                 },
             );
         }
-    };
-
-    ($taxonomy:expr, $cht:expr, $args:expr, $meros:expr, $writer:expr, $reader_creator:expr, $file1:expr) => {
-        // 对 file1 和 file2 执行分类处理
-        let pair_reader = $reader_creator($file1).expect("Unable to create pair reader from paths");
-        read_parallel(
-            pair_reader,
-            $args.num_threads as u32,
-            $args.num_threads as usize,
-            |record_set| record_set.to_seq_reads($args.minimum_quality_score, $meros),
-            |record_sets| {
-                process_record_sets!(record_sets, $taxonomy, $cht, $meros, $args, $writer)
-            },
-        );
     };
 }
 
@@ -197,7 +184,6 @@ fn process_files(
     idx_opts: IndexOptions,
     cht: &CHTable<u32>,
     taxonomy: &Taxonomy,
-    writer: &mut Box<dyn std::io::Write>,
 ) -> Result<()> {
     let meros = idx_opts.as_meros();
 
@@ -213,7 +199,6 @@ fn process_files(
                         cht,
                         args,
                         meros,
-                        writer,
                         seq::PairFastqReader::from_path(file1, file2)
                     );
                 }
@@ -230,24 +215,10 @@ fn process_files(
             // 对 file 执行分类处理
             match detect_file_format(&file)? {
                 FileFormat::Fastq => {
-                    process_file_pairs!(
-                        taxonomy,
-                        cht,
-                        args,
-                        meros,
-                        writer,
-                        FqReader::from_path(file)
-                    );
+                    process_file_pairs!(taxonomy, cht, args, meros, FqReader::from_path(file));
                 }
                 FileFormat::Fasta => {
-                    process_file_pairs!(
-                        taxonomy,
-                        cht,
-                        args,
-                        meros,
-                        writer,
-                        FaReader::from_path(file)
-                    );
+                    process_file_pairs!(taxonomy, cht, args, meros, FaReader::from_path(file));
                 }
             };
         }
@@ -271,18 +242,10 @@ fn main() -> Result<()> {
         ));
     }
 
-    let mut writer: Box<dyn Write> = match &args.kraken_output_filename {
-        Some(filename) => {
-            let file = File::create(filename)?;
-            Box::new(BufWriter::new(file)) as Box<dyn Write>
-        }
-        None => Box::new(io::stdout()) as Box<dyn Write>,
-    };
-
     // 开始计时
     let start = Instant::now();
 
-    process_files(args, idx_opts, &cht, &taxo, &mut writer)?;
+    process_files(args, idx_opts, &cht, &taxo)?;
     // 计算持续时间
     let duration = start.elapsed();
 

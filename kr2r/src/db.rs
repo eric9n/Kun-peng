@@ -1,102 +1,24 @@
 // 使用时需要引用模块路径
-use crate::compact_hash::{BitN, CHTableMut, Cell, CompactValue, HashConfig, Slot};
+use crate::compact_hash::{CHTableMut, Cell, Compact, HashConfig, Slot};
 use crate::mmscanner::MinimizerScanner;
 use crate::taxonomy::{NCBITaxonomy, Taxonomy};
 use crate::Meros;
 
-use regex::Regex;
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
 use std::collections::{BTreeSet, HashMap};
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufReader, BufWriter, Read, Result as IOResult, Write};
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Result as IOResult, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-
-#[cfg(unix)]
-extern crate libc;
-
-#[cfg(unix)]
-use libc::{getrlimit, rlimit, RLIMIT_NOFILE};
-
-#[cfg(unix)]
-pub fn get_file_limit() -> usize {
-    let mut limits = rlimit {
-        rlim_cur: 0, // 当前（软）限制
-        rlim_max: 0, // 最大（硬）限制
-    };
-
-    // 使用unsafe块调用getrlimit，因为这是一个外部C函数
-    let result = unsafe { getrlimit(RLIMIT_NOFILE, &mut limits) };
-
-    if result == 0 {
-        // 如果成功，返回当前软限制转换为usize
-        limits.rlim_cur as usize
-    } else {
-        // 如果失败，输出错误并可能返回一个默认值或panic
-        eprintln!("Failed to get file limit");
-        0
-    }
-}
-
-#[cfg(windows)]
-pub fn get_file_limit() -> usize {
-    8192
-}
-
-// 函数定义
-pub fn find_and_sort_files(directory: &Path, prefix: &str, suffix: &str) -> IOResult<Vec<PathBuf>> {
-    // 构建正则表达式以匹配文件名中的数字
-    let pattern = format!(r"{}_(\d+){}", prefix, suffix);
-    let re = Regex::new(&pattern).unwrap();
-
-    // 读取指定目录下的所有条目
-    let entries = fs::read_dir(directory)?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.is_file()
-                && path
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .map_or(false, |s| s.starts_with(prefix) && s.ends_with(suffix))
-        })
-        .collect::<Vec<PathBuf>>();
-
-    // 使用正则表达式提取数字并排序
-    let mut sorted_entries = entries
-        .into_iter()
-        .filter_map(|path| {
-            re.captures(path.file_name()?.to_str()?)
-                .and_then(|caps| caps.get(1).map(|m| m.as_str().parse::<i32>().ok()))
-                .flatten()
-                .map(|num| (path, num))
-        })
-        .collect::<Vec<(PathBuf, i32)>>();
-
-    sorted_entries.sort_by_key(|k| k.1);
-
-    // 检查数字是否从0开始连续
-    for (i, (_, num)) in sorted_entries.iter().enumerate() {
-        if i as i32 != *num {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "File numbers are not continuous starting from 0.",
-            ));
-        }
-    }
-
-    // 返回排序后的文件路径
-    Ok(sorted_entries.into_iter().map(|(path, _)| path).collect())
-}
 
 // 定义每批次处理的 Cell 数量
 const BATCH_SIZE: usize = 81920;
 
 /// 处理k2格式的临时文件,构建数据库
-pub fn process_k2file<P: AsRef<Path>, B: BitN>(
+pub fn process_k2file<P: AsRef<Path>, B: Compact>(
     chunk_file: P,
+    partition_index: usize,
     chtm: &mut CHTableMut<B>,
     taxonomy: &Taxonomy,
 ) -> IOResult<()> {
@@ -128,12 +50,12 @@ pub fn process_k2file<P: AsRef<Path>, B: BitN>(
         cells.into_iter().for_each(|cell| {
             let item = cell.as_slot();
             let item_taxid: u32 = item.value.right(value_mask).to_u32();
-            if let Some(mut slot) = &chtm.set_page_cell(item) {
+            if let Some((flag, mut slot)) = &chtm.set_page_cell(item, partition_index) {
                 let slot_taxid = slot.value.right(value_mask).to_u32();
                 let new_taxid = taxonomy.lca(item_taxid, slot_taxid);
                 if slot_taxid != new_taxid {
                     slot.update_right(B::from_u32(new_taxid), value_bits);
-                    chtm.update_cell(slot);
+                    chtm.update_cell(flag, slot);
                 }
             } else {
                 size_counter.fetch_add(1, Ordering::SeqCst);
@@ -148,55 +70,6 @@ pub fn process_k2file<P: AsRef<Path>, B: BitN>(
     let total_count = total_counter.load(Ordering::SeqCst);
     println!("size_count {:?}", size_count);
     println!("total_count {:?}", total_count);
-    chtm.add_size(size_count);
-
-    Ok(())
-}
-
-/// 处理k2格式的临时文件,构建数据库
-pub fn process_k2file_bool<P: AsRef<Path>>(
-    chunk_file: P,
-    chtm: &mut CHTableMut<bool>,
-) -> IOResult<()> {
-    // let total_counter = AtomicUsize::new(0);
-    let size_counter = AtomicUsize::new(0);
-
-    // let value_mask = chtm.config.value_mask;
-    // let value_bits = chtm.config.value_bits;
-
-    let file = File::open(chunk_file)?;
-    let mut reader = BufReader::new(file);
-
-    let cell_size = std::mem::size_of::<Cell<bool>>();
-    let batch_buffer_size = cell_size * BATCH_SIZE;
-    let mut batch_buffer = vec![0u8; batch_buffer_size];
-
-    while let Ok(bytes_read) = reader.read(&mut batch_buffer) {
-        if bytes_read == 0 {
-            break;
-        } // 文件末尾
-
-        // 处理读取的数据批次
-        let cells_in_batch = bytes_read / cell_size;
-
-        let cells = unsafe {
-            std::slice::from_raw_parts(batch_buffer.as_ptr() as *const Cell<bool>, cells_in_batch)
-        };
-
-        cells.into_iter().for_each(|cell| {
-            let item = cell.as_slot();
-            chtm.update_cell(item);
-        });
-        size_counter.fetch_add(cells.len(), Ordering::SeqCst);
-        // total_counter.fetch_add(cells.len(), Ordering::SeqCst);
-    }
-
-    chtm.copy_from_page();
-
-    let size_count = size_counter.load(Ordering::SeqCst);
-    // let total_count = total_counter.load(Ordering::SeqCst);
-    println!("size_count {:?}", size_count);
-    // println!("total_count {:?}", total_count);
     chtm.add_size(size_count);
 
     Ok(())
@@ -252,12 +125,12 @@ pub fn process_fna<P: AsRef<Path>>(
             while let Some(Ok((_, hash_set))) = record_sets.next() {
                 hash_set.into_iter().for_each(|item| {
                     let item_taxid = item.value.right(value_mask);
-                    if let Some(mut slot) = &chtm.set_page_cell(item) {
+                    if let Some(mut slot) = &chtm.set_table_cell(item.idx, item.value) {
                         let slot_taxid = slot.value.right(value_mask);
                         let new_taxid = taxonomy.lca(item_taxid, slot_taxid);
                         if slot_taxid != new_taxid {
                             slot.update_right(new_taxid, value_bits);
-                            chtm.update_cell(slot);
+                            chtm.update_cell(&1, slot);
                             // update_counter.fetch_add(1, Ordering::SeqCst);
                         }
                     } else {
@@ -315,54 +188,7 @@ pub fn get_bits_for_taxid(
 }
 
 /// 将fna文件转换成k2格式的临时文件
-pub fn convert_fna_to_k2_format_bool<P: AsRef<Path>>(
-    fna_file: P,
-    meros: Meros,
-    hash_config: HashConfig<bool>,
-    writers: &mut Vec<BufWriter<File>>,
-    chunk_size: usize,
-    threads: u32,
-) {
-    let reader = Reader::from_path(fna_file).unwrap();
-    let queue_len = (threads - 2) as usize;
-    let value_bits = hash_config.value_bits;
-
-    read_parallel(
-        reader,
-        threads,
-        queue_len,
-        |record_set| {
-            let mut k2_cell_list = Vec::new();
-            for record in record_set.into_iter() {
-                for hash_key in MinimizerScanner::new(record.seq(), meros).into_iter() {
-                    let index: usize = hash_config.index(hash_key);
-                    let idx = index % chunk_size;
-                    let partition_index = index / chunk_size;
-                    let cell = Cell::new(idx as u32, bool::hash_value(hash_key, value_bits, true));
-                    k2_cell_list.push((partition_index, cell));
-                }
-            }
-            k2_cell_list
-        },
-        |record_sets| {
-            while let Some(Ok((_, k2_cell_list))) = record_sets.next() {
-                for cell in k2_cell_list {
-                    let partition_index = cell.0;
-                    if let Some(writer) = writers.get_mut(partition_index) {
-                        writer.write_all(cell.1.as_slice()).unwrap();
-                    }
-                }
-
-                // for writer in writers.into_iter() {
-                //     writer.flush().expect("io error");
-                // }
-            }
-        },
-    );
-}
-
-/// 将fna文件转换成k2格式的临时文件
-pub fn convert_fna_to_k2_format<P: AsRef<Path>, B: BitN>(
+pub fn convert_fna_to_k2_format<P: AsRef<Path>, B: Compact>(
     fna_file: P,
     meros: Meros,
     taxonomy: &Taxonomy,
@@ -403,10 +229,11 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>, B: BitN>(
         },
         |record_sets| {
             while let Some(Ok((_, k2_cell_list))) = record_sets.next() {
+                let cell_size = std::mem::size_of::<Cell<B>>();
                 for cell in k2_cell_list {
                     let partition_index = cell.0;
                     if let Some(writer) = writers.get_mut(partition_index) {
-                        writer.write_all(cell.1.as_slice()).unwrap();
+                        writer.write_all(cell.1.as_slice(cell_size)).unwrap();
                     }
                 }
 
@@ -416,35 +243,6 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>, B: BitN>(
             }
         },
     );
-}
-
-pub fn create_partition_files<P: AsRef<Path>>(
-    partition: usize,
-    base_path: P,
-    prefix: &str,
-) -> Vec<PathBuf> {
-    let file_path = base_path.as_ref();
-
-    (0..partition)
-        .into_iter()
-        .map(|item| file_path.join(format!("{}_{}.k2", prefix, item)))
-        .collect()
-}
-
-pub fn create_partition_writers(partition_files: &Vec<PathBuf>) -> Vec<BufWriter<File>> {
-    partition_files
-        .into_iter()
-        .map(|item| {
-            // 尝试创建文件，如果失败则直接返回错误
-            let file = OpenOptions::new()
-                .write(true)
-                .append(true) // 确保以追加模式打开文件
-                .create(true) // 如果文件不存在，则创建
-                .open(item)
-                .unwrap();
-            BufWriter::new(file)
-        })
-        .collect()
 }
 
 // // This function exists to deal with NCBI's use of \x01 characters to denote

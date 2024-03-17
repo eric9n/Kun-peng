@@ -6,39 +6,34 @@ use std::io::{Error, ErrorKind, Result};
 use std::marker::PhantomData;
 use std::path::Path;
 
-pub trait CompactValue:
+/// 1101010101 => left: 11010, right: 10101;
+pub trait Compact:
     Default + PartialEq + Clone + Copy + PartialEq + Eq + Sized + Send + Sync
 {
     fn compacted(hash_key: u64, value_bits: usize) -> Self;
     fn hash_value(hash_key: u64, value_bits: usize, value: Self) -> Self;
-}
 
-/// 1101010101 => left: 11010, right: 10101;
-pub trait BitN: CompactValue {
     fn left(&self, value_bits: usize) -> Self;
-    fn right(&self, value_mask: u32) -> Self;
+    fn right(&self, value_mask: usize) -> Self;
     fn combined(left: Self, right: Self, value_bits: usize) -> Self;
     fn to_u32(&self) -> u32;
     fn from_u32(value: u32) -> Self;
 }
 
-impl CompactValue for u32 {
+impl Compact for u32 {
     fn hash_value(hash_key: u64, value_bits: usize, value: u32) -> u32 {
         Self::compacted(hash_key, value_bits) << value_bits | value
     }
     fn compacted(value: u64, value_bits: usize) -> u32 {
         (value >> (32 + value_bits)) as u32
     }
-}
 
-impl BitN for u32 {
     fn left(&self, value_bits: usize) -> u32 {
         *self >> value_bits
     }
 
-    fn right(&self, value_mask: u32) -> u32 {
-        // 为 u32 类型实现 right 方法
-        *self & value_mask
+    fn right(&self, value_mask: usize) -> u32 {
+        *self & value_mask as u32
     }
     fn combined(left: Self, right: Self, value_bits: usize) -> Self {
         left << value_bits | right
@@ -52,103 +47,98 @@ impl BitN for u32 {
     }
 }
 
-impl CompactValue for u16 {
-    fn hash_value(hash_key: u64, value_bits: usize, value: u16) -> u16 {
-        Self::compacted(hash_key, value_bits) << value_bits | value
+impl Compact for u64 {
+    fn hash_value(hash_key: u64, value_bits: usize, value: u64) -> u64 {
+        Self::compacted(hash_key, value_bits) << (32 + value_bits) | value
     }
-    fn compacted(value: u64, value_bits: usize) -> u16 {
-        (value >> (48 + value_bits)) as u16
-    }
-}
-
-impl BitN for u16 {
-    fn left(&self, value_bits: usize) -> u16 {
-        *self >> value_bits
+    fn compacted(value: u64, value_bits: usize) -> u64 {
+        (value >> (32 + value_bits)) as u64
     }
 
-    fn right(&self, value_mask: u32) -> u16 {
-        *self & (value_mask as u16)
+    fn left(&self, value_bits: usize) -> u64 {
+        *self >> (32 + value_bits)
     }
+
+    fn right(&self, value_mask: usize) -> u64 {
+        let mask: u64 = ((value_mask as u64) << 32) | 0xFFFFFFFF;
+        mask & *self
+    }
+
     fn combined(left: Self, right: Self, value_bits: usize) -> Self {
-        left << value_bits | right
+        left << (32 + value_bits) | right
     }
 
     fn to_u32(&self) -> u32 {
         *self as u32
     }
     fn from_u32(value: u32) -> Self {
-        value as u16
+        value as u64
     }
 }
 
-impl CompactValue for u8 {
-    fn hash_value(hash_key: u64, value_bits: usize, value: u8) -> u8 {
-        Self::compacted(hash_key, value_bits) << value_bits | value
-    }
-    fn compacted(value: u64, value_bits: usize) -> u8 {
-        (value >> (56 + value_bits)) as u8
-    }
-}
+// impl CompactValue for u16 {
+//     fn hash_value(hash_key: u64, value_bits: usize, value: u16) -> u16 {
+//         Self::compacted(hash_key, value_bits) << value_bits | value
+//     }
+//     fn compacted(value: u64, value_bits: usize) -> u16 {
+//         (value >> (48 + value_bits)) as u16
+//     }
+// }
 
-impl BitN for u8 {
-    fn left(&self, value_bits: usize) -> u8 {
-        *self >> value_bits
-    }
+// impl Compact for u16 {
+//     fn left(&self, value_bits: usize) -> u16 {
+//         *self >> value_bits
+//     }
 
-    fn right(&self, value_mask: u32) -> u8 {
-        *self & (value_mask as u8)
-    }
-    fn combined(left: Self, right: Self, value_bits: usize) -> Self {
-        left << value_bits | right
-    }
+//     fn right(&self, value_mask: u32) -> u16 {
+//         *self & (value_mask as u16)
+//     }
+//     fn combined(left: Self, right: Self, value_bits: usize) -> Self {
+//         left << value_bits | right
+//     }
 
-    fn to_u32(&self) -> u32 {
-        *self as u32
-    }
-    fn from_u32(value: u32) -> Self {
-        value as u8
-    }
-}
+//     fn to_u32(&self) -> u32 {
+//         *self as u32
+//     }
+//     fn from_u32(value: u32) -> Self {
+//         value as u16
+//     }
+// }
 
-#[allow(unused_variables)]
-impl CompactValue for bool {
-    fn hash_value(hash_key: u64, value_bits: usize, value: bool) -> bool {
-        value
-    }
-    fn compacted(value: u64, value_bits: usize) -> bool {
-        true
-    }
-}
+// impl CompactValue for u8 {
+//     fn hash_value(hash_key: u64, value_bits: usize, value: u8) -> u8 {
+//         Self::compacted(hash_key, value_bits) << value_bits | value
+//     }
+//     fn compacted(value: u64, value_bits: usize) -> u8 {
+//         (value >> (56 + value_bits)) as u8
+//     }
+// }
 
-#[allow(unused_variables)]
-impl BitN for bool {
-    fn left(&self, value_bits: usize) -> bool {
-        true
-    }
+// impl Compact for u8 {
+//     fn left(&self, value_bits: usize) -> u8 {
+//         *self >> value_bits
+//     }
 
-    fn right(&self, value_mask: u32) -> bool {
-        *self
-    }
-    fn combined(left: Self, right: Self, value_bits: usize) -> Self {
-        right
-    }
-    fn to_u32(&self) -> u32 {
-        0
-    }
-    fn from_u32(value: u32) -> Self {
-        if value == 0 {
-            false
-        } else {
-            true
-        }
-    }
-}
+//     fn right(&self, value_mask: u32) -> u8 {
+//         *self & (value_mask as u8)
+//     }
+//     fn combined(left: Self, right: Self, value_bits: usize) -> Self {
+//         left << value_bits | right
+//     }
+
+//     fn to_u32(&self) -> u32 {
+//         *self as u32
+//     }
+//     fn from_u32(value: u32) -> Self {
+//         value as u8
+//     }
+// }
 
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Slot<B>
 where
-    B: BitN,
+    B: Compact,
 {
     pub idx: usize,
     pub value: B,
@@ -156,7 +146,7 @@ where
 
 impl<B> Slot<B>
 where
-    B: BitN,
+    B: Compact,
 {
     pub fn new(idx: usize, value: B) -> Self {
         Self { idx, value }
@@ -166,12 +156,18 @@ where
         let left = self.value.left(value_bits);
         self.value = B::combined(left, right, value_bits);
     }
+
+    #[inline]
+    pub fn as_slice(&self, slot_size: usize) -> &[u8] {
+        let slot_ptr = self as *const Self as *const u8;
+        unsafe { std::slice::from_raw_parts(slot_ptr, slot_size) }
+    }
 }
 
 // 实现 PartialOrd，只比较 index 字段
 impl<B> PartialOrd for Slot<B>
 where
-    B: BitN,
+    B: Compact,
 {
     fn partial_cmp(&self, other: &Self) -> Option<CmpOrdering> {
         self.idx.partial_cmp(&other.idx)
@@ -181,7 +177,7 @@ where
 // 实现 Ord，只比较 index 字段
 impl<B> Ord for Slot<B>
 where
-    B: BitN,
+    B: Compact,
 {
     fn cmp(&self, other: &Self) -> CmpOrdering {
         self.idx.cmp(&other.idx)
@@ -192,7 +188,7 @@ where
 #[repr(C)]
 pub struct Cell<B>
 where
-    B: BitN,
+    B: Compact,
 {
     pub idx: u32,
     value: B,
@@ -200,20 +196,15 @@ where
 
 impl<B> Cell<B>
 where
-    B: BitN,
+    B: Compact,
 {
     pub fn new(idx: u32, value: B) -> Self {
         Self { idx, value }
     }
 
-    pub fn as_slice(&self) -> &[u8] {
+    pub fn as_slice(&self, cell_size: usize) -> &[u8] {
         let cell_ptr = self as *const Self as *const u8;
-        let cell_size = std::mem::size_of::<Self>();
-        let cell_bytes = unsafe {
-            // 将Cell实例的内存表示转换为字节切片
-            std::slice::from_raw_parts(cell_ptr, cell_size)
-        };
-        cell_bytes
+        unsafe { std::slice::from_raw_parts(cell_ptr, cell_size) }
     }
 
     pub fn as_slot(&self) -> Slot<B> {
@@ -223,7 +214,7 @@ where
 
 pub struct Page<B>
 where
-    B: BitN,
+    B: Compact,
 {
     pub index: usize,
     pub size: usize,
@@ -232,7 +223,7 @@ where
 
 impl<B> Page<B>
 where
-    B: BitN,
+    B: Compact,
 {
     pub fn new(index: usize, size: usize, data: Vec<B>) -> Self {
         Self { index, size, data }
@@ -252,10 +243,10 @@ use std::fmt;
 #[derive(Clone, Copy)]
 pub struct HashConfig<B>
 where
-    B: BitN,
+    B: Compact,
 {
     // value_mask = ((1 << value_bits) - 1);
-    pub value_mask: u32,
+    pub value_mask: usize,
     // 值的位数
     pub value_bits: usize,
     // 哈希表的容量
@@ -268,7 +259,7 @@ where
 // 为HashConfig手动实现Debug trait
 impl<B> fmt::Debug for HashConfig<B>
 where
-    B: BitN,
+    B: Compact,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CompactHashTableConfig")
@@ -283,7 +274,7 @@ where
 
 impl<B> HashConfig<B>
 where
-    B: BitN,
+    B: Compact,
 {
     // 使用常量替代硬编码的数字，增加代码可读性
     const CAPACITY_OFFSET: usize = 0;
@@ -330,20 +321,25 @@ where
         let idx = self.index(hash_key);
         Slot::<B>::new(idx, B::hash_value(hash_key, self.value_bits, taxid))
     }
+
+    pub fn slot_u64(&self, hash_key: u64, seq_id: u64) -> Slot<u64> {
+        let idx = self.index(hash_key);
+        Slot::<u64>::new(idx, u64::hash_value(hash_key, self.value_bits, seq_id))
+    }
 }
 
 // macro_rules! define_page {
 //     ($struct_name:ident, $type:ty) => {
 //         pub struct $struct_name<B>
 //         where
-//             B: BitN<$type>,
+//             B: Compact<$type>,
 //         {
 //             pub index: usize,
 //             pub size: usize,
 //             pub data: Vec<B>,
 //         }
 
-//         impl<B: BitN<$type>> $struct_name<B> {
+//         impl<B: Compact<$type>> $struct_name<B> {
 //             pub fn new(index: usize, size: usize, data: Vec<B>) -> Self {
 //                 Self { index, size, data }
 //             }
@@ -357,7 +353,7 @@ where
 #[allow(unused)]
 pub struct CHTable<'a, B>
 where
-    B: BitN + 'a,
+    B: Compact + 'a,
 {
     // memmap
     mmap: Mmap,
@@ -368,7 +364,7 @@ where
 
 impl<'a, B> CHTable<'a, B>
 where
-    B: BitN + 'a,
+    B: Compact + 'a,
 {
     pub fn from<P: AsRef<Path>>(filename: P) -> Result<CHTable<'a, B>> {
         let file = OpenOptions::new().read(true).open(&filename)?;
@@ -424,7 +420,7 @@ where
 #[allow(unused)]
 pub struct CHTableMut<'a, B>
 where
-    B: BitN + 'a,
+    B: Compact + 'a,
 {
     // memmap
     mmap: MmapMut,
@@ -436,7 +432,7 @@ where
 
 impl<'a, B> CHTableMut<'a, B>
 where
-    B: BitN + 'a,
+    B: Compact + 'a,
 {
     pub fn new<P: AsRef<Path>>(
         hash_file: P,
@@ -485,7 +481,7 @@ where
 
 impl<'a, B> CHTableMut<'a, B>
 where
-    B: BitN + 'a,
+    B: Compact + 'a,
 {
     pub fn set_table_cell(&mut self, index: usize, value: B) -> Option<Slot<B>> {
         let mut idx = index;
@@ -517,7 +513,11 @@ where
         None
     }
 
-    pub fn set_page_cell(&mut self, item: Slot<B>) -> Option<Slot<B>> {
+    pub fn set_page_cell(
+        &mut self,
+        item: Slot<B>,
+        partition_index: usize,
+    ) -> Option<(usize, Slot<B>)> {
         let mut idx = item.idx;
         let first_idx = idx;
         let value_bits = self.config.value_bits; // 局部变量存储配置
@@ -531,12 +531,17 @@ where
                 }
 
                 if cell.left(value_bits) == item.value.left(value_bits) {
-                    return Some(Slot::<B>::new(idx, cell.clone()));
+                    return Some((0, Slot::<B>::new(idx, cell.clone())));
                 }
 
                 idx = idx + 1;
                 if idx >= self.page.size {
-                    return self.set_table_cell(idx, item.value);
+                    // 需要确定在table中的位置
+                    let index = self.page.size * partition_index + idx;
+                    match self.set_table_cell(index, item.value) {
+                        None => return None,
+                        Some(s) => return Some((1, s)),
+                    }
                 }
                 if idx == first_idx {
                     break;
@@ -555,11 +560,15 @@ where
     }
 
     // 直接更新
-    pub fn update_cell(&mut self, item: Slot<B>) {
-        if item.idx < self.page.size {
-            self.page.data[item.idx] = item.value;
-        } else {
-            self.table[item.idx] = item.value;
+    pub fn update_cell(&mut self, flag: &usize, item: Slot<B>) {
+        // 需要确定在table中的位置
+        match flag {
+            0 => {
+                self.page.data[item.idx] = item.value;
+            }
+            _ => {
+                self.table[item.idx] = item.value;
+            }
         }
     }
 

@@ -157,11 +157,11 @@ pub async fn run_taxo(taxo_dir: &PathBuf) -> Result<()> {
 
 pub async fn run_download_file(site: &str, data_dir: &PathBuf, fna_url: &str) -> Result<()> {
     let ncbi_file = NcbiFile::from_file(site, data_dir, fna_url).await;
-    log::info!("{} downlaod file start...", fna_url);
+    log::info!("{} download file start...", fna_url);
     ncbi_file.clear().await;
     ncbi_file.run().await?;
     ncbi_file.check().await?;
-    log::info!("{} downlaod file end...", fna_url);
+    log::info!("{} download file end...", fna_url);
     Ok(())
 }
 

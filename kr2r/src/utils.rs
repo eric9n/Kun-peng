@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Result, Write};
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufRead, BufReader, BufWriter, Result, Write};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -169,4 +169,127 @@ pub fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<FileFormat> {
             "Unrecognized file format",
         )),
     }
+}
+
+#[cfg(unix)]
+extern crate libc;
+
+#[cfg(unix)]
+use libc::{getrlimit, rlimit, RLIMIT_NOFILE};
+
+#[cfg(unix)]
+pub fn get_file_limit() -> usize {
+    let mut limits = rlimit {
+        rlim_cur: 0, // 当前（软）限制
+        rlim_max: 0, // 最大（硬）限制
+    };
+
+    // 使用unsafe块调用getrlimit，因为这是一个外部C函数
+    let result = unsafe { getrlimit(RLIMIT_NOFILE, &mut limits) };
+
+    if result == 0 {
+        // 如果成功，返回当前软限制转换为usize
+        limits.rlim_cur as usize
+    } else {
+        // 如果失败，输出错误并可能返回一个默认值或panic
+        eprintln!("Failed to get file limit");
+        0
+    }
+}
+
+#[cfg(windows)]
+pub fn get_file_limit() -> usize {
+    8192
+}
+
+pub fn create_partition_files<P: AsRef<Path>>(
+    partition: usize,
+    base_path: P,
+    prefix: &str,
+) -> Vec<PathBuf> {
+    let file_path = base_path.as_ref();
+
+    (0..partition)
+        .into_iter()
+        .map(|item| file_path.join(format!("{}_{}.k2", prefix, item)))
+        .collect()
+}
+
+pub fn create_partition_writers(partition_files: &Vec<PathBuf>) -> Vec<BufWriter<File>> {
+    partition_files
+        .into_iter()
+        .map(|item| {
+            // 尝试创建文件，如果失败则直接返回错误
+            let file = OpenOptions::new()
+                .write(true)
+                .append(true) // 确保以追加模式打开文件
+                .create(true) // 如果文件不存在，则创建
+                .open(item)
+                .unwrap();
+            BufWriter::new(file)
+        })
+        .collect()
+}
+
+pub fn create_sample_map<P: AsRef<Path>>(filename: P) -> BufWriter<File> {
+    let file = OpenOptions::new()
+        .write(true)
+        .append(true) // 确保以追加模式打开文件
+        .create(true) // 如果文件不存在，则创建
+        .open(filename)
+        .unwrap();
+    BufWriter::new(file)
+}
+
+use regex::Regex;
+
+// 函数定义
+pub fn find_and_sort_files(
+    directory: &Path,
+    prefix: &str,
+    suffix: &str,
+) -> io::Result<Vec<PathBuf>> {
+    // 构建正则表达式以匹配文件名中的数字
+    let pattern = format!(r"{}_(\d+){}", prefix, suffix);
+    let re = Regex::new(&pattern).unwrap();
+
+    // 读取指定目录下的所有条目
+    let entries = fs::read_dir(directory)?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .map_or(false, |s| s.starts_with(prefix) && s.ends_with(suffix))
+        })
+        .collect::<Vec<PathBuf>>();
+
+    // 使用正则表达式提取数字并排序
+    let mut sorted_entries = entries
+        .into_iter()
+        .filter_map(|path| {
+            re.captures(path.file_name()?.to_str()?)
+                .and_then(|caps| caps.get(1).map(|m| m.as_str().parse::<i32>().ok()))
+                .flatten()
+                .map(|num| (path, num))
+        })
+        .collect::<Vec<(PathBuf, i32)>>();
+
+    sorted_entries.sort_by_key(|k| k.1);
+
+    // 检查数字是否从0开始连续
+    for (i, (_, num)) in sorted_entries.iter().enumerate() {
+        if i as i32 != *num {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "File numbers are not continuous starting from 0.",
+            ));
+        }
+    }
+
+    // 返回排序后的文件路径
+    Ok(sorted_entries.into_iter().map(|(path, _)| path).collect())
 }
