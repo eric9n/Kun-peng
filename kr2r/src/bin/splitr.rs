@@ -185,17 +185,20 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
                                 // 拼接seq_id
                                 let seq_id = (file_index << 32 | index) as u64;
 
-                                buffer.push_str(format!("{}\t{}\n", index, dna_id).as_str());
-
                                 let scan1 = MinimizerScanner::new(&seq1, meros);
                                 let scan2 = MinimizerScanner::new(&seq2, meros);
 
+                                let mut kmer_count = 0;
                                 for hash_key in scan1.chain(scan2).into_iter() {
                                     let mut slot = hash_config.slot_u64(hash_key, seq_id);
                                     let partition_index = slot.idx / chunk_size;
                                     slot.idx = slot.idx % chunk_size;
                                     k2_slot_list.push((partition_index, slot));
+                                    kmer_count += 1;
                                 }
+                                buffer.push_str(
+                                    format!("{}\t{}\t{}\n", index, dna_id, kmer_count).as_str(),
+                                );
                             }
                             (buffer, k2_slot_list)
                         },

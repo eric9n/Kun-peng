@@ -232,7 +232,8 @@ fn main() -> Result<()> {
     let idx_opts = IndexOptions::read_index_options(args.options_filename.clone())?;
     check_feature(idx_opts.dna_db)?;
     let taxo = Taxonomy::from_file(&args.taxonomy_filename)?;
-    let cht = CHTable::from(args.index_filename.clone())?;
+    // let hash_config = HashConfig::<u32>::from(&args.index_filename)?;
+    let cht = CHTable::from(args.index_filename.clone(), 0, 1)?;
 
     if args.paired_end_processing && !args.single_file_pairs && args.input_files.len() % 2 != 0 {
         // 验证文件列表是否为偶数个

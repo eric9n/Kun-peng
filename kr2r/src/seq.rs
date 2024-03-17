@@ -6,13 +6,13 @@ use seq_io::fastq::Record as FqRecord;
 
 use seq_io::parallel::Reader;
 
+use crate::utils::is_gzipped;
+use seq_io::policy::StdPolicy;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io;
 use std::iter;
 use std::path::Path;
-
-use seq_io::policy::StdPolicy;
 
 use crate::Meros;
 
@@ -80,9 +80,9 @@ pub trait SeqSet {
     fn to_seq_reads(&self, score: i32, meros: Meros) -> HashSet<SeqReads>;
 }
 
-pub struct PairFastqReader<R: io::Read, P = DefaultBufPolicy> {
-    reader1: fastq::Reader<R, P>,
-    reader2: fastq::Reader<R, P>,
+pub struct PairFastqReader<P = DefaultBufPolicy> {
+    reader1: fastq::Reader<Box<dyn io::Read + Send>, P>,
+    reader2: fastq::Reader<Box<dyn io::Read + Send>, P>,
     index: usize, // 新增索引字段
 }
 
@@ -92,17 +92,34 @@ impl Default for PairFastqRecordSet {
     }
 }
 
-impl<'a> PairFastqReader<File, DefaultBufPolicy> {
+use flate2::read::GzDecoder;
+
+impl<'a> PairFastqReader<DefaultBufPolicy> {
     /// Creates a reader from a file path.
     #[inline]
-    pub fn from_path<P: AsRef<Path>>(path1: P, path2: P) -> io::Result<PairFastqReader<File>> {
+    pub fn from_path<P: AsRef<Path>>(path1: P, path2: P) -> io::Result<PairFastqReader> {
         // 分别打开两个文件
-        let file1 = File::open(path1)?;
-        let file2 = File::open(path2)?;
+        let mut file1 = File::open(&path1)?;
+        let mut file2 = File::open(path2)?;
+
+        let read1: Box<dyn io::Read + Send> = if is_gzipped(&mut file1)? {
+            Box::new(GzDecoder::new(file1))
+        } else {
+            Box::new(file1)
+        };
+
+        let read2: Box<dyn io::Read + Send> = if is_gzipped(&mut file2)? {
+            Box::new(GzDecoder::new(file2))
+        } else {
+            Box::new(file2)
+        };
+
+        // let decoder1 = GzDecoder::new(file1);
+        // let decoder2 = GzDecoder::new(file2);
 
         // 为每个文件创建一个 fastq::Reader 实例
-        let reader1 = fastq::Reader::new(file1);
-        let reader2 = fastq::Reader::new(file2);
+        let reader1 = fastq::Reader::new(read1);
+        let reader2 = fastq::Reader::new(read2);
 
         // 使用这两个实例构造一个 PairFastqReader 对象
         Ok(PairFastqReader {
@@ -157,9 +174,8 @@ impl<'a> Iterator for PairFastqRecordSetIter<'a> {
     }
 }
 
-impl<R, P> Reader for PairFastqReader<R, P>
+impl<P> Reader for PairFastqReader<P>
 where
-    R: io::Read,
     P: seq_io::policy::BufPolicy + Send,
 {
     type DataSet = PairFastqRecordSet;

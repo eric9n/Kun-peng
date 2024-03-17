@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, BufWriter, Result, Write};
+use std::io::{BufRead, BufReader, BufWriter, Result, Seek, Write};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -147,11 +147,25 @@ pub enum FileFormat {
     Fastq,
 }
 
+use flate2::read::GzDecoder;
 use std::io::{self, Read};
 
+pub fn is_gzipped(file: &mut File) -> io::Result<bool> {
+    let mut buffer = [0; 2];
+    file.read_exact(&mut buffer)?;
+    file.rewind()?; // 重置文件指针到开头
+    Ok(buffer == [0x1F, 0x8B])
+}
+
 pub fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<FileFormat> {
-    let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
+    let mut file = File::open(path)?;
+    let read1: Box<dyn io::Read + Send> = if is_gzipped(&mut file)? {
+        Box::new(GzDecoder::new(file))
+    } else {
+        Box::new(file)
+    };
+
+    let mut reader = BufReader::new(read1);
     let mut buffer = [0; 1]; // 仅分配一个字节的缓冲区
 
     // 读取文件的第一个字节

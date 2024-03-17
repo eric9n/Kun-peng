@@ -118,7 +118,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for i in 0..partition {
             println!("chunk file {:?}", &chunk_files[i]);
             let mut chtm = CHTableMut::new(&hash_filename, hash_config, i, chunk_size)?;
-            process_k2file(&chunk_files[i], i, &mut chtm, &taxonomy)?;
+            process_k2file(&chunk_files[i], &mut chtm, &taxonomy)?;
         }
         // 计算持续时间
         let duration = start.elapsed();

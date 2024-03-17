@@ -18,7 +18,6 @@ const BATCH_SIZE: usize = 81920;
 /// 处理k2格式的临时文件,构建数据库
 pub fn process_k2file<P: AsRef<Path>, B: Compact>(
     chunk_file: P,
-    partition_index: usize,
     chtm: &mut CHTableMut<B>,
     taxonomy: &Taxonomy,
 ) -> IOResult<()> {
@@ -50,7 +49,7 @@ pub fn process_k2file<P: AsRef<Path>, B: Compact>(
         cells.into_iter().for_each(|cell| {
             let item = cell.as_slot();
             let item_taxid: u32 = item.value.right(value_mask).to_u32();
-            if let Some((flag, mut slot)) = &chtm.set_page_cell(item, partition_index) {
+            if let Some((flag, mut slot)) = &chtm.set_page_cell(item) {
                 let slot_taxid = slot.value.right(value_mask).to_u32();
                 let new_taxid = taxonomy.lca(item_taxid, slot_taxid);
                 if slot_taxid != new_taxid {
