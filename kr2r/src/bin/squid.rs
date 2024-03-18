@@ -95,10 +95,10 @@ fn process_batch<R: Read + Send>(
     let mut last_file_index: Option<u64> = None;
     let mut writer: Option<BufWriter<File>> = None;
 
-    let value_bits = chtm.config.value_bits;
+    // let value_bits = chtm.config.value_bits;
     let value_mask = chtm.config.value_mask;
-    let key_bits = 32 - value_bits;
-    let key_mask = (1 << key_bits) - 1;
+    // let key_bits = 32 - value_bits;
+    // let key_mask = (1 << key_bits) - 1;
 
     while let Ok(bytes_read) = reader.read(&mut batch_buffer) {
         if bytes_read == 0 {
@@ -119,7 +119,7 @@ fn process_batch<R: Read + Send>(
 
                 if taxid > 0 {
                     let file_index = slot.value.right(value_mask) >> 32;
-                    let value = slot.to_b(taxid, key_bits, key_mask);
+                    let value = slot.to_b(taxid);
                     let value_bytes = value.to_le_bytes(); // 将u64转换为[u8; 8]
                     Some((file_index, value_bytes.to_vec()))
                 } else {

@@ -163,8 +163,12 @@ where
         unsafe { std::slice::from_raw_parts(slot_ptr, slot_size) }
     }
 
-    pub fn to_b(&self, left: B, value_bits: usize, value_mask: usize) -> B {
-        B::combined(left, self.value.right(value_mask), value_bits)
+    pub fn get_seq_id(&self) -> B {
+        self.value.right(0xFFFFFFFF)
+    }
+
+    pub fn to_b(&self, left: B) -> B {
+        B::combined(left, self.value.right(0xFFFFFFFF), 0)
     }
 }
 
