@@ -185,14 +185,15 @@ fn main() -> Result<()> {
     let chunk_files = find_and_sort_files(&args.chunk_dir, &args.chunk_prefix, ".k2")?;
     // 开始计时
     let start = Instant::now();
-
+    println!("start...");
     for chunk_file in chunk_files {
+        println!("chunk_file {:?}", chunk_file);
         process_chunk_file(chunk_file, &args)?;
     }
     // 计算持续时间
     let duration = start.elapsed();
     // 打印运行时间
-    println!("classify took: {:?}", duration);
+    println!("squid took: {:?}", duration);
 
     Ok(())
 }

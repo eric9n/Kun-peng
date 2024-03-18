@@ -268,7 +268,7 @@ fn main() -> Result<()> {
     let duration = start.elapsed();
 
     // 打印运行时间
-    println!("classify took: {:?}", duration);
+    println!("splitr took: {:?}", duration);
 
     Ok(())
 }
