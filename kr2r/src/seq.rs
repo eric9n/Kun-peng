@@ -114,9 +114,6 @@ impl<'a> PairFastqReader<DefaultBufPolicy> {
             Box::new(file2)
         };
 
-        // let decoder1 = GzDecoder::new(file1);
-        // let decoder2 = GzDecoder::new(file2);
-
         // 为每个文件创建一个 fastq::Reader 实例
         let reader1 = fastq::Reader::new(read1);
         let reader2 = fastq::Reader::new(read2);

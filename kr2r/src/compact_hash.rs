@@ -162,6 +162,10 @@ where
         let slot_ptr = self as *const Self as *const u8;
         unsafe { std::slice::from_raw_parts(slot_ptr, slot_size) }
     }
+
+    pub fn to_b(&self, left: B, value_bits: usize, value_mask: usize) -> B {
+        B::combined(left, self.value.right(value_mask), value_bits)
+    }
 }
 
 // 实现 PartialOrd，只比较 index 字段

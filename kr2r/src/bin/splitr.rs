@@ -151,7 +151,7 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
             let line_index = AtomicUsize::new(0);
 
             let file_bits = ((file_index as f64).log2().ceil() as usize).max(1);
-            if file_bits > hash_config.value_bits {
+            if file_bits > 32 - hash_config.value_bits {
                 panic!("The number of files is too large to process.");
             }
 
