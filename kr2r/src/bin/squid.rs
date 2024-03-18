@@ -35,6 +35,7 @@ struct Args {
     #[clap(long, default_value = "sample")]
     chunk_prefix: String,
 
+    /// 批量处理大小 default: 8MB
     #[clap(long, default_value_t = BATCH_SIZE)]
     batch_size: usize,
 }
@@ -177,7 +178,14 @@ fn process_chunk_file<P: AsRef<Path>>(chunk_file: P, args: &Args) -> Result<()> 
     let mut reader = BufReader::new(file);
 
     let (page_index, page_size) = read_chunk_header(&mut reader)?;
+
+    let start = Instant::now();
     let chtm = CHTable::<u32>::from(&args.index_filename, page_index, page_size)?;
+
+    // 计算持续时间
+    let duration = start.elapsed();
+    // 打印运行时间
+    println!("load table took: {:?}", duration);
 
     process_batch(&mut reader, &chtm, args.chunk_dir.clone(), args.batch_size)?;
     Ok(())
