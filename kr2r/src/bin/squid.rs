@@ -10,6 +10,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
 
+// 定义每批次处理的 Slot 数量
+const BATCH_SIZE: usize = 8 * 1024 * 1024;
+
 /// Command line arguments for the splitr program.
 ///
 /// This structure defines the command line arguments that are accepted by the splitr program.
@@ -31,10 +34,10 @@ struct Args {
 
     #[clap(long, default_value = "sample")]
     chunk_prefix: String,
-}
 
-// 定义每批次处理的 Slot 数量
-const BATCH_SIZE: usize = 81920;
+    #[clap(long, default_value_t = BATCH_SIZE)]
+    batch_size: usize,
+}
 
 fn read_chunk_header<R: Read>(reader: &mut R) -> io::Result<(usize, usize)> {
     let mut buffer = [0u8; 16]; // u64 + u64 = 8 bytes + 8 bytes
@@ -89,9 +92,10 @@ fn process_batch<R: Read + Send>(
     reader: &mut R,
     chtm: &CHTable<u32>,
     chunk_dir: PathBuf,
+    batch_size: usize,
 ) -> std::io::Result<()> {
     let slot_size = std::mem::size_of::<Slot<u64>>();
-    let mut batch_buffer = vec![0u8; slot_size * BATCH_SIZE];
+    let mut batch_buffer = vec![0u8; slot_size * batch_size];
     let mut last_file_index: Option<u64> = None;
     let mut writer: Option<BufWriter<File>> = None;
 
@@ -175,7 +179,7 @@ fn process_chunk_file<P: AsRef<Path>>(chunk_file: P, args: &Args) -> Result<()> 
     let (page_index, page_size) = read_chunk_header(&mut reader)?;
     let chtm = CHTable::<u32>::from(&args.index_filename, page_index, page_size)?;
 
-    process_batch(&mut reader, &chtm, args.chunk_dir.clone())?;
+    process_batch(&mut reader, &chtm, args.chunk_dir.clone(), args.batch_size)?;
     Ok(())
 }
 
