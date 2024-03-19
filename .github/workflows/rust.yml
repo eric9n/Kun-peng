@@ -25,6 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set Version Number
+        shell: bash
         run: echo "VERSION=$(echo $GITHUB_REF | sed -e 's|refs/tags/||')" >> $GITHUB_ENV
       - name: Build
         run: cargo build --release
