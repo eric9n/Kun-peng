@@ -10,7 +10,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   BINARIES_LIST: 'ncbi estimate_capacity build_db classify build_k2_db inspect seqid2taxid splitr squid'
-  PROJECT_PREFIX: 'kraken_rust_'
+  PROJECT_PREFIX: 'kraken-rust-'
 
 jobs:
   build-and-release:
@@ -24,6 +24,8 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+      - name: Set Version Number
+        run: echo "VERSION=$(echo $GITHUB_REF | sed -e 's|refs/tags/||')" >> $GITHUB_ENV
       - name: Build
         run: cargo build --release
 
@@ -60,7 +62,7 @@ jobs:
       - name: Prepare asset name
         run: |
           PLATFORM_TAG=$(echo ${{ matrix.platform }} | sed -e 's/-latest//' -e 's/ubuntu-20.04/linux-x86_64/' -e 's/macos/macos-x86_64/' -e 's/windows/windows-x86_64/')
-          echo "ASSET_NAME=${PROJECT_PREFIX}${PLATFORM_TAG}.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_NAME=${PROJECT_PREFIX}${VERSION}-${PLATFORM_TAG}.tar.gz" >> $GITHUB_ENV
         shell: bash
 
       - name: Create tar.gz archive
@@ -94,7 +96,7 @@ jobs:
             docker cp centos7-container:/github/workspace/target/release/$binary ./target/release/packaged_centos7/
           done
 
-          tar czvf ./${PROJECT_PREFIX}centos7.tar.gz -C ./target/release/packaged_centos7 .
+          tar czvf ./${PROJECT_PREFIX}${VERSION}-centos7.tar.gz -C ./target/release/packaged_centos7 .
 
           docker rm centos7-container
 
@@ -102,7 +104,7 @@ jobs:
         if: matrix.platform == 'ubuntu-20.04'
         run: |
           gh release upload ${{ github.ref_name }} \
-            ./${PROJECT_PREFIX}centos7.tar.gz \
+            ./${PROJECT_PREFIX}${VERSION}-centos7.tar.gz \
             --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
