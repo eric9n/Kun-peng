@@ -201,7 +201,13 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
                     .join(format!("{}_{}.map", args.id_map_prefix, file_index)),
             );
 
-            match detect_file_format(&file1)? {
+            let file_format = detect_file_format(&file1);
+            if file_format.is_err() {
+                println!("file {:?}: {:?}", &file1, file_format);
+                continue;
+            }
+
+            match file_format.unwrap() {
                 FileFormat::Fastq => {
                     let reader = seq::PairFastqReader::from_path(file1, file2)
                         .expect("Unable to create pair reader from paths");
@@ -282,7 +288,14 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
                 args.chunk_dir
                     .join(format!("{}_{}.map", args.id_map_prefix, file_index)),
             );
-            match detect_file_format(&file)? {
+
+            let file_format = detect_file_format(&file);
+            if file_format.is_err() {
+                println!("file {:?}: {:?}", &file, file_format);
+                continue;
+            }
+
+            match file_format.unwrap() {
                 FileFormat::Fastq => {
                     let reader =
                         Reader::from_path(file).expect("Unable to create pair reader from paths");

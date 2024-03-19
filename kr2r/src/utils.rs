@@ -142,6 +142,7 @@ pub fn format_bytes(size: f64) -> String {
     format!("{:.2}{}", size, current_suffix)
 }
 
+#[derive(Debug)]
 pub enum FileFormat {
     Fasta,
     Fastq,
