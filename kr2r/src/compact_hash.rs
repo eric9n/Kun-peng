@@ -346,9 +346,7 @@ where
     // 哈希表的容量
     pub config: HashConfig<B>,
     pub table: &'a [B],
-    pub page_data: &'a [B],
-    pub page_index: usize,
-    pub page_size: usize,
+    pub page: Page<B>,
 }
 
 impl<'a, B> CHTable<'a, B>
@@ -374,16 +372,14 @@ where
             return Err(Error::new(ErrorKind::Other, "out of capacity"));
         }
 
-        let page_data = &table[start_index..end_index];
-        // let page = Page::<B>::new(page_index, page_size, page_data);
+        let page_data = table[start_index..end_index].to_vec();
+        let page = Page::<B>::new(page_index, page_size, page_data);
 
         let chtm = CHTable {
             config,
             table,
             mmap,
-            page_data,
-            page_index,
-            page_size,
+            page,
         };
         Ok(chtm)
     }
@@ -402,7 +398,7 @@ where
         let first_idx = idx;
 
         loop {
-            if let Some(cell) = self.page_data.get(idx) {
+            if let Some(cell) = self.page.data.get(idx) {
                 if cell.right(value_mask) == B::default()
                     || cell.left(self.config.value_bits) == compacted_key
                 {
@@ -410,9 +406,9 @@ where
                 }
 
                 idx = idx + 1;
-                if idx >= self.page_size {
+                if idx >= self.page.size {
                     // 需要确定在table中的位置, page index 从0开始
-                    let index = self.page_size * self.page_index + idx;
+                    let index = self.page.size * self.page.index + idx;
                     return self.get_from_table(index, compacted_key);
                 }
                 if idx == first_idx {
@@ -432,7 +428,7 @@ where
         let first_idx = idx;
 
         loop {
-            if let Some(cell) = self.page_data.get(idx) {
+            if let Some(cell) = self.page.data.get(idx) {
                 if cell.right(value_mask) == B::default()
                     || cell.left(self.config.value_bits) == compacted_key
                 {
