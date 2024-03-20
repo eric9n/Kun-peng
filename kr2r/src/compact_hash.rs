@@ -8,7 +8,7 @@ use std::path::Path;
 
 /// 1101010101 => left: 11010, right: 10101;
 pub trait Compact:
-    Default + PartialEq + Clone + Copy + PartialEq + Eq + Sized + Send + Sync
+    Default + PartialEq + Clone + Copy + PartialEq + Eq + Sized + Send + Sync + Debug
 {
     fn compacted(hash_key: u64, value_bits: usize) -> Self;
     fn hash_value(hash_key: u64, value_bits: usize, value: Self) -> Self;
@@ -188,7 +188,32 @@ where
     }
 }
 
-use std::fmt;
+pub struct PagePtr<'a, B>
+where
+    B: Compact + 'a,
+{
+    #[allow(dead_code)]
+    mmap: Mmap,
+    pub index: usize,
+    pub size: usize,
+    pub data: &'a [B],
+}
+
+impl<'a, B> PagePtr<'a, B>
+where
+    B: Compact + 'a,
+{
+    pub fn new(mmap: Mmap, index: usize, size: usize, data: &'a [B]) -> Self {
+        Self {
+            mmap,
+            index,
+            size,
+            data,
+        }
+    }
+}
+
+use std::fmt::{self, Debug};
 
 #[derive(Clone, Copy)]
 pub struct HashConfig<B>
@@ -278,63 +303,122 @@ where
     }
 }
 
+pub trait K2Compact<B>: std::marker::Sync + Send
+where
+    B: Compact,
+{
+    fn get_value_mask(&self) -> usize;
+    fn get_from_page(&self, slot: &Slot<u64>) -> B;
+}
+
 #[allow(unused)]
 pub struct CHPage<'a, B>
 where
-    B: Compact + 'a,
+    B: Compact,
 {
-    // memmap
-    mmap: Mmap,
     // 哈希表的容量
     pub config: HashConfig<B>,
     pub page: Page<B>,
-    pub next_page: &'a [B],
+    pub next_page: PagePtr<'a, B>,
+}
+
+fn read_page_from_file<P: AsRef<Path>, B: Compact>(filename: P) -> Result<Page<B>> {
+    let file = OpenOptions::new().read(true).open(&filename)?;
+    let mmap = unsafe { MmapOptions::new().map(&file)? };
+    let index = LittleEndian::read_u64(&mmap[0..8]) as usize;
+    let capacity = LittleEndian::read_u64(&mmap[8..16]) as usize;
+
+    let page_data =
+        unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const B, capacity) };
+
+    Ok(Page::new(index, capacity, page_data.to_vec()))
+}
+
+fn read_pageptr_from_file<'a, P: AsRef<Path>, B: Compact>(filename: P) -> Result<PagePtr<'a, B>> {
+    let file = OpenOptions::new().read(true).open(&filename)?;
+    let mmap = unsafe { MmapOptions::new().populate().map(&file)? };
+    let index = LittleEndian::read_u64(&mmap[0..8]) as usize;
+    let capacity = LittleEndian::read_u64(&mmap[8..16]) as usize;
+
+    let page_data =
+        unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const B, capacity) };
+
+    Ok(PagePtr::new(mmap, index, capacity, page_data))
 }
 
 impl<'a, B> CHPage<'a, B>
 where
     B: Compact + 'a,
 {
-    pub fn from<P: AsRef<Path>>(
+    pub fn from<P: AsRef<Path> + Debug>(
         config: HashConfig<B>,
         chunk_file1: P,
         chunk_file2: P,
-        page_index: usize,
-        page_size: usize,
     ) -> Result<CHPage<'a, B>> {
-        let file2 = OpenOptions::new().read(true).open(&chunk_file2)?;
-        let mmap = unsafe { MmapOptions::new().map(&file2)? };
+        // let file2 = OpenOptions::new().read(true).open(&chunk_file2)?;
+        // let mmap = unsafe { MmapOptions::new().map(&file2)? };
+        // let index2 = LittleEndian::read_u64(&mmap[0..8]) as usize;
+        // let capacity = LittleEndian::read_u64(&mmap[8..16]) as usize;
 
-        let index2 = LittleEndian::read_u64(&mmap[0..8]) as usize;
-        let capacity = LittleEndian::read_u64(&mmap[8..16]) as usize;
+        // let next_page =
+        //     unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const B, capacity) };
 
-        let next_page = unsafe { std::slice::from_raw_parts(mmap.as_ptr() as *const B, capacity) };
+        let page = read_page_from_file(chunk_file1)?;
+        let next_page = read_pageptr_from_file(chunk_file2)?;
 
-        let file1 = OpenOptions::new().read(true).open(&chunk_file1)?;
+        // let file1 = OpenOptions::new().read(true).open(&chunk_file1)?;
+        // let mmap1 = unsafe { MmapOptions::new().map(&file1)? };
 
-        let mmap1 = unsafe { MmapOptions::new().map(&file1)? };
+        // let index1 = LittleEndian::read_u64(&mmap1[0..8]) as usize;
+        // let capacity = LittleEndian::read_u64(&mmap1[8..16]) as usize;
 
-        let index1 = LittleEndian::read_u64(&mmap1[0..8]) as usize;
-        let capacity = LittleEndian::read_u64(&mmap1[8..16]) as usize;
-
-        if index2 - index1 != 1 {
-            return Err(Error::new(ErrorKind::Other, "wrong index"));
-        }
-
-        let table = unsafe { std::slice::from_raw_parts(mmap.as_ptr() as *const B, capacity) };
-        let page_data = table[..].to_vec();
-        let page = Page::<B>::new(page_index, page_size, page_data);
+        // let table =
+        //     unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const B, capacity) };
+        // let page_data = table.to_vec();
+        // let page = Page::<B>::new(index1, capacity, page_data);
 
         let chtm = CHPage {
             config,
             next_page,
-            mmap,
             page,
         };
         Ok(chtm)
     }
 
-    pub fn get_from_page(&self, slot: &Slot<u64>) -> B {
+    pub fn get_from_next_page(&self, index: usize, compacted_key: B) -> B {
+        let value_mask = self.config.value_mask;
+        let mut idx = index;
+
+        loop {
+            if let Some(cell) = self.next_page.data.get(idx) {
+                if cell.right(value_mask) == B::default()
+                    || cell.left(self.config.value_bits) == compacted_key
+                {
+                    return cell.right(value_mask);
+                }
+
+                idx = idx + 1;
+                if idx >= self.next_page.size {
+                    break;
+                }
+            } else {
+                // 如果get(idx)失败，返回默认值
+                return B::default();
+            }
+        }
+        B::default()
+    }
+}
+
+impl<'a, B> K2Compact<B> for CHPage<'a, B>
+where
+    B: Compact,
+{
+    fn get_value_mask(&self) -> usize {
+        self.config.value_mask
+    }
+
+    fn get_from_page(&self, slot: &Slot<u64>) -> B {
         let compacted_key = B::from_u32(slot.value.left(self.config.value_bits) as u32);
         let value_mask = self.config.value_mask;
         let mut idx = slot.idx;
@@ -355,30 +439,6 @@ where
                     return self.get_from_next_page(index, compacted_key);
                 }
                 if idx == first_idx {
-                    break;
-                }
-            } else {
-                // 如果get(idx)失败，返回默认值
-                return B::default();
-            }
-        }
-        B::default()
-    }
-
-    pub fn get_from_next_page(&self, index: usize, compacted_key: B) -> B {
-        let value_mask = self.config.value_mask;
-        let mut idx = index;
-
-        loop {
-            if let Some(cell) = self.next_page.get(idx) {
-                if cell.right(value_mask) == B::default()
-                    || cell.left(self.config.value_bits) == compacted_key
-                {
-                    return cell.right(value_mask);
-                }
-
-                idx = idx + 1;
-                if idx >= self.page.size {
                     break;
                 }
             } else {
@@ -445,37 +505,6 @@ where
             .count()
     }
 
-    pub fn get_from_page(&self, slot: &Slot<u64>) -> B {
-        let compacted_key = B::from_u32(slot.value.left(self.config.value_bits) as u32);
-        let value_mask = self.config.value_mask;
-        let mut idx = slot.idx;
-        let first_idx = idx;
-
-        loop {
-            if let Some(cell) = self.page.data.get(idx) {
-                if cell.right(value_mask) == B::default()
-                    || cell.left(self.config.value_bits) == compacted_key
-                {
-                    return cell.right(value_mask);
-                }
-
-                idx = idx + 1;
-                if idx >= self.page.size {
-                    // 需要确定在table中的位置, page index 从0开始
-                    let index = self.page.size * self.page.index + idx;
-                    return self.get_from_table(index, compacted_key);
-                }
-                if idx == first_idx {
-                    break;
-                }
-            } else {
-                // 如果get(idx)失败，返回默认值
-                return B::default();
-            }
-        }
-        B::default()
-    }
-
     pub fn get_from_table(&self, index: usize, compacted_key: B) -> B {
         let value_mask = self.config.value_mask;
         let mut idx = index;
@@ -522,6 +551,46 @@ where
             idx = (idx + 1) % self.config.capacity;
             if idx == first_idx {
                 break;
+            }
+        }
+        B::default()
+    }
+}
+
+impl<'a, B> K2Compact<B> for CHTable<'a, B>
+where
+    B: Compact + 'a,
+{
+    fn get_value_mask(&self) -> usize {
+        self.config.value_mask
+    }
+
+    fn get_from_page(&self, slot: &Slot<u64>) -> B {
+        let compacted_key = B::from_u32(slot.value.left(self.config.value_bits) as u32);
+        let value_mask = self.config.value_mask;
+        let mut idx = slot.idx;
+        let first_idx = idx;
+
+        loop {
+            if let Some(cell) = self.page.data.get(idx) {
+                if cell.right(value_mask) == B::default()
+                    || cell.left(self.config.value_bits) == compacted_key
+                {
+                    return cell.right(value_mask);
+                }
+
+                idx = idx + 1;
+                if idx >= self.page.size {
+                    // 需要确定在table中的位置, page index 从0开始
+                    let index = self.page.size * self.page.index + idx;
+                    return self.get_from_table(index, compacted_key);
+                }
+                if idx == first_idx {
+                    break;
+                }
+            } else {
+                // 如果get(idx)失败，返回默认值
+                return B::default();
             }
         }
         B::default()

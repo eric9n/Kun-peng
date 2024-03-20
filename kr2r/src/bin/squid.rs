@@ -1,5 +1,5 @@
 use clap::Parser;
-use kr2r::compact_hash::{CHTable, Compact, Slot};
+use kr2r::compact_hash::{CHPage, CHTable, Compact, HashConfig, K2Compact, Slot};
 use kr2r::utils::find_and_sort_files;
 // use std::collections::HashMap;
 use rayon::prelude::*;
@@ -22,7 +22,7 @@ const BATCH_SIZE: usize = 8 * 1024 * 1024;
 struct Args {
     /// The file path for the Kraken 2 index.
     #[clap(short = 'H', long = "index-filename", value_parser, required = true)]
-    index_filename: String,
+    index_filename: PathBuf,
 
     /// The file path for the Kraken 2 options.
     // #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
@@ -34,6 +34,9 @@ struct Args {
 
     #[clap(long, default_value = "sample")]
     chunk_prefix: String,
+
+    #[clap(long, default_value = "hash")]
+    hash_prefix: String,
 
     /// 批量处理大小 default: 8MB
     #[clap(long, default_value_t = BATCH_SIZE)]
@@ -89,19 +92,23 @@ fn write_to_file(
     Ok(())
 }
 
-fn process_batch<R: Read + Send>(
+fn process_batch<R, K>(
     reader: &mut R,
-    chtm: &CHTable<u32>,
+    chtm: &K,
     chunk_dir: PathBuf,
     batch_size: usize,
-) -> std::io::Result<()> {
+) -> std::io::Result<()>
+where
+    K: K2Compact<u32> + Send,
+    R: Read + Send,
+{
     let slot_size = std::mem::size_of::<Slot<u64>>();
     let mut batch_buffer = vec![0u8; slot_size * batch_size];
     let mut last_file_index: Option<u64> = None;
     let mut writer: Option<BufWriter<File>> = None;
 
     // let value_bits = chtm.config.value_bits;
-    let value_mask = chtm.config.value_mask;
+    let value_mask = chtm.get_value_mask();
     // let key_bits = 32 - value_bits;
     // let key_mask = (1 << key_bits) - 1;
 
@@ -180,14 +187,34 @@ fn process_chunk_file<P: AsRef<Path>>(chunk_file: P, args: &Args) -> Result<()> 
     let (page_index, page_size) = read_chunk_header(&mut reader)?;
 
     let start = Instant::now();
-    let chtm = CHTable::<u32>::from(&args.index_filename, page_index, page_size)?;
+    if args.index_filename.is_dir() {
+        let hash_prefix = &args.hash_prefix;
+        let hash_files = find_and_sort_files(&args.index_filename, hash_prefix, ".k2d")?;
+        let config = HashConfig::<u32>::from(
+            &args
+                .index_filename
+                .join(format!("{}_config.k2d", hash_prefix)),
+        )?;
+        let parition = hash_files.len();
+        let chtm = CHPage::from(
+            config,
+            &hash_files[page_index],
+            &hash_files[(page_index + 1) % parition],
+        )?;
+        // 计算持续时间
+        let duration = start.elapsed();
+        // 打印运行时间
+        println!("load table took: {:?}", duration);
+        process_batch(&mut reader, &chtm, args.chunk_dir.clone(), args.batch_size)?;
+    } else {
+        let chtm = CHTable::<u32>::from(&args.index_filename, page_index, page_size)?;
+        // 计算持续时间
+        let duration = start.elapsed();
+        // 打印运行时间
+        println!("load table took: {:?}", duration);
+        process_batch(&mut reader, &chtm, args.chunk_dir.clone(), args.batch_size)?;
+    }
 
-    // 计算持续时间
-    let duration = start.elapsed();
-    // 打印运行时间
-    println!("load table took: {:?}", duration);
-
-    process_batch(&mut reader, &chtm, args.chunk_dir.clone(), args.batch_size)?;
     Ok(())
 }
 

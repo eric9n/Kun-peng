@@ -60,21 +60,21 @@ struct Args {
 
     /// chunk directory
     #[clap(long)]
-    chunk_dir: PathBuf,
+    hash_dir: PathBuf,
 
     #[clap(long, default_value = "hash")]
-    chunk_prefix: String,
+    hash_prefix: String,
 
     // default: 1073741824(1G)
     #[clap(long, default_value_t = 1073741824)]
-    chunk_size: usize,
+    hash_size: usize,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
     let hash_config = HashConfig::<u32>::from(args.index_filename.clone())?;
 
-    let partition = (hash_config.capacity + args.chunk_size - 1) / args.chunk_size;
+    let partition = (hash_config.capacity + args.hash_size - 1) / args.hash_size;
     println!("start...");
     // 开始计时
     let start = Instant::now();
@@ -83,16 +83,16 @@ fn main() -> Result<()> {
     let b_size = std::mem::size_of::<u32>();
 
     let config_file = args
-        .chunk_dir
-        .join(format!("{}_config.k2d", args.chunk_prefix));
+        .hash_dir
+        .join(format!("{}_config.k2d", args.hash_prefix));
     mmap_read_write(&args.index_filename, config_file, 0, 32, b_size, None)?;
 
     for i in 0..partition {
         let chunk_file = args
-            .chunk_dir
-            .join(format!("{}_{}.k2d", args.chunk_prefix, i));
-        let offset = (32 + args.chunk_size * i * b_size) as u64;
-        let mut length = args.chunk_size * b_size;
+            .hash_dir
+            .join(format!("{}_{}.k2d", args.hash_prefix, i));
+        let offset = (32 + args.hash_size * i * b_size) as u64;
+        let mut length = args.hash_size * b_size;
         if (offset as usize + length) > file_len {
             length = file_len - offset as usize;
         }
