@@ -190,6 +190,9 @@ fn process_chunk_file<P: AsRef<Path>>(
 
     let (page_index, page_size) = read_chunk_header(&mut reader)?;
 
+    println!("page_index {:?}", page_index);
+    println!("page_size {:?}", page_size);
+
     let start = Instant::now();
 
     if hash_files.len() <= 1 {
