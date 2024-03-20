@@ -364,8 +364,10 @@ where
         //     unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const B, capacity) };
 
         let page = read_page_from_file(chunk_file1)?;
+        println!("page {:?}", page.size);
         let next_page = read_pageptr_from_file(chunk_file2)?;
 
+        println!("next page {:?}", page.size);
         // let file1 = OpenOptions::new().read(true).open(&chunk_file1)?;
         // let mmap1 = unsafe { MmapOptions::new().map(&file1)? };
 
