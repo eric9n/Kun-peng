@@ -76,64 +76,6 @@ impl Compact for u64 {
     }
 }
 
-// impl CompactValue for u16 {
-//     fn hash_value(hash_key: u64, value_bits: usize, value: u16) -> u16 {
-//         Self::compacted(hash_key, value_bits) << value_bits | value
-//     }
-//     fn compacted(value: u64, value_bits: usize) -> u16 {
-//         (value >> (48 + value_bits)) as u16
-//     }
-// }
-
-// impl Compact for u16 {
-//     fn left(&self, value_bits: usize) -> u16 {
-//         *self >> value_bits
-//     }
-
-//     fn right(&self, value_mask: u32) -> u16 {
-//         *self & (value_mask as u16)
-//     }
-//     fn combined(left: Self, right: Self, value_bits: usize) -> Self {
-//         left << value_bits | right
-//     }
-
-//     fn to_u32(&self) -> u32 {
-//         *self as u32
-//     }
-//     fn from_u32(value: u32) -> Self {
-//         value as u16
-//     }
-// }
-
-// impl CompactValue for u8 {
-//     fn hash_value(hash_key: u64, value_bits: usize, value: u8) -> u8 {
-//         Self::compacted(hash_key, value_bits) << value_bits | value
-//     }
-//     fn compacted(value: u64, value_bits: usize) -> u8 {
-//         (value >> (56 + value_bits)) as u8
-//     }
-// }
-
-// impl Compact for u8 {
-//     fn left(&self, value_bits: usize) -> u8 {
-//         *self >> value_bits
-//     }
-
-//     fn right(&self, value_mask: u32) -> u8 {
-//         *self & (value_mask as u8)
-//     }
-//     fn combined(left: Self, right: Self, value_bits: usize) -> Self {
-//         left << value_bits | right
-//     }
-
-//     fn to_u32(&self) -> u32 {
-//         *self as u32
-//     }
-//     fn from_u32(value: u32) -> Self {
-//         value as u8
-//     }
-// }
-
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Slot<B>
@@ -337,6 +279,118 @@ where
 }
 
 #[allow(unused)]
+pub struct CHPage<'a, B>
+where
+    B: Compact + 'a,
+{
+    // memmap
+    mmap: Mmap,
+    // 哈希表的容量
+    pub config: HashConfig<B>,
+    pub page: Page<B>,
+    pub next_page: &'a [B],
+}
+
+impl<'a, B> CHPage<'a, B>
+where
+    B: Compact + 'a,
+{
+    pub fn from<P: AsRef<Path>>(
+        config: HashConfig<B>,
+        chunk_file1: P,
+        chunk_file2: P,
+        page_index: usize,
+        page_size: usize,
+    ) -> Result<CHPage<'a, B>> {
+        let file2 = OpenOptions::new().read(true).open(&chunk_file2)?;
+        let mmap = unsafe { MmapOptions::new().map(&file2)? };
+
+        let index2 = LittleEndian::read_u64(&mmap[0..8]) as usize;
+        let capacity = LittleEndian::read_u64(&mmap[8..16]) as usize;
+
+        let next_page = unsafe { std::slice::from_raw_parts(mmap.as_ptr() as *const B, capacity) };
+
+        let file1 = OpenOptions::new().read(true).open(&chunk_file1)?;
+
+        let mmap1 = unsafe { MmapOptions::new().map(&file1)? };
+
+        let index1 = LittleEndian::read_u64(&mmap1[0..8]) as usize;
+        let capacity = LittleEndian::read_u64(&mmap1[8..16]) as usize;
+
+        if index2 - index1 != 1 {
+            return Err(Error::new(ErrorKind::Other, "wrong index"));
+        }
+
+        let table = unsafe { std::slice::from_raw_parts(mmap.as_ptr() as *const B, capacity) };
+        let page_data = table[..].to_vec();
+        let page = Page::<B>::new(page_index, page_size, page_data);
+
+        let chtm = CHPage {
+            config,
+            next_page,
+            mmap,
+            page,
+        };
+        Ok(chtm)
+    }
+
+    pub fn get_from_page(&self, slot: &Slot<u64>) -> B {
+        let compacted_key = B::from_u32(slot.value.left(self.config.value_bits) as u32);
+        let value_mask = self.config.value_mask;
+        let mut idx = slot.idx;
+        let first_idx = idx;
+
+        loop {
+            if let Some(cell) = self.page.data.get(idx) {
+                if cell.right(value_mask) == B::default()
+                    || cell.left(self.config.value_bits) == compacted_key
+                {
+                    return cell.right(value_mask);
+                }
+
+                idx = idx + 1;
+                if idx >= self.page.size {
+                    // 需要确定在table中的位置, page index 从0开始
+                    let index = idx % self.page.size;
+                    return self.get_from_next_page(index, compacted_key);
+                }
+                if idx == first_idx {
+                    break;
+                }
+            } else {
+                // 如果get(idx)失败，返回默认值
+                return B::default();
+            }
+        }
+        B::default()
+    }
+
+    pub fn get_from_next_page(&self, index: usize, compacted_key: B) -> B {
+        let value_mask = self.config.value_mask;
+        let mut idx = index;
+
+        loop {
+            if let Some(cell) = self.next_page.get(idx) {
+                if cell.right(value_mask) == B::default()
+                    || cell.left(self.config.value_bits) == compacted_key
+                {
+                    return cell.right(value_mask);
+                }
+
+                idx = idx + 1;
+                if idx >= self.page.size {
+                    break;
+                }
+            } else {
+                // 如果get(idx)失败，返回默认值
+                return B::default();
+            }
+        }
+        B::default()
+    }
+}
+
+#[allow(unused)]
 pub struct CHTable<'a, B>
 where
     B: Compact + 'a,
@@ -428,7 +482,7 @@ where
         let first_idx = idx;
 
         loop {
-            if let Some(cell) = self.page.data.get(idx) {
+            if let Some(cell) = self.table.get(idx) {
                 if cell.right(value_mask) == B::default()
                     || cell.left(self.config.value_bits) == compacted_key
                 {

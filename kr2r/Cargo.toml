@@ -37,6 +37,10 @@ path = "src/bin/splitr.rs"
 name = "squid"
 path = "src/bin/squid.rs"
 
+[[bin]]
+name = "hashshard"
+path = "src/bin/hashshard.rs"
+
 
 [features]
 default = ["dna"]
