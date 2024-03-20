@@ -180,16 +180,27 @@ where
     Ok(())
 }
 
-fn process_chunk_file<P: AsRef<Path>>(chunk_file: P, args: &Args) -> Result<()> {
+fn process_chunk_file<P: AsRef<Path>>(
+    args: &Args,
+    chunk_file: P,
+    hash_files: &Vec<PathBuf>,
+) -> Result<()> {
     let file = File::open(chunk_file)?;
     let mut reader = BufReader::new(file);
 
     let (page_index, page_size) = read_chunk_header(&mut reader)?;
 
     let start = Instant::now();
-    if args.index_filename.is_dir() {
+
+    if hash_files.len() <= 1 {
+        let chtm = CHTable::<u32>::from(&hash_files[0], page_index, page_size)?;
+        // 计算持续时间
+        let duration = start.elapsed();
+        // 打印运行时间
+        println!("load table took: {:?}", duration);
+        process_batch(&mut reader, &chtm, args.chunk_dir.clone(), args.batch_size)?;
+    } else {
         let hash_prefix = &args.hash_prefix;
-        let hash_files = find_and_sort_files(&args.index_filename, hash_prefix, ".k2d")?;
         let config = HashConfig::<u32>::from(
             &args
                 .index_filename
@@ -206,13 +217,6 @@ fn process_chunk_file<P: AsRef<Path>>(chunk_file: P, args: &Args) -> Result<()> 
         // 打印运行时间
         println!("load table took: {:?}", duration);
         process_batch(&mut reader, &chtm, args.chunk_dir.clone(), args.batch_size)?;
-    } else {
-        let chtm = CHTable::<u32>::from(&args.index_filename, page_index, page_size)?;
-        // 计算持续时间
-        let duration = start.elapsed();
-        // 打印运行时间
-        println!("load table took: {:?}", duration);
-        process_batch(&mut reader, &chtm, args.chunk_dir.clone(), args.batch_size)?;
     }
 
     Ok(())
@@ -222,12 +226,20 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     let chunk_files = find_and_sort_files(&args.chunk_dir, &args.chunk_prefix, ".k2")?;
+
+    let hash_files = if args.index_filename.is_dir() {
+        let hash_prefix = &args.hash_prefix;
+        find_and_sort_files(&args.index_filename, hash_prefix, ".k2d")?
+    } else {
+        vec![args.index_filename.clone()]
+    };
+    println!("hash_files {:?}", hash_files);
     // 开始计时
     let start = Instant::now();
     println!("start...");
     for chunk_file in chunk_files {
         println!("chunk_file {:?}", chunk_file);
-        process_chunk_file(chunk_file, &args)?;
+        process_chunk_file(&args, chunk_file, &hash_files)?;
     }
     // 计算持续时间
     let duration = start.elapsed();
