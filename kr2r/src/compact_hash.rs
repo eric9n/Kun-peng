@@ -324,14 +324,14 @@ where
 
 fn read_page_from_file<P: AsRef<Path>, B: Compact>(filename: P) -> Result<Page<B>> {
     let file = OpenOptions::new().read(true).open(&filename)?;
-    let mmap = unsafe { MmapOptions::new().map(&file)? };
+    let mmap = unsafe { MmapOptions::new().populate().map(&file)? };
     let index = LittleEndian::read_u64(&mmap[0..8]) as usize;
     let capacity = LittleEndian::read_u64(&mmap[8..16]) as usize;
 
-    let page_data =
-        unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const B, capacity) };
+    let data = unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const B, capacity) };
 
-    Ok(Page::new(index, capacity, page_data.to_vec()))
+    let page_data = data.to_vec();
+    Ok(Page::new(index, capacity, page_data))
 }
 
 fn read_pageptr_from_file<'a, P: AsRef<Path>, B: Compact>(filename: P) -> Result<PagePtr<'a, B>> {
@@ -345,6 +345,8 @@ fn read_pageptr_from_file<'a, P: AsRef<Path>, B: Compact>(filename: P) -> Result
 
     Ok(PagePtr::new(mmap, index, capacity, page_data))
 }
+
+use std::time::Instant;
 
 impl<'a, B> CHPage<'a, B>
 where
@@ -363,11 +365,13 @@ where
         // let next_page =
         //     unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const B, capacity) };
 
+        let start = Instant::now();
+
         let page = read_page_from_file(chunk_file1)?;
-        println!("page {:?}", page.size);
+        println!("page {:?}, {:?}", page.size, start.elapsed());
         let next_page = read_pageptr_from_file(chunk_file2)?;
 
-        println!("next page {:?}", page.size);
+        println!("next page {:?}, {:?}", next_page.size, start.elapsed());
         // let file1 = OpenOptions::new().read(true).open(&chunk_file1)?;
         // let mmap1 = unsafe { MmapOptions::new().map(&file1)? };
 
