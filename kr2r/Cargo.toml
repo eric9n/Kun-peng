@@ -41,6 +41,10 @@ path = "src/bin/squid.rs"
 name = "hashshard"
 path = "src/bin/hashshard.rs"
 
+[[bin]]
+name = "resolve"
+path = "src/bin/resolve.rs"
+
 
 [features]
 default = ["dna"]
@@ -63,7 +67,7 @@ rayon = "1.8"
 libc = "0.2"
 regex = "1.5.4"
 flate2 = "1.0"
-
+dashmap = { version = "5.5.3", features = ["rayon"] }
 
 [dev-dependencies]
 criterion = "0.5.1"

@@ -65,15 +65,14 @@ struct Args {
     #[clap(long, default_value_t = 1073741824)]
     chunk_size: usize,
 
-    #[clap(long, default_value = "sample")]
-    chunk_prefix: String,
+    // #[clap(long, default_value = "sample")]
+    // chunk_prefix: String,
 
-    #[clap(long, default_value = "sample_file.map")]
-    file_map: String,
+    // #[clap(long, default_value = "sample_file.map")]
+    // file_map: String,
 
-    #[clap(long, default_value = "sample_id")]
-    id_map_prefix: String,
-
+    // #[clap(long, default_value = "sample_id")]
+    // id_map_prefix: String,
     /// Input files for processing.
     ///
     /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
@@ -82,7 +81,7 @@ struct Args {
 }
 
 fn init_chunk_writers(args: &Args, partition: usize) -> Vec<BufWriter<fs::File>> {
-    let chunk_files = create_partition_files(partition, &args.chunk_dir, &args.chunk_prefix);
+    let chunk_files = create_partition_files(partition, &args.chunk_dir, "sample");
 
     let mut writers = create_partition_writers(&chunk_files);
 
@@ -174,7 +173,7 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
     let score = args.minimum_quality_score;
     let mut writers: Vec<BufWriter<fs::File>> = init_chunk_writers(&args, partition);
 
-    let file_path = args.chunk_dir.join(args.file_map);
+    let file_path = args.chunk_dir.join("sample_file.map");
     let mut file_writer = create_sample_map(&file_path);
     // 如果文件内容为空，则默认最大值为0
     let mut file_index = get_lastest_file_index(&file_path)?;
@@ -196,10 +195,8 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
                 panic!("The number of files is too large to process.");
             }
 
-            let mut sample_writer = create_sample_map(
-                args.chunk_dir
-                    .join(format!("{}_{}.map", args.id_map_prefix, file_index)),
-            );
+            let mut sample_writer =
+                create_sample_map(args.chunk_dir.join(format!("sample_id_{}.map", file_index)));
 
             let file_format = detect_file_format(&file1);
             if file_format.is_err() {
@@ -284,10 +281,8 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
                 panic!("The number of files is too large to process.");
             }
 
-            let mut sample_writer = create_sample_map(
-                args.chunk_dir
-                    .join(format!("{}_{}.map", args.id_map_prefix, file_index)),
-            );
+            let mut sample_writer =
+                create_sample_map(args.chunk_dir.join(format!("sample_id_{}.map", file_index)));
 
             let file_format = detect_file_format(&file);
             if file_format.is_err() {

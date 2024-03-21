@@ -32,9 +32,6 @@ struct Args {
     #[clap(long)]
     chunk_dir: PathBuf,
 
-    #[clap(long, default_value = "sample")]
-    chunk_prefix: String,
-
     #[clap(long, default_value = "hash")]
     hash_prefix: String,
 
@@ -228,11 +225,11 @@ fn process_chunk_file<P: AsRef<Path>>(
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let chunk_files = find_and_sort_files(&args.chunk_dir, &args.chunk_prefix, ".k2")?;
+    let chunk_files = find_and_sort_files(&args.chunk_dir, "sample", ".k2", 0)?;
 
     let hash_files = if args.index_filename.is_dir() {
         let hash_prefix = &args.hash_prefix;
-        find_and_sort_files(&args.index_filename, hash_prefix, ".k2d")?
+        find_and_sort_files(&args.index_filename, hash_prefix, ".k2d", 0)?
     } else {
         vec![args.index_filename.clone()]
     };

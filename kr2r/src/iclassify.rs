@@ -68,6 +68,20 @@ pub fn trim_pair_info(id: &str) -> String {
     id.to_string()
 }
 
+pub fn count_values(vec: Vec<u32>) -> HashMap<u32, u64> {
+    let mut counts = HashMap::new();
+
+    for value in vec {
+        // 使用entry API处理计数
+        // entry返回的是一个Entry枚举，它代表了可能存在也可能不存在的值
+        // or_insert方法在键不存在时插入默认值（在这里是0）
+        // 然后无论哪种情况，我们都对计数器加1
+        *counts.entry(value).or_insert(0) += 1;
+    }
+
+    counts
+}
+
 // &HashMap<u32, u64>,
 pub fn resolve_tree(
     hit_counts: &HashMap<u32, u64>,

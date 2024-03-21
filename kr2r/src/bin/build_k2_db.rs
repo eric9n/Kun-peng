@@ -108,7 +108,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         chunk_files
     } else {
-        find_and_sort_files(&args.chunk_dir, &args.chunk_prefix, ".k2")?
+        find_and_sort_files(&args.chunk_dir, &args.chunk_prefix, ".k2", 0)?
     };
     println!("chunk_files {:?}", chunk_files);
 

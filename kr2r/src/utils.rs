@@ -263,6 +263,7 @@ pub fn find_and_sort_files(
     directory: &Path,
     prefix: &str,
     suffix: &str,
+    adjusted: usize,
 ) -> io::Result<Vec<PathBuf>> {
     // 构建正则表达式以匹配文件名中的数字
     let pattern = format!(r"{}_(\d+){}", prefix, suffix);
@@ -297,7 +298,8 @@ pub fn find_and_sort_files(
 
     // 检查数字是否从0开始连续
     for (i, (_, num)) in sorted_entries.iter().enumerate() {
-        if i as i32 != *num {
+        let a_idx = i + adjusted;
+        if a_idx as i32 != *num {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
                 "File numbers are not continuous starting from 0.",
