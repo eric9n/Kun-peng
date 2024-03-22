@@ -41,15 +41,12 @@ pub fn read_id_to_seq_map<P: AsRef<Path>>(filename: P) -> Result<DashMap<u32, (S
 )]
 struct Args {
     // chunk directory
-    #[clap(long)]
+    #[clap(long, value_parser, required = true)]
     chunk_dir: PathBuf,
 
     /// The file path for the Kraken 2 index.
     #[clap(short = 'H', long = "index-filename", value_parser, required = true)]
     index_filename: PathBuf,
-
-    #[clap(long, default_value = "hash")]
-    hash_prefix: String,
 
     /// The file path for the Kraken 2 taxonomy.
     #[clap(short = 't', long = "taxonomy-filename", value_parser, required = true)]
@@ -152,14 +149,13 @@ fn main() -> Result<()> {
 
     let partition = sample_files.len();
 
-    let hash_prefix = &args.hash_prefix;
-    let config = HashConfig::<u32>::from(
-        &args
-            .index_filename
-            .join(format!("{}_config.k2d", hash_prefix)),
-    )?;
+    let hash_config = if args.index_filename.is_dir() {
+        HashConfig::<u32>::from(&args.index_filename.join("hash_config.k2d"))?
+    } else {
+        HashConfig::<u32>::from(args.index_filename.clone())?
+    };
 
-    let value_mask = config.value_mask;
+    let value_mask = hash_config.value_mask;
     for i in 0..partition {
         let sample_file = &sample_files[i];
         let sample_id_map = read_id_to_seq_map(&sample_id_files[i])?;

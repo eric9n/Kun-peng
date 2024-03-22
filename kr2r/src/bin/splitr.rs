@@ -30,7 +30,7 @@ use std::time::Instant;
 struct Args {
     /// The file path for the Kraken 2 index.
     #[clap(short = 'H', long = "index-filename", value_parser, required = true)]
-    index_filename: String,
+    index_filename: PathBuf,
 
     /// The file path for the Kraken 2 options.
     #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
@@ -368,7 +368,11 @@ fn main() -> Result<()> {
             "Paired-end processing requires an even number of input files.",
         ));
     }
-    let hash_config = HashConfig::<u32>::from(args.index_filename.clone())?;
+    let hash_config = if args.index_filename.is_dir() {
+        HashConfig::<u32>::from(&args.index_filename.join("hash_config.k2d"))?
+    } else {
+        HashConfig::<u32>::from(args.index_filename.clone())?
+    };
 
     let partition = (hash_config.capacity + args.chunk_size - 1) / args.chunk_size;
     println!("start...");

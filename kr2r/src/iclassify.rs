@@ -43,18 +43,12 @@ pub fn classify_sequence<'a, B: Compact>(
             }
 
             if taxon > 0 {
-                println!("hashed {:?}", hashed);
                 *hit_counts.entry(taxon).or_insert(0) += 1;
             }
             total_kmers += 1;
         }
     }
 
-    println!("hit_counts {:?}", hit_counts);
-    println!("total_kmers {:?}", total_kmers);
-    // *hit_counts.entry(2).or_insert(0) += 5;
-    // *hit_counts.entry(715).or_insert(0) += 1;
-    // total_kmers = 92;
     let mut call = resolve_tree(&hit_counts, taxonomy, total_kmers, confidence_threshold);
     if call > 0 && minimizer_hit_groups < minimum_hit_groups {
         call = 0;

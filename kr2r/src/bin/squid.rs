@@ -32,9 +32,6 @@ struct Args {
     #[clap(long)]
     chunk_dir: PathBuf,
 
-    #[clap(long, default_value = "hash")]
-    hash_prefix: String,
-
     /// 批量处理大小 default: 8MB
     #[clap(long, default_value_t = BATCH_SIZE)]
     batch_size: usize,
@@ -197,12 +194,7 @@ fn process_chunk_file<P: AsRef<Path>>(
         println!("load table took: {:?}", duration);
         process_batch(&mut reader, &chtm, args.chunk_dir.clone(), args.batch_size)?;
     } else {
-        let hash_prefix = &args.hash_prefix;
-        let config = HashConfig::<u32>::from(
-            &args
-                .index_filename
-                .join(format!("{}_config.k2d", hash_prefix)),
-        )?;
+        let config = HashConfig::<u32>::from(&args.index_filename.join("hash_config.k2d"))?;
         let parition = hash_files.len();
         let chtm = CHPage::from(
             config,
@@ -225,7 +217,7 @@ fn main() -> Result<()> {
     let chunk_files = find_and_sort_files(&args.chunk_dir, "sample", ".k2", 0)?;
 
     let hash_files = if args.index_filename.is_dir() {
-        let hash_prefix = &args.hash_prefix;
+        let hash_prefix = "hash";
         find_and_sort_files(&args.index_filename, hash_prefix, ".k2d", 0)?
     } else {
         vec![args.index_filename.clone()]
