@@ -104,10 +104,8 @@ where
     let mut last_file_index: Option<u64> = None;
     let mut writer: Option<BufWriter<File>> = None;
 
-    // let value_bits = chtm.config.value_bits;
     let value_mask = chtm.get_value_mask();
-    // let key_bits = 32 - value_bits;
-    // let key_mask = (1 << key_bits) - 1;
+    let value_bits = chtm.get_value_bits();
 
     while let Ok(bytes_read) = reader.read(&mut batch_buffer) {
         if bytes_read == 0 {
@@ -124,11 +122,13 @@ where
         let result: HashMap<u64, Vec<u8>> = slots
             .into_par_iter()
             .filter_map(|slot| {
-                let taxid = chtm.get_from_page(slot) as u64;
+                let taxid = chtm.get_from_page(slot);
 
                 if taxid > 0 {
                     let file_index = slot.value.right(value_mask) >> 32;
-                    let value = slot.to_b(taxid);
+                    let left = slot.value.left(value_bits) as u32;
+                    let high = u32::combined(left, taxid, value_bits) as u64;
+                    let value = slot.to_b(high);
                     let value_bytes = value.to_le_bytes(); // 将u64转换为[u8; 8]
                     Some((file_index, value_bytes.to_vec()))
                 } else {
@@ -186,9 +186,6 @@ fn process_chunk_file<P: AsRef<Path>>(
     let mut reader = BufReader::new(file);
 
     let (page_index, page_size) = read_chunk_header(&mut reader)?;
-
-    println!("page_index {:?}", page_index);
-    println!("page_size {:?}", page_size);
 
     let start = Instant::now();
 

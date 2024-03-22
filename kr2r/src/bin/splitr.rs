@@ -3,7 +3,7 @@ use kr2r::compact_hash::{HashConfig, Slot};
 use kr2r::mmscanner::MinimizerScanner;
 use kr2r::seq::{self, SeqX};
 use kr2r::utils::{
-    create_partition_files, create_partition_writers, create_sample_map, detect_file_format,
+    create_partition_files, create_partition_writers, create_sample_file, detect_file_format,
     get_file_limit, FileFormat,
 };
 use kr2r::{IndexOptions, Meros};
@@ -174,7 +174,7 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
     let mut writers: Vec<BufWriter<fs::File>> = init_chunk_writers(&args, partition);
 
     let file_path = args.chunk_dir.join("sample_file.map");
-    let mut file_writer = create_sample_map(&file_path);
+    let mut file_writer = create_sample_file(&file_path);
     // 如果文件内容为空，则默认最大值为0
     let mut file_index = get_lastest_file_index(&file_path)?;
 
@@ -195,8 +195,14 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
                 panic!("The number of files is too large to process.");
             }
 
+            // 创建空的数据文件
+            create_sample_file(
+                args.chunk_dir
+                    .join(format!("sample_file_{}.bin", file_index)),
+            );
+
             let mut sample_writer =
-                create_sample_map(args.chunk_dir.join(format!("sample_id_{}.map", file_index)));
+                create_sample_file(args.chunk_dir.join(format!("sample_id_{}.map", file_index)));
 
             let file_format = detect_file_format(&file1);
             if file_format.is_err() {
@@ -221,10 +227,7 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
                                 let dna_id = records.0.id().unwrap_or_default().to_string();
                                 let seq1 = records.0.seq_x(score);
                                 let seq2 = records.1.seq_x(score);
-
-                                line_index.fetch_add(1, Ordering::SeqCst);
-                                let index = line_index.load(Ordering::SeqCst);
-
+                                let index = line_index.fetch_add(1, Ordering::SeqCst);
                                 // 拼接seq_id
                                 let seq_id = (file_index << 32 | index) as u64;
 
@@ -281,8 +284,13 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
                 panic!("The number of files is too large to process.");
             }
 
+            // 创建空的数据文件
+            create_sample_file(
+                args.chunk_dir
+                    .join(format!("sample_file_{}.bin", file_index)),
+            );
             let mut sample_writer =
-                create_sample_map(args.chunk_dir.join(format!("sample_id_{}.map", file_index)));
+                create_sample_file(args.chunk_dir.join(format!("sample_id_{}.map", file_index)));
 
             let file_format = detect_file_format(&file);
             if file_format.is_err() {
@@ -307,8 +315,7 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>, partition: us
                                 let dna_id = records.id().unwrap_or_default().to_string();
                                 let seq1 = records.seq_x(score);
 
-                                line_index.fetch_add(1, Ordering::SeqCst);
-                                let index = line_index.load(Ordering::SeqCst);
+                                let index = line_index.fetch_add(1, Ordering::SeqCst);
 
                                 // 拼接seq_id
                                 let seq_id = (file_index << 32 | index) as u64;

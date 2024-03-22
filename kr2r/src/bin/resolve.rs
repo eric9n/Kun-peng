@@ -1,5 +1,5 @@
 use clap::Parser;
-use kr2r::compact_hash::Compact;
+use kr2r::compact_hash::{Compact, HashConfig};
 use kr2r::iclassify::{count_values, resolve_tree};
 use kr2r::taxonomy::Taxonomy;
 use kr2r::utils::find_and_sort_files;
@@ -44,6 +44,13 @@ struct Args {
     #[clap(long)]
     chunk_dir: PathBuf,
 
+    /// The file path for the Kraken 2 index.
+    #[clap(short = 'H', long = "index-filename", value_parser, required = true)]
+    index_filename: PathBuf,
+
+    #[clap(long, default_value = "hash")]
+    hash_prefix: String,
+
     /// The file path for the Kraken 2 taxonomy.
     #[clap(short = 't', long = "taxonomy-filename", value_parser, required = true)]
     taxonomy_filename: String,
@@ -80,6 +87,7 @@ fn process_batch<P: AsRef<Path>, B: Compact>(
     taxonomy: &Taxonomy,
     id_map: DashMap<u32, (String, usize)>,
     writer: Box<dyn Write + Send>,
+    value_mask: usize,
 ) -> Result<()> {
     let file = File::open(sample_file)?;
     let mut reader = BufReader::new(file);
@@ -116,14 +124,10 @@ fn process_batch<P: AsRef<Path>, B: Compact>(
 
     hit_counts.into_par_iter().for_each(|(k, v)| {
         if let Some(item) = id_map.get(&k) {
-            let total_kmers = item.1;
-            let minimizer_hit_groups = v.len();
-            let mut call = resolve_tree(
-                &count_values(v),
-                taxonomy,
-                total_kmers,
-                confidence_threshold,
-            );
+            let total_kmers: usize = item.1;
+            // let minimizer_hit_groups = v.len();
+            let (counts, minimizer_hit_groups) = count_values(v, value_mask);
+            let mut call = resolve_tree(&counts, taxonomy, total_kmers, confidence_threshold);
             if call > 0 && minimizer_hit_groups < minimum_hit_groups {
                 call = 0;
             };
@@ -148,18 +152,33 @@ fn main() -> Result<()> {
 
     let partition = sample_files.len();
 
+    let hash_prefix = &args.hash_prefix;
+    let config = HashConfig::<u32>::from(
+        &args
+            .index_filename
+            .join(format!("{}_config.k2d", hash_prefix)),
+    )?;
+
+    let value_mask = config.value_mask;
     for i in 0..partition {
         let sample_file = &sample_files[i];
         let sample_id_map = read_id_to_seq_map(&sample_id_files[i])?;
         let writer: Box<dyn Write + Send> = match &args.kraken_output_dir {
             Some(ref file_path) => {
-                let filename = file_path.join(format!("output_{}.txt", i));
+                let filename = file_path.join(format!("output_{}.txt", i + 1));
                 let file = File::create(filename)?;
                 Box::new(BufWriter::new(file)) as Box<dyn Write + Send>
             }
             None => Box::new(io::stdout()) as Box<dyn Write + Send>,
         };
-        process_batch::<&PathBuf, u64>(sample_file, &args, &taxo, sample_id_map, writer)?;
+        process_batch::<&PathBuf, u64>(
+            sample_file,
+            &args,
+            &taxo,
+            sample_id_map,
+            writer,
+            value_mask,
+        )?;
     }
     Ok(())
 }

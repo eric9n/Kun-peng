@@ -4,7 +4,7 @@ use crate::taxonomy::Taxonomy;
 use crate::Meros;
 use crate::TaxonCounts;
 // use rayon::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub const TAXID_MAX: u32 = u32::MAX - 1;
 pub const MATE_PAIR_BORDER_TAXON: u32 = TAXID_MAX;
@@ -23,25 +23,38 @@ pub fn classify_sequence<'a, B: Compact>(
     let mut hit_counts = TaxonCounts::new();
     let mut total_kmers = 0usize;
     let mut minimizer_hit_groups = 0;
+    let mut last_minimizer = std::u64::MAX;
+
+    let min_hash_check = meros.min_clear_hash_value.unwrap_or_default();
 
     for hash_keys in seq_reads.seq_paired {
-        for hashed in hash_keys.iter() {
-            let taxon = if meros
-                .min_clear_hash_value
-                .map_or(true, |min_hash| *hashed >= min_hash)
-            {
-                cht.get(*hashed).to_u32()
+        for &hashed in hash_keys.iter() {
+            let taxon = if hashed >= min_hash_check {
+                cht.get(hashed).to_u32()
             } else {
                 0
             };
+
+            if last_minimizer != hashed {
+                if taxon > 0 {
+                    minimizer_hit_groups += 1;
+                }
+                last_minimizer = hashed;
+            }
+
             if taxon > 0 {
-                minimizer_hit_groups += 1;
+                println!("hashed {:?}", hashed);
                 *hit_counts.entry(taxon).or_insert(0) += 1;
             }
             total_kmers += 1;
         }
     }
 
+    println!("hit_counts {:?}", hit_counts);
+    println!("total_kmers {:?}", total_kmers);
+    // *hit_counts.entry(2).or_insert(0) += 5;
+    // *hit_counts.entry(715).or_insert(0) += 1;
+    // total_kmers = 92;
     let mut call = resolve_tree(&hit_counts, taxonomy, total_kmers, confidence_threshold);
     if call > 0 && minimizer_hit_groups < minimum_hit_groups {
         call = 0;
@@ -68,18 +81,22 @@ pub fn trim_pair_info(id: &str) -> String {
     id.to_string()
 }
 
-pub fn count_values(vec: Vec<u32>) -> HashMap<u32, u64> {
+pub fn count_values(vec: Vec<u32>, value_mask: usize) -> (HashMap<u32, u64>, usize) {
     let mut counts = HashMap::new();
+
+    let mut unique_elements = HashSet::new();
 
     for value in vec {
         // 使用entry API处理计数
         // entry返回的是一个Entry枚举，它代表了可能存在也可能不存在的值
         // or_insert方法在键不存在时插入默认值（在这里是0）
         // 然后无论哪种情况，我们都对计数器加1
-        *counts.entry(value).or_insert(0) += 1;
+        let key = value.right(value_mask);
+        *counts.entry(key).or_insert(0) += 1;
+        unique_elements.insert(value);
     }
 
-    counts
+    (counts, unique_elements.len())
 }
 
 // &HashMap<u32, u64>,

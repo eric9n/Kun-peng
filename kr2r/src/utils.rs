@@ -246,7 +246,7 @@ pub fn create_partition_writers(partition_files: &Vec<PathBuf>) -> Vec<BufWriter
         .collect()
 }
 
-pub fn create_sample_map<P: AsRef<Path>>(filename: P) -> BufWriter<File> {
+pub fn create_sample_file<P: AsRef<Path>>(filename: P) -> BufWriter<File> {
     let file = OpenOptions::new()
         .write(true)
         .append(true) // 确保以追加模式打开文件

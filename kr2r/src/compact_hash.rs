@@ -308,6 +308,7 @@ where
     B: Compact,
 {
     fn get_value_mask(&self) -> usize;
+    fn get_value_bits(&self) -> usize;
     fn get_from_page(&self, slot: &Slot<u64>) -> B;
 }
 
@@ -416,6 +417,10 @@ where
 {
     fn get_value_mask(&self) -> usize {
         self.config.value_mask
+    }
+
+    fn get_value_bits(&self) -> usize {
+        self.config.value_bits
     }
 
     fn get_from_page(&self, slot: &Slot<u64>) -> B {
@@ -563,6 +568,10 @@ where
 {
     fn get_value_mask(&self) -> usize {
         self.config.value_mask
+    }
+
+    fn get_value_bits(&self) -> usize {
+        self.config.value_bits
     }
 
     fn get_from_page(&self, slot: &Slot<u64>) -> B {
