@@ -1,5 +1,8 @@
 // use crate::{Meros, CURRENT_REVCOM_VERSION};
-use crate::{BITS_PER_CHAR, CURRENT_REVCOM_VERSION, DEFAULT_SPACED_SEED_MASK, DEFAULT_TOGGLE_MASK};
+use crate::{
+    BITS_PER_CHAR, CURRENT_REVCOM_VERSION, DEFAULT_KMER_LENGTH, DEFAULT_MINIMIZER_LENGTH,
+    DEFAULT_SPACED_SEED_MASK, DEFAULT_TOGGLE_MASK,
+};
 use std::fs::File;
 use std::io::{Read, Result as IoResult, Write};
 use std::mem;
@@ -58,6 +61,25 @@ impl Meros {
 
     pub fn window_size(&self) -> usize {
         self.k_mer - self.l_mer
+    }
+}
+
+impl Default for Meros {
+    fn default() -> Self {
+        let l_mer = DEFAULT_MINIMIZER_LENGTH as usize;
+        let k_mer = DEFAULT_KMER_LENGTH as usize;
+        let mut mask = 1u64;
+        mask <<= l_mer * BITS_PER_CHAR;
+        mask -= 1;
+
+        Self {
+            k_mer,
+            l_mer,
+            mask,
+            spaced_seed_mask: DEFAULT_SPACED_SEED_MASK,
+            toggle_mask: DEFAULT_TOGGLE_MASK & mask,
+            min_clear_hash_value: Some(0),
+        }
     }
 }
 

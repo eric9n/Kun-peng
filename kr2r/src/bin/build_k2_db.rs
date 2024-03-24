@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .expect("more bits required for storing taxid");
 
     let capacity = args.build.required_capacity as usize;
-    let hash_config = HashConfig::<u32>::new(capacity, value_bits, 0);
+    let hash_config = HashConfig::<u32>::new(capacity, value_bits, 0, 0, 0);
 
     // 开始计时
     let start = Instant::now();
@@ -108,7 +108,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         chunk_files
     } else {
-        find_and_sort_files(&args.chunk_dir, &args.chunk_prefix, ".k2", 0)?
+        find_and_sort_files(&args.chunk_dir, &args.chunk_prefix, ".k2")?
     };
     println!("chunk_files {:?}", chunk_files);
 

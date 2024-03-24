@@ -228,6 +228,10 @@ where
     pub capacity: usize,
     // 哈希表中当前存储的元素数量。
     pub size: usize,
+    // 分区数
+    pub partition: usize,
+    // 分块大小
+    pub hash_size: usize,
     _phantom: PhantomData<B>,
 }
 
@@ -252,20 +256,56 @@ where
     B: Compact,
 {
     // 使用常量替代硬编码的数字，增加代码可读性
+    const PARTITION_OFFSET: usize = 0;
+    const HASH_SIZE_OFFSET: usize = 8;
     const CAPACITY_OFFSET: usize = 0;
     const SIZE_OFFSET: usize = 8;
     const VALUE_BITS_OFFSET: usize = 24;
     const U64_SIZE: usize = 8;
 
-    pub fn new(capacity: usize, value_bits: usize, size: usize) -> Self {
+    pub fn new(
+        capacity: usize,
+        value_bits: usize,
+        size: usize,
+        partition: usize,
+        hash_size: usize,
+    ) -> Self {
         let value_mask = (1 << value_bits) - 1;
         Self {
             capacity,
             value_bits,
             value_mask,
             size,
+            partition,
+            hash_size,
             _phantom: PhantomData,
         }
+    }
+
+    pub fn from_hash_header<P: AsRef<Path>>(filename: P) -> Result<Self> {
+        let file = OpenOptions::new().read(true).open(&filename)?;
+        let mmap = unsafe { MmapOptions::new().map(&file)? };
+
+        let offset = 2 * Self::U64_SIZE;
+
+        let partition = LittleEndian::read_u64(
+            &mmap[Self::PARTITION_OFFSET..Self::PARTITION_OFFSET + Self::U64_SIZE],
+        ) as usize;
+        let hash_size = LittleEndian::read_u64(
+            &mmap[Self::HASH_SIZE_OFFSET..Self::HASH_SIZE_OFFSET + Self::U64_SIZE],
+        ) as usize;
+        let capacity = LittleEndian::read_u64(
+            &mmap[Self::CAPACITY_OFFSET + offset..Self::CAPACITY_OFFSET + offset + Self::U64_SIZE],
+        ) as usize;
+        let size = LittleEndian::read_u64(
+            &mmap[Self::SIZE_OFFSET + offset..Self::SIZE_OFFSET + offset + Self::U64_SIZE],
+        ) as usize;
+        let value_bits = LittleEndian::read_u64(
+            &mmap[Self::VALUE_BITS_OFFSET + offset
+                ..Self::VALUE_BITS_OFFSET + offset + Self::U64_SIZE],
+        ) as usize;
+
+        Ok(Self::new(capacity, value_bits, size, partition, hash_size))
     }
 
     pub fn from<P: AsRef<Path>>(filename: P) -> Result<Self> {
@@ -285,7 +325,7 @@ where
             &mmap[Self::VALUE_BITS_OFFSET..Self::VALUE_BITS_OFFSET + Self::U64_SIZE],
         ) as usize;
 
-        Self::new(capacity, value_bits, size)
+        Self::new(capacity, value_bits, size, 0, 0)
     }
 
     pub fn index(&self, hash_key: u64) -> usize {

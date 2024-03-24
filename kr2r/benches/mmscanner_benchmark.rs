@@ -1,7 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use kr2r::mmscanner::MinimizerScanner;
 use kr2r::Meros;
-
 // 定义性能测试函数
 fn performance_test(c: &mut Criterion) {
     let seq: Vec<u8> = b"ACGATCGACGACG".to_vec();

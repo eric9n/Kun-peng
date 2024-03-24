@@ -199,7 +199,7 @@ fn process_files(
                         cht,
                         args,
                         meros,
-                        seq::PairFastqReader::from_path(file1, file2)
+                        seq::PairFastqReader::from_path(file1, Some(file2))
                     );
                 }
                 FileFormat::Fasta => {

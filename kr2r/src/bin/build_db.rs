@@ -41,7 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1211893248
     let capacity = args.build.required_capacity as usize;
 
-    let hash_config = HashConfig::<u32>::new(capacity, value_bits, 0);
+    let hash_config = HashConfig::<u32>::new(capacity, value_bits, 0, 0, 0);
     let mut chtm = CHTableMut::new(args.build.hashtable_filename, hash_config, 0, capacity)?;
 
     let source: PathBuf = args.build.source.clone();

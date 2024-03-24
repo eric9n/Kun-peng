@@ -30,21 +30,8 @@ name = "build_k2_db"
 path = "src/bin/build_k2_db.rs"
 
 [[bin]]
-name = "splitr"
-path = "src/bin/splitr.rs"
-
-[[bin]]
 name = "squid"
 path = "src/bin/squid.rs"
-
-[[bin]]
-name = "hashshard"
-path = "src/bin/hashshard.rs"
-
-[[bin]]
-name = "resolve"
-path = "src/bin/resolve.rs"
-
 
 [features]
 default = ["dna"]

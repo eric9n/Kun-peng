@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result, Write};
 use std::path::Path;
@@ -255,15 +256,15 @@ impl Default for Taxonomy {
 impl Taxonomy {
     const MAGIC: &'static [u8] = b"K2TAXDAT"; // 替换为实际的 magic bytes
 
-    pub fn from_file(filename: &str) -> Result<Taxonomy> {
-        let mut file = std::fs::File::open(filename)?;
+    pub fn from_file<P: AsRef<Path> + Debug>(filename: P) -> Result<Taxonomy> {
+        let mut file = std::fs::File::open(&filename)?;
 
         let mut magic = vec![0; Self::MAGIC.len()];
         file.read_exact(&mut magic)?;
         if magic != Self::MAGIC {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("Malformed taxonomy file {}", filename),
+                format!("Malformed taxonomy file {:?}", &filename),
             ));
         }
 

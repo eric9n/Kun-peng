@@ -7,6 +7,7 @@ use seq_io::fastq::Record as FqRecord;
 use seq_io::parallel::Reader;
 
 use crate::utils::is_gzipped;
+use crate::Meros;
 use seq_io::policy::StdPolicy;
 use std::collections::HashSet;
 use std::fs::File;
@@ -14,9 +15,8 @@ use std::io;
 use std::iter;
 use std::path::Path;
 
-use crate::Meros;
-
 type DefaultBufPolicy = StdPolicy;
+use flate2::read::GzDecoder;
 
 pub trait SeqX {
     fn seq_x(&self, score: i32) -> Vec<u8>;
@@ -82,25 +82,15 @@ pub trait SeqSet {
 
 pub struct PairFastqReader<P = DefaultBufPolicy> {
     reader1: fastq::Reader<Box<dyn io::Read + Send>, P>,
-    reader2: fastq::Reader<Box<dyn io::Read + Send>, P>,
-    index: usize, // 新增索引字段
+    reader2: Option<fastq::Reader<Box<dyn io::Read + Send>, P>>,
 }
-
-impl Default for PairFastqRecordSet {
-    fn default() -> Self {
-        PairFastqRecordSet(fastq::RecordSet::default(), fastq::RecordSet::default())
-    }
-}
-
-use flate2::read::GzDecoder;
 
 impl<'a> PairFastqReader<DefaultBufPolicy> {
     /// Creates a reader from a file path.
     #[inline]
-    pub fn from_path<P: AsRef<Path>>(path1: P, path2: P) -> io::Result<PairFastqReader> {
+    pub fn from_path<P: AsRef<Path>>(path1: P, path2: Option<P>) -> io::Result<PairFastqReader> {
         // 分别打开两个文件
         let mut file1 = File::open(&path1)?;
-        let mut file2 = File::open(path2)?;
 
         let read1: Box<dyn io::Read + Send> = if is_gzipped(&mut file1)? {
             Box::new(GzDecoder::new(file1))
@@ -108,22 +98,23 @@ impl<'a> PairFastqReader<DefaultBufPolicy> {
             Box::new(file1)
         };
 
-        let read2: Box<dyn io::Read + Send> = if is_gzipped(&mut file2)? {
-            Box::new(GzDecoder::new(file2))
-        } else {
-            Box::new(file2)
+        let reader1 = fastq::Reader::new(read1);
+
+        let reader2 = match path2 {
+            Some(path2) => {
+                let mut file2 = File::open(path2)?;
+                let read2: Box<dyn io::Read + Send> = if is_gzipped(&mut file2)? {
+                    Box::new(GzDecoder::new(file2))
+                } else {
+                    Box::new(file2)
+                };
+                Some(fastq::Reader::new(read2))
+            }
+            None => None,
         };
 
-        // 为每个文件创建一个 fastq::Reader 实例
-        let reader1 = fastq::Reader::new(read1);
-        let reader2 = fastq::Reader::new(read2);
-
         // 使用这两个实例构造一个 PairFastqReader 对象
-        Ok(PairFastqReader {
-            reader1,
-            reader2,
-            index: 0,
-        })
+        Ok(PairFastqReader { reader1, reader2 })
     }
 
     pub fn next(&mut self) -> Option<PairFastqRecord> {
@@ -132,23 +123,26 @@ impl<'a> PairFastqReader<DefaultBufPolicy> {
             .next()?
             .expect("fastq file error")
             .to_owned_record();
-        let ref_recrod2 = self
-            .reader2
-            .next()?
-            .expect("fastq file error")
-            .to_owned_record();
+        let ref_record2 = match &mut self.reader2 {
+            Some(reader2) => Some(reader2.next()?.expect("fastq file error").to_owned_record()),
+            None => None,
+        };
+        // let ref_recrod2 = self
+        //     .reader2
+        //     .next()?
+        //     .expect("fastq file error")
+        //     .to_owned_record();
 
-        self.index += 1;
-        Some(PairFastqRecord(self.index, ref_record1, ref_recrod2))
+        Some(PairFastqRecord(ref_record1, ref_record2))
     }
 }
 
-pub struct PairFastqRecord(pub usize, pub fastq::OwnedRecord, pub fastq::OwnedRecord);
+pub struct PairFastqRecord(pub fastq::OwnedRecord, pub Option<fastq::OwnedRecord>);
 
 pub struct PairFastqRecordSet(fastq::RecordSet, fastq::RecordSet);
 
 impl<'a> iter::IntoIterator for &'a PairFastqRecordSet {
-    type Item = (fastq::RefRecord<'a>, fastq::RefRecord<'a>);
+    type Item = (fastq::RefRecord<'a>, Option<fastq::RefRecord<'a>>);
     type IntoIter = PairFastqRecordSetIter<'a>;
 
     #[inline]
@@ -159,13 +153,20 @@ impl<'a> iter::IntoIterator for &'a PairFastqRecordSet {
 
 pub struct PairFastqRecordSetIter<'a>(fastq::RecordSetIter<'a>, fastq::RecordSetIter<'a>);
 
+impl Default for PairFastqRecordSet {
+    fn default() -> Self {
+        PairFastqRecordSet(fastq::RecordSet::default(), fastq::RecordSet::default())
+    }
+}
+
 impl<'a> Iterator for PairFastqRecordSetIter<'a> {
-    type Item = (fastq::RefRecord<'a>, fastq::RefRecord<'a>);
+    type Item = (fastq::RefRecord<'a>, Option<fastq::RefRecord<'a>>);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         match (self.0.next(), self.1.next()) {
-            (Some(record1), Some(record2)) => Some((record1, record2)),
+            (Some(record1), Some(record2)) => Some((record1, Some(record2))),
+            (Some(record1), None) => Some((record1, None)),
             _ => None, // Return None if either iterator runs out of records
         }
     }
@@ -180,15 +181,22 @@ where
 
     #[inline]
     fn fill_data(&mut self, rset: &mut PairFastqRecordSet) -> Option<Result<(), Self::Err>> {
-        let res1 = self.reader1.read_record_set(&mut rset.0)?.is_err();
-        let res2 = self.reader2.read_record_set(&mut rset.1)?.is_err();
-
-        if res1 || res2 {
-            return None;
+        match self.reader1.read_record_set(&mut rset.0)? {
+            Ok(_) => {
+                if let Some(ref mut reader) = &mut self.reader2 {
+                    match reader.read_record_set(&mut rset.1)? {
+                        Ok(_) => Some(Ok(())),
+                        Err(_) => None,
+                    }
+                } else {
+                    Some(Ok(()))
+                }
+            }
+            Err(_) => None,
         }
 
         // If both reads are successful, return Ok(())
-        Some(Ok(()))
+        // Some(Ok(()))
     }
 }
 
@@ -199,13 +207,17 @@ impl SeqSet for PairFastqRecordSet {
         for records in self.into_iter() {
             let dna_id = records.0.id().unwrap_or_default().to_string();
             let seq1 = records.0.seq_x(score);
-            let seq2 = records.1.seq_x(score);
-
-            let kmers1 = MinimizerScanner::new(&seq1, meros).collect();
-            let kmers2 = MinimizerScanner::new(&seq2, meros).collect();
-
-            let seq_paired: Vec<Vec<u64>> = vec![kmers1, kmers2];
-            seq_pair_set.insert(SeqReads { dna_id, seq_paired });
+            if let Some(record3) = records.1 {
+                let seq2 = record3.seq_x(score);
+                let kmers1 = MinimizerScanner::new(&seq1, meros).collect();
+                let kmers2 = MinimizerScanner::new(&seq2, meros).collect();
+                let seq_paired: Vec<Vec<u64>> = vec![kmers1, kmers2];
+                seq_pair_set.insert(SeqReads { dna_id, seq_paired });
+            } else {
+                let kmers1 = MinimizerScanner::new(&seq1, meros).collect();
+                let seq_paired: Vec<Vec<u64>> = vec![kmers1];
+                seq_pair_set.insert(SeqReads { dna_id, seq_paired });
+            }
         }
         seq_pair_set
     }

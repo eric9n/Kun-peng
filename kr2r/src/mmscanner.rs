@@ -188,10 +188,11 @@ pub struct MinimizerScanner<'a> {
 
 impl<'a> MinimizerScanner<'a> {
     pub fn new(seq: &'a [u8], meros: Meros) -> Self {
+        let size: usize = seq.len();
         MinimizerScanner {
             seq,
             meros,
-            cursor: Cursor::new(&meros, seq.len()),
+            cursor: Cursor::new(&meros, size),
             // last_minimizer: std::u64::MAX,
         }
     }
@@ -199,10 +200,18 @@ impl<'a> MinimizerScanner<'a> {
     /// 在一个序列上滑动一个光标（可能是为了找到下一个有意义的片段或窗口），
     /// 并对滑动得到的片段进行某种转换或处理。如果光标无法继续滑动（例如到达序列的末尾），则返回 None。
     fn next_window(&mut self) -> Option<u64> {
-        self.cursor.slide(self.seq).and_then(|lmer| {
+        self.cursor.slide(&self.seq).and_then(|lmer| {
             let candidate_lmer: u64 = to_candidate_lmer(&self.meros, lmer);
             self.cursor.next_candidate_lmer(candidate_lmer)
         })
+    }
+}
+
+impl<'a> Default for MinimizerScanner<'a> {
+    fn default() -> Self {
+        let meros = Meros::default();
+        let seq: &[u8] = &[];
+        MinimizerScanner::new(seq, meros)
     }
 }
 

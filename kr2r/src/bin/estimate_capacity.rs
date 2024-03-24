@@ -119,7 +119,7 @@ fn process_sequence(
             let mut minimizer_set = HashSet::new();
             for record in record_set.into_iter() {
                 let seq = record.seq();
-                let kmer_iter = MinimizerScanner::new(seq, meros)
+                let kmer_iter = MinimizerScanner::new(&seq, meros)
                     .into_iter()
                     .filter(|hash_key| hash_key & RANGE_MASK < range_n)
                     .collect::<HashSet<u64>>();

@@ -1,4 +1,5 @@
 use clap::Parser;
+use dashmap::DashMap;
 use kr2r::compact_hash::{Compact, HashConfig};
 use kr2r::iclassify::{count_values, resolve_tree};
 use kr2r::taxonomy::Taxonomy;
@@ -8,6 +9,8 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Result, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+
+const BATCH_SIZE: usize = 8 * 1024 * 1024;
 
 pub fn read_id_to_seq_map<P: AsRef<Path>>(filename: P) -> Result<DashMap<u32, (String, usize)>> {
     let file = File::open(filename)?;
@@ -39,19 +42,22 @@ pub fn read_id_to_seq_map<P: AsRef<Path>>(filename: P) -> Result<DashMap<u32, (S
     about = "resolve taxonomy tree",
     long_about = "resolve taxonomy tree"
 )]
-struct Args {
+pub struct Args {
+    /// database hash chunk directory and other files
+    #[clap(long)]
+    hash_dir: PathBuf,
+
     // chunk directory
     #[clap(long, value_parser, required = true)]
     chunk_dir: PathBuf,
 
-    /// The file path for the Kraken 2 index.
-    #[clap(short = 'H', long = "index-filename", value_parser, required = true)]
-    index_filename: PathBuf,
+    // /// The file path for the Kraken 2 index.
+    // #[clap(short = 'H', long = "index-filename", value_parser, required = true)]
+    // index_filename: PathBuf,
 
-    /// The file path for the Kraken 2 taxonomy.
-    #[clap(short = 't', long = "taxonomy-filename", value_parser, required = true)]
-    taxonomy_filename: String,
-
+    // /// The file path for the Kraken 2 taxonomy.
+    // #[clap(short = 't', long = "taxonomy-filename", value_parser, required = true)]
+    // taxonomy_filename: String,
     /// Confidence score threshold, default is 0.0.
     #[clap(
         short = 'T',
@@ -70,13 +76,14 @@ struct Args {
     )]
     minimum_hit_groups: usize,
 
+    /// 批量处理大小 default: 8MB
+    #[clap(long, default_value_t = BATCH_SIZE)]
+    batch_size: usize,
+
     /// File path for outputting normal Kraken output.
     #[clap(long = "output-dir", value_parser)]
     kraken_output_dir: Option<PathBuf>,
 }
-
-const BATCH_SIZE: usize = 80 * 1024;
-use dashmap::DashMap;
 
 fn process_batch<P: AsRef<Path>, B: Compact>(
     sample_file: P,
@@ -140,21 +147,16 @@ fn process_batch<P: AsRef<Path>, B: Compact>(
     Ok(())
 }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
-    let taxo = Taxonomy::from_file(&args.taxonomy_filename)?;
+pub fn run(args: Args) -> Result<()> {
+    let hash_dir = &args.hash_dir;
+    let taxonomy_filename = hash_dir.join("taxo.k2d");
+    let taxo = Taxonomy::from_file(taxonomy_filename)?;
 
-    let sample_files = find_and_sort_files(&args.chunk_dir, "sample_file", ".bin", 1)?;
-    let sample_id_files = find_and_sort_files(&args.chunk_dir, "sample_id", ".map", 1)?;
+    let sample_files = find_and_sort_files(&args.chunk_dir, "sample_file", ".bin")?;
+    let sample_id_files = find_and_sort_files(&args.chunk_dir, "sample_id", ".map")?;
 
     let partition = sample_files.len();
-
-    let hash_config = if args.index_filename.is_dir() {
-        HashConfig::<u32>::from(&args.index_filename.join("hash_config.k2d"))?
-    } else {
-        HashConfig::<u32>::from(args.index_filename.clone())?
-    };
-
+    let hash_config = HashConfig::<u32>::from_hash_header(&args.hash_dir.join("hash_config.k2d"))?;
     let value_mask = hash_config.value_mask;
     for i in 0..partition {
         let sample_file = &sample_files[i];
@@ -177,4 +179,12 @@ fn main() -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+#[allow(dead_code)]
+fn main() {
+    let args = Args::parse();
+    if let Err(e) = run(args) {
+        eprintln!("Application error: {}", e);
+    }
 }
