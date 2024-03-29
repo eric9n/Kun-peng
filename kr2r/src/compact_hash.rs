@@ -371,7 +371,19 @@ fn read_page_from_file<P: AsRef<Path>, B: Compact>(filename: P) -> Result<Page<B
 
     let data = unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const B, capacity) };
 
-    let page_data = data.to_vec();
+    // 初始化Vec<B>，预分配足够容量
+    let mut page_data: Vec<B> = Vec::with_capacity(capacity);
+    // 为Vec<B>安全地设置长度
+    unsafe {
+        page_data.set_len(capacity);
+    }
+    // 使用copy_from_slice进行数据复制
+    unsafe {
+        let page_data_slice = std::slice::from_raw_parts_mut(page_data.as_mut_ptr(), capacity);
+        page_data_slice.copy_from_slice(data);
+    }
+
+    // let page_data = data.to_vec();
     Ok(Page::new(index, capacity, page_data))
 }
 
