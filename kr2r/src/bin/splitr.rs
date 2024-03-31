@@ -30,18 +30,18 @@ use clap::Parser;
 pub struct Args {
     /// database hash chunk directory and other files
     #[clap(long)]
-    hash_dir: PathBuf,
+    pub hash_dir: PathBuf,
 
     // /// The file path for the Kraken 2 options.
     // #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
     // options_filename: String,
     /// Enable paired-end processing.
     #[clap(short = 'P', long = "paired-end-processing", action)]
-    paired_end_processing: bool,
+    pub paired_end_processing: bool,
 
     /// Process pairs with mates in the same file.
     #[clap(short = 'S', long = "single-file-pairs", action)]
-    single_file_pairs: bool,
+    pub single_file_pairs: bool,
 
     /// Minimum quality score for FASTQ data, default is 0.
     #[clap(
@@ -50,19 +50,19 @@ pub struct Args {
         value_parser,
         default_value_t = 0
     )]
-    minimum_quality_score: i32,
+    pub minimum_quality_score: i32,
 
     /// The number of threads to use, default is 1.
     #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = 10)]
-    num_threads: i32,
+    pub num_threads: i32,
 
     /// chunk directory
     #[clap(long)]
-    chunk_dir: PathBuf,
+    pub chunk_dir: PathBuf,
 
     /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
     // #[clap(short = 'F', long = "files")]
-    input_files: Vec<String>,
+    pub input_files: Vec<String>,
 }
 
 fn init_chunk_writers(

@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 // 定义每批次处理的 Slot 数量
-const BATCH_SIZE: usize = 8 * 1024 * 1024;
+pub const BATCH_SIZE: usize = 8 * 1024 * 1024;
 
 /// Command line arguments for the splitr program.
 ///
@@ -26,7 +26,7 @@ const BATCH_SIZE: usize = 8 * 1024 * 1024;
 pub struct Args {
     /// database hash chunk directory and other files
     #[clap(long)]
-    hash_dir: PathBuf,
+    pub hash_dir: PathBuf,
     // /// The file path for the Kraken 2 index.
     // #[clap(short = 'H', long = "index-filename", value_parser, required = true)]
     // index_filename: PathBuf,
@@ -36,11 +36,11 @@ pub struct Args {
 
     /// chunk directory
     #[clap(long)]
-    chunk_dir: PathBuf,
+    pub chunk_dir: PathBuf,
 
     /// 批量处理大小 default: 8MB
     #[clap(long, default_value_t = BATCH_SIZE)]
-    batch_size: usize,
+    pub batch_size: usize,
 }
 
 fn read_chunk_header<R: Read>(reader: &mut R) -> io::Result<(usize, usize)> {

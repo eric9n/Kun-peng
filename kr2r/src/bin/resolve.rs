@@ -45,11 +45,11 @@ pub fn read_id_to_seq_map<P: AsRef<Path>>(filename: P) -> Result<DashMap<u32, (S
 pub struct Args {
     /// database hash chunk directory and other files
     #[clap(long)]
-    hash_dir: PathBuf,
+    pub hash_dir: PathBuf,
 
     // chunk directory
     #[clap(long, value_parser, required = true)]
-    chunk_dir: PathBuf,
+    pub chunk_dir: PathBuf,
 
     // /// The file path for the Kraken 2 index.
     // #[clap(short = 'H', long = "index-filename", value_parser, required = true)]
@@ -65,7 +65,7 @@ pub struct Args {
         value_parser,
         default_value_t = 0.0
     )]
-    confidence_threshold: f64,
+    pub confidence_threshold: f64,
 
     /// The minimum number of hit groups needed for a call.
     #[clap(
@@ -74,15 +74,15 @@ pub struct Args {
         value_parser,
         default_value_t = 2
     )]
-    minimum_hit_groups: usize,
+    pub minimum_hit_groups: usize,
 
     /// 批量处理大小 default: 8MB
     #[clap(long, default_value_t = BATCH_SIZE)]
-    batch_size: usize,
+    pub batch_size: usize,
 
     /// File path for outputting normal Kraken output.
     #[clap(long = "output-dir", value_parser)]
-    kraken_output_dir: Option<PathBuf>,
+    pub kraken_output_dir: Option<PathBuf>,
 }
 
 fn process_batch<P: AsRef<Path>, B: Compact>(
