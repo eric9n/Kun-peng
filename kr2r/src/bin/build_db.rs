@@ -18,11 +18,17 @@ struct Args {
 
     #[clap(flatten)]
     taxo: Taxo,
+
+    // /// Name of Kraken 2 database
+    // #[arg(short, long = "db")]
+    // database: PathBuf,
+    #[arg(short = 'c', long, required = true)]
+    pub required_capacity: u64,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let meros = args.build.as_meros();
+    let meros = args.build.klmt.as_meros();
 
     let id_to_taxon_map = read_id_to_taxon_map(&args.taxo.id_to_taxon_map_filename)?;
 
@@ -38,8 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .expect("more bits required for storing taxid");
 
-    // 1211893248
-    let capacity = args.build.required_capacity as usize;
+    let capacity = args.required_capacity as usize;
 
     let hash_config = HashConfig::<u32>::new(capacity, value_bits, 0, 0, 0);
     let mut chtm = CHTableMut::new(args.build.hashtable_filename, hash_config, 0, capacity)?;

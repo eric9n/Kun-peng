@@ -1,12 +1,9 @@
 use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
+use kr2r::args::KLMTArgs;
 use kr2r::mmscanner::MinimizerScanner;
-use kr2r::utils::{expand_spaced_seed_mask, find_library_fna_files, format_bytes};
+use kr2r::utils::{find_library_fna_files, format_bytes};
 use kr2r::KBuildHasher;
-use kr2r::{
-    construct_seed_template, Meros, BITS_PER_CHAR, DEFAULT_KMER_LENGTH, DEFAULT_MINIMIZER_LENGTH,
-    DEFAULT_MINIMIZER_SPACES,
-};
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
 use serde_json;
@@ -21,51 +18,32 @@ use std::path::{Path, PathBuf};
     about = "estimate capacity",
     long_about = "Estimates the size of the Kraken 2 hash table."
 )]
-struct Args {
+pub struct Args {
     /// build database directory or file
     #[arg(long, default_value = "lib")]
-    source: PathBuf,
+    pub source: PathBuf,
+
+    /// 包含原始配置
+    #[clap(flatten)]
+    pub klmt: KLMTArgs,
 
     /// estimate capacity from cache if exists
     #[arg(long, default_value_t = true)]
-    cache: bool,
-
-    /// Set length of k-mers, k must be positive integer, k=35, k cannot be less than l
-    #[clap(short, long, value_parser = clap::value_parser!(u64).range(1..), default_value_t = DEFAULT_KMER_LENGTH)]
-    k_mer: u64,
-
-    /// Set length of minimizers, 1 <= l <= 31
-    #[clap(short, long, value_parser = clap::value_parser!(u8).range(1..=31), default_value_t = DEFAULT_MINIMIZER_LENGTH)]
-    l_mer: u8,
+    pub cache: bool,
 
     /// Set maximum qualifying hash code
     #[clap(short, long, default_value = "4")]
-    n: usize,
-
-    // /// Spaced seed mask
-    // #[clap(short = 'S', long, default_value= "0", value_parser = parse_binary)]
-    // spaced_seed_mask: u64,
-    /// Number of characters in minimizer that are ignored in comparisons
-    #[clap(long, default_value_t = DEFAULT_MINIMIZER_SPACES)]
-    minimizer_spaces: u8,
-
-    /// Minimizer ordering toggle mask
-    #[clap(short = 'T', long, value_parser = parse_binary)]
-    toggle_mask: Option<u64>,
+    pub n: usize,
 
     /// Proportion of the hash table to be populated
     /// (build task only; def: 0.7, must be
     ///    between 0 and 1).
     #[clap(long, long, default_value_t = 0.7)]
-    load_factor: f64,
+    pub load_factor: f64,
 
     /// Number of threads
     #[clap(short = 'p', long, default_value = "4")]
-    threads: usize,
-}
-
-fn parse_binary(src: &str) -> Result<u64, std::num::ParseIntError> {
-    u64::from_str_radix(src, 2)
+    pub threads: usize,
 }
 
 const RANGE_SECTIONS: u64 = 1024;
@@ -86,7 +64,6 @@ fn process_sequence(
     fna_file: &str,
     // hllp: &mut HyperLogLogPlus<u64, KBuildHasher>,
     args: Args,
-    spaced_seed_mask: u64,
 ) -> HyperLogLogPlus<u64, KBuildHasher> {
     // 构建预期的 JSON 文件路径
     let json_path = build_output_path(fna_file, "hllp.json");
@@ -102,8 +79,8 @@ fn process_sequence(
         return hllp;
     }
 
-    let k_mer = args.k_mer as usize;
-    let l_mer = args.l_mer as usize;
+    let meros = args.klmt.as_meros();
+
     let mut hllp: HyperLogLogPlus<u64, _> =
         HyperLogLogPlus::new(16, KBuildHasher::default()).unwrap();
 
@@ -114,8 +91,6 @@ fn process_sequence(
         args.threads as u32,
         args.threads - 2 as usize,
         |record_set| {
-            let meros = Meros::new(k_mer, l_mer, Some(spaced_seed_mask), args.toggle_mask, None);
-
             let mut minimizer_set = HashSet::new();
             for record in record_set.into_iter() {
                 let seq = record.seq();
@@ -145,24 +120,13 @@ fn process_sequence(
     hllp
 }
 
-fn main() {
-    let args = Args::parse();
-    if args.k_mer < args.l_mer as u64 {
+pub fn run(args: Args) -> usize {
+    let meros = args.klmt.as_meros();
+
+    if meros.k_mer < meros.l_mer {
         let err = Error::raw(ErrorKind::ValueValidation, "k cannot be less than l");
         err.exit();
     }
-
-    let seed = construct_seed_template(
-        args.l_mer.clone() as usize,
-        args.minimizer_spaces.clone() as usize,
-    );
-    let spaced_seed_mask = parse_binary(&seed).unwrap();
-    let spaced_seed_mask = expand_spaced_seed_mask(spaced_seed_mask, BITS_PER_CHAR as u64);
-
-    // if args.spaced_seed_mask != DEFAULT_SPACED_SEED_MASK {
-    //     args.spaced_seed_mask =
-    //         expand_spaced_seed_mask(args.spaced_seed_mask, BITS_PER_CHAR as u64);
-    // }
 
     let mut hllp: HyperLogLogPlus<u64, KBuildHasher> =
         HyperLogLogPlus::new(16, KBuildHasher::default()).unwrap();
@@ -175,21 +139,17 @@ fn main() {
     };
 
     for fna_file in fna_files {
-        println!("fna_file {:?}", fna_file);
         let args_clone = Args {
             source: source.clone(),
             ..args
         };
-        let local_hllp = process_sequence(&fna_file, args_clone, spaced_seed_mask);
+        let local_hllp = process_sequence(&fna_file, args_clone);
         if let Err(e) = hllp.merge(&local_hllp) {
             println!("hllp merge err {:?}", e);
         }
     }
 
-    // let final_count = counter.load(Ordering::SeqCst); // 读取计数器的最终值
-
     let hllp_count = (hllp.count() * RANGE_SECTIONS as f64 / args.n as f64).round() as u64;
-    // println!("Final count: {:?}", final_count);
     let required_capacity = (hllp_count + 8192) as f64 / args.load_factor;
     println!(
         "estimate count: {:?}, required capacity: {:?}, Estimated hash table requirement: {:}",
@@ -197,4 +157,11 @@ fn main() {
         required_capacity.ceil(),
         format_bytes(required_capacity * 4f64)
     );
+    required_capacity.ceil() as usize
+}
+
+#[allow(dead_code)]
+fn main() {
+    let args = Args::parse();
+    run(args);
 }

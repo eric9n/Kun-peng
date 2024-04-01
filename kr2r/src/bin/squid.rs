@@ -1,95 +1,65 @@
 use clap::{Parser, Subcommand};
 mod annotate;
+mod build_k2_db;
+mod estimate_capacity;
 mod hashshard;
 mod resolve;
+mod seqid2taxid;
 mod splitr;
 
+use kr2r::args::ClassifyArgs;
+use kr2r::args::{Build, Taxo};
 use kr2r::utils::find_and_sort_files;
 use std::io::Result;
 use std::path::PathBuf;
+use std::time::Instant;
+
+pub const U32MAXPLUS: u64 = u32::MAX as u64 + 2;
+pub const ONEGB: u64 = 1073741824;
+
+#[derive(Parser, Debug, Clone)]
+#[clap(author, version, about, long_about = None)]
+struct BuildArgs {
+    #[clap(flatten)]
+    pub build: Build,
+
+    #[clap(flatten)]
+    taxo: Taxo,
+
+    // /// Name of Kraken 2 database
+    // #[arg(short, long = "db")]
+    // database: PathBuf,
+    #[arg(short = 'c', long, required = true)]
+    pub required_capacity: u64,
+
+    /// chunk directory
+    #[clap(long)]
+    chunk_dir: PathBuf,
+
+    /// chunk size 1-4(GB)
+    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS), default_value_t = ONEGB)]
+    chunk_size: u64,
+
+    /// estimate capacity from cache if exists
+    #[arg(long, default_value_t = true)]
+    cache: bool,
+
+    /// Set maximum qualifying hash code
+    #[clap(long, default_value = "4")]
+    max_n: usize,
+
+    /// Proportion of the hash table to be populated
+    /// (build task only; def: 0.7, must be
+    ///    between 0 and 1).
+    #[clap(long, long, default_value_t = 0.7)]
+    load_factor: f64,
+}
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(subcommand)]
     cmd: Commands,
-}
-
-/// Command line arguments for the classify program.
-///
-/// This structure defines the command line arguments that are accepted by the classify program.
-/// It uses the `clap` crate for parsing command line arguments.
-/// combines the functionality of the 'splitr', 'annotate', and 'resolve' commands into a single workflow.
-/// This command streamlines the process of splitting fast(q/a) files, annotating sequences, and resolving the taxonomy tree,
-/// providing a comprehensive solution for sequence classification.
-#[derive(Parser, Debug, Clone)]
-#[clap(
-    version,
-    about = "Integrates 'splitr', 'annotate', and 'resolve' into a unified workflow for sequence classification., classify a set of sequences",
-    long_about = "classify a set of sequences"
-)]
-pub struct ClassifyArgs {
-    /// database hash chunk directory and other files
-    #[clap(long)]
-    hash_dir: PathBuf,
-
-    // /// The file path for the Kraken 2 options.
-    // #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
-    // options_filename: String,
-    /// Enable paired-end processing.
-    #[clap(short = 'P', long = "paired-end-processing", action)]
-    paired_end_processing: bool,
-
-    /// Process pairs with mates in the same file.
-    #[clap(short = 'S', long = "single-file-pairs", action)]
-    single_file_pairs: bool,
-
-    /// Minimum quality score for FASTQ data, default is 0.
-    #[clap(
-        short = 'Q',
-        long = "minimum-quality-score",
-        value_parser,
-        default_value_t = 0
-    )]
-    minimum_quality_score: i32,
-
-    /// The number of threads to use, default is 1.
-    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = 10)]
-    num_threads: i32,
-
-    /// chunk directory
-    #[clap(long)]
-    chunk_dir: PathBuf,
-
-    /// 批量处理大小 default: 8MB
-    #[clap(long, default_value_t = annotate::BATCH_SIZE)]
-    batch_size: usize,
-
-    /// Confidence score threshold, default is 0.0.
-    #[clap(
-        short = 'T',
-        long = "confidence-threshold",
-        value_parser,
-        default_value_t = 0.0
-    )]
-    confidence_threshold: f64,
-
-    /// The minimum number of hit groups needed for a call.
-    #[clap(
-        short = 'g',
-        long = "minimum-hit-groups",
-        value_parser,
-        default_value_t = 2
-    )]
-    minimum_hit_groups: usize,
-
-    /// File path for outputting normal Kraken output.
-    #[clap(long = "output-dir", value_parser)]
-    kraken_output_dir: Option<PathBuf>,
-
-    /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
-    // #[clap(short = 'F', long = "files")]
-    input_files: Vec<String>,
 }
 
 impl From<ClassifyArgs> for splitr::Args {
@@ -129,8 +99,35 @@ impl From<ClassifyArgs> for resolve::Args {
     }
 }
 
+impl From<BuildArgs> for estimate_capacity::Args {
+    fn from(item: BuildArgs) -> Self {
+        Self {
+            source: item.build.source,
+            klmt: item.build.klmt,
+            cache: item.cache,
+            n: item.max_n,
+            load_factor: item.load_factor,
+            threads: item.build.threads,
+        }
+    }
+}
+
+impl From<BuildArgs> for build_k2_db::Args {
+    fn from(item: BuildArgs) -> Self {
+        Self {
+            build: item.build,
+            taxo: item.taxo,
+            chunk_dir: item.chunk_dir,
+            chunk_size: item.chunk_size,
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 enum Commands {
+    Estimate(estimate_capacity::Args),
+    Seqid2taxid(seqid2taxid::Args),
+    Build(BuildArgs),
     Hashshard(hashshard::Args),
     Splitr(splitr::Args),
     Annotate(annotate::Args),
@@ -140,16 +137,23 @@ enum Commands {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    // let matches = Command::new("squid")
-    //     .version("2.1")
-    //     .author("Eric <eric9n@gmail.com>")
-    //     .about("classify a set of sequences like Kraken 2")
-    //     // .subcommand(splitr::Args::command().name("splitr"))
-    //     // .subcommand(annotate::Args::command().name("annotate"))
-    //     // .subcommand(resolve::Args::command().name("resolve"))
-    //     // .subcommand(hashshard::Args::command().name("hashshard"))
-    //     .get_matches();
+
     match args.cmd {
+        Commands::Estimate(cmd_args) => {
+            estimate_capacity::run(cmd_args);
+        }
+        Commands::Seqid2taxid(cmd_args) => {
+            seqid2taxid::run(cmd_args)?;
+        }
+        Commands::Build(cmd_args) => {
+            let ec_args = estimate_capacity::Args::from(cmd_args.clone());
+            let required_capacity = estimate_capacity::run(ec_args);
+
+            let build_args = build_k2_db::Args::from(cmd_args.clone());
+            if let Err(e) = build_k2_db::run(build_args, required_capacity) {
+                panic!("Application error: {}", e);
+            }
+        }
         Commands::Hashshard(cmd_args) => {
             hashshard::run(cmd_args)?;
         }
@@ -163,6 +167,8 @@ fn main() -> Result<()> {
             resolve::run(cmd_args)?;
         }
         Commands::Classify(cmd_args) => {
+            let start = Instant::now();
+
             let splitr_args = splitr::Args::from(cmd_args.clone());
             let chunk_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".k2")?;
             if !chunk_files.is_empty() {
@@ -173,32 +179,11 @@ fn main() -> Result<()> {
             annotate::run(annotate_args)?;
             let resolve_args = resolve::Args::from(cmd_args.clone());
             resolve::run(resolve_args)?;
+
+            let duration = start.elapsed();
+            println!("Classify took: {:?}", duration);
         }
     }
 
-    // let cmd1_args = splitr::Args::from_arg_matches(sub_matches).expect("parse splitr arg error");
     Ok(())
-    // match args() {
-    //     Some(("splitr", sub_matches)) => {
-    //         let cmd1_args =
-    //             splitr::Args::from_arg_matches(sub_matches).expect("parse splitr arg error");
-    //         splitr::run(cmd1_args)
-    //     }
-    //     Some(("annotate", sub_matches)) => {
-    //         let cmd1_args =
-    //             annotate::Args::from_arg_matches(sub_matches).expect("parse annotate arg error");
-    //         annotate::run(cmd1_args)
-    //     }
-    //     Some(("resolve", sub_matches)) => {
-    //         let cmd1_args =
-    //             resolve::Args::from_arg_matches(sub_matches).expect("parse resolve arg error");
-    //         resolve::run(cmd1_args)
-    //     }
-    //     Some(("hashshard", sub_matches)) => {
-    //         let cmd1_args =
-    //             hashshard::Args::from_arg_matches(sub_matches).expect("parse resolve arg error");
-    //         hashshard::run(cmd1_args)
-    //     }
-    //     _ => Ok(()),
-    // }
 }

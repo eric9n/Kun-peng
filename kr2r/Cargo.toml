@@ -6,10 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [[bin]]
-name = "estimate_capacity"
-path = "src/bin/estimate_capacity.rs"
-
-[[bin]]
 name = "build_db"
 path = "src/bin/build_db.rs"
 
@@ -21,13 +17,6 @@ path = "src/bin/classify.rs"
 name = "inspect"
 path = "src/bin/inspect.rs"
 
-[[bin]]
-name = "seqid2taxid"
-path = "src/bin/seqid2taxid.rs"
-
-[[bin]]
-name = "build_k2_db"
-path = "src/bin/build_k2_db.rs"
 
 [[bin]]
 name = "squid"

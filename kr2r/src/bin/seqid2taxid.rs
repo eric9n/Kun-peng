@@ -16,8 +16,7 @@ pub struct Args {
     map_file: Option<PathBuf>,
 }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
+pub fn run(args: Args) -> Result<()> {
     let prelim_file = summary_prelim_map_files(&args.source)?;
 
     let map_file = if let Some(seqid_file) = args.map_file {
@@ -29,4 +28,12 @@ fn main() -> Result<()> {
 
     println!("finished {:?}", &map_file);
     Ok(())
+}
+
+#[allow(dead_code)]
+fn main() {
+    let args = Args::parse();
+    if let Err(e) = run(args) {
+        eprintln!("Application error: {}", e);
+    }
 }
