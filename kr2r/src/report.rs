@@ -23,7 +23,7 @@ pub fn get_clade_counts(taxonomy: &Taxonomy, call_counts: &HashMap<u64, u64>) ->
 pub fn get_clade_counters(taxonomy: &Taxonomy, call_counters: &TaxonCounters) -> TaxonCounters {
     let mut clade_counters = TaxonCounters::new();
 
-    for (&taxid, counter) in call_counters {
+    for (&taxid, counter) in call_counters.iter() {
         let mut current_taxid = taxid;
         while current_taxid != 0 {
             let _ = clade_counters
@@ -183,7 +183,7 @@ pub fn print_kraken_style_report_line(
         )?;
     }
 
-    write!(file, "\t{}\t{}", rank_str, taxid)?;
+    write!(file, "\t{}\t{}\t", rank_str, taxid)?;
 
     for _ in 0..depth {
         write!(file, "  ")?;
@@ -240,13 +240,17 @@ pub fn kraken_report_dfs(
         .next()
         .unwrap_or("");
 
-    let mut clade_counter = clade_counters.get_mut(&taxid).unwrap();
+    // let mut clade_counter = clade_counters.get_mut(&taxid).unwrap();
+    let mut clade_counter = clade_counters
+        .entry(taxid)
+        .or_insert_with(ReadCounter::default);
+
     print_kraken_style_report_line(
         file,
         report_kmer_data,
         total_seqs,
         &mut clade_counter,
-        call_counters.get(&taxid).unwrap(),
+        call_counters.get(&taxid).unwrap_or(&ReadCounter::default()),
         &rank_str,
         node.external_id as u32,
         name,
@@ -283,8 +287,8 @@ pub fn kraken_report_dfs(
     Ok(())
 }
 
-pub fn report_kraken_style(
-    filename: &str,
+pub fn report_kraken_style<P: AsRef<Path>>(
+    filename: P,
     report_zeros: bool,
     report_kmer_data: bool,
     taxonomy: &Taxonomy,

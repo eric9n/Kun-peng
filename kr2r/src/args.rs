@@ -63,7 +63,7 @@ const BATCH_SIZE: usize = 8 * 1024 * 1024;
 #[derive(Parser, Debug, Clone)]
 #[clap(
     version,
-    about = "Integrates 'splitr', 'annotate', and 'resolve' into a unified workflow for sequence classification., classify a set of sequences",
+    about = "Integrates 'splitr', 'annotate', and 'resolve' into a unified workflow for sequence classification. classify a set of sequences",
     long_about = "classify a set of sequences"
 )]
 pub struct ClassifyArgs {

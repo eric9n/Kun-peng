@@ -18,7 +18,7 @@ pub const U32MAXPLUS: u64 = u32::MAX as u64 + 2;
 pub const ONEGB: u64 = 1073741824;
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author, version, about, long_about = None)]
+#[clap(author, version, about="build database", long_about = None)]
 struct BuildArgs {
     #[clap(flatten)]
     pub build: Build,

@@ -66,7 +66,7 @@ pub fn sea_hash(key: u64) -> u64 {
 /// representing a `u64`. Using this hasher with input that is not 8 bytes,
 /// or not properly representing a `u64`, may lead to undefined behavior including
 /// but not limited to memory safety violations
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Debug)]
 pub struct KHasher {
     hash: u64,
 }
@@ -101,7 +101,7 @@ impl Hasher for KHasher {
     }
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Debug)]
 pub struct KBuildHasher;
 
 impl BuildHasher for KBuildHasher {

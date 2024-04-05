@@ -4,7 +4,7 @@ use crate::taxonomy::Taxonomy;
 use crate::Meros;
 use crate::TaxonCounts;
 // use rayon::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 pub const TAXID_MAX: u32 = u32::MAX - 1;
 pub const MATE_PAIR_BORDER_TAXON: u32 = TAXID_MAX;
@@ -73,24 +73,6 @@ pub fn trim_pair_info(id: &str) -> String {
         return id[0..sz - 2].to_string();
     }
     id.to_string()
-}
-
-pub fn count_values(vec: Vec<u32>, value_mask: usize) -> (HashMap<u32, u64>, usize) {
-    let mut counts = HashMap::new();
-
-    let mut unique_elements = HashSet::new();
-
-    for value in vec {
-        // 使用entry API处理计数
-        // entry返回的是一个Entry枚举，它代表了可能存在也可能不存在的值
-        // or_insert方法在键不存在时插入默认值（在这里是0）
-        // 然后无论哪种情况，我们都对计数器加1
-        let key = value.right(value_mask);
-        *counts.entry(key).or_insert(0) += 1;
-        unique_elements.insert(value);
-    }
-
-    (counts, unique_elements.len())
 }
 
 // &HashMap<u32, u64>,

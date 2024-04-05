@@ -1,9 +1,10 @@
+use crate::KBuildHasher;
+use dashmap::DashMap;
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::hash::BuildHasher;
-
-use crate::KBuildHasher;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 type TaxId = u32;
 pub const TAXID_MAX: TaxId = TaxId::MAX;
@@ -64,12 +65,13 @@ impl Unionable for HashSet<u64> {
     }
 }
 
+#[derive(Debug)]
 pub struct ReadCounts<T>
 where
     T: Unionable,
 {
-    n_reads: u64,
-    n_kmers: u64,
+    n_reads: AtomicU64,
+    n_kmers: AtomicU64,
     kmers: T,
 }
 
@@ -77,32 +79,24 @@ impl<T> ReadCounts<T>
 where
     T: Unionable,
 {
-    // pub fn new(kmers: T) -> Self {
-    //     ReadCounts {
-    //         n_reads: 0,
-    //         n_kmers: 0,
-    //         kmers,
-    //     }
-    // }
-
     pub fn with_capacity(kmers: T, n_reads: u64, n_kmers: u64) -> Self {
         ReadCounts {
-            n_reads,
-            n_kmers,
+            n_reads: AtomicU64::new(n_reads),
+            n_kmers: AtomicU64::new(n_kmers),
             kmers, // kmers: T::with_capacity(n_kmers as usize),
         }
     }
 
     pub fn read_count(&self) -> u64 {
-        self.n_reads
+        self.n_reads.load(Ordering::SeqCst)
     }
 
     pub fn increment_read_count(&mut self) {
-        self.n_reads += 1;
+        self.n_reads.fetch_add(1, Ordering::SeqCst);
     }
 
     pub fn kmer_count(&self) -> u64 {
-        self.n_kmers
+        self.n_kmers.load(Ordering::SeqCst)
     }
 
     pub fn distinct_kmer_count(&mut self) -> usize {
@@ -110,13 +104,15 @@ where
     }
 
     pub fn add_kmer(&mut self, kmer: u64) {
-        self.n_kmers += 1;
+        self.n_kmers.fetch_add(1, Ordering::SeqCst);
         self.kmers.add_kmer(kmer);
     }
 
     pub fn merge(&mut self, other: &ReadCounts<T>) -> Result<(), UnionError> {
-        self.n_reads += other.n_reads;
-        self.n_kmers += other.n_kmers;
+        self.n_reads.fetch_add(other.read_count(), Ordering::SeqCst);
+        self.n_kmers.fetch_add(other.kmer_count(), Ordering::SeqCst);
+        // self.n_reads += other.n_reads;
+        // self.n_kmers += other.n_kmers;
         self.kmers.union(&other.kmers).map_err(|_| UnionError)
     }
 }
@@ -155,3 +151,4 @@ impl ReadCounter {
 }
 
 pub type TaxonCounters = HashMap<u64, ReadCounter>;
+pub type TaxonCountersDash = DashMap<u64, ReadCounter>;
