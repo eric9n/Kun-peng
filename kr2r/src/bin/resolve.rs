@@ -100,6 +100,14 @@ pub struct Args {
     )]
     pub confidence_threshold: f64,
 
+    /// In comb. w/ -R, provide minimizer information in report
+    #[clap(short = 'K', long, value_parser, default_value_t = false)]
+    pub report_kmer_data: bool,
+
+    /// In comb. w/ -R, report taxa w/ 0 count
+    #[clap(short = 'z', long, value_parser, default_value_t = false)]
+    pub report_zero_counts: bool,
+
     /// The minimum number of hit groups needed for a call.
     #[clap(
         short = 'g',
@@ -243,8 +251,8 @@ pub fn run(args: Args) -> Result<()> {
         let filename = output.join("output.krepot2");
         report_kraken_style(
             filename,
-            false,
-            false,
+            args.report_zero_counts,
+            args.report_kmer_data,
             &taxo,
             &total_taxon_counts,
             total_seqs as u64,

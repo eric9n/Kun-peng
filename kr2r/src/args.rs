@@ -125,6 +125,14 @@ pub struct ClassifyArgs {
     #[clap(long = "output-dir", value_parser)]
     pub kraken_output_dir: Option<PathBuf>,
 
+    /// In comb. w/ -R, provide minimizer information in report
+    #[clap(short = 'K', long, value_parser, default_value_t = false)]
+    pub report_kmer_data: bool,
+
+    /// In comb. w/ -R, report taxa w/ 0 count
+    #[clap(short = 'z', long, value_parser, default_value_t = false)]
+    pub report_zero_counts: bool,
+
     /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
     // #[clap(short = 'F', long = "files")]
     pub input_files: Vec<String>,

@@ -95,6 +95,8 @@ impl From<ClassifyArgs> for resolve::Args {
             confidence_threshold: item.confidence_threshold,
             minimum_hit_groups: item.minimum_hit_groups,
             kraken_output_dir: item.kraken_output_dir,
+            report_kmer_data: item.report_kmer_data,
+            report_zero_counts: item.report_zero_counts,
         }
     }
 }
