@@ -69,16 +69,65 @@ ncbi gen --site all -g archaea fna
 ```
 
 
-## 2. Seqid2taxid Tool
+## 2 Squid Tool
+
+Squid is a versatile command-line tool designed for the efficient processing and classification of biological sequences. With its suite of functionalities, Squid facilitates various tasks related to sequence analysis, taxonomy resolution, and database management, making it an essential utility for bioinformatics workflows.
+
+### Features
+Squid offers a wide range of commands, each tailored for specific aspects of sequence data processing:
+
+* estimate: Estimate the capacity requirements for database construction or analysis, aiding in resource planning.
+* seqid2taxid: Generate a mapping file from sequence identifiers to taxonomic IDs, facilitating the association of sequences with their respective taxonomic lineage.
+* build: Construct a Squid database from a collection of sequences, optimizing it for subsequent analysis tasks.
+* hashshard: Divide a hash file into smaller, more manageable shards, improving the efficiency of data processing.
+* splitr: Split FASTQ or FASTA files into ranges based on sequence identifiers or other criteria, aiding in the parallel processing of large datasets.
+* annotate: Annotate a set of sequences with taxonomic or other relevant information, enriching the dataset for further analysis.
+* resolve: Resolve the taxonomic tree for a set of sequences, identifying their positions within the taxonomic hierarchy.
+* classify: A comprehensive workflow that integrates splitr, annotate, and resolve into a unified process for the classification of sequence data. This command streamlines the task of * assigning taxonomic classifications to sequences.
+
+### Getting Started
+To get started with Squid, you can invoke the tool with the -h or --help option to display detailed help messages for each command:
+
+
+```bash
+./squid -h
+Usage: squid <COMMAND>
+
+Commands:
+  estimate     estimate capacity
+  seqid2taxid  seqid to taxid map file
+  build        build database
+  hashshard    split hash file
+  splitr       Split fast(q/a) file into ranges
+  annotate     annotate a set of sequences
+  resolve      resolve taxonomy tree
+  classify     Integrates 'splitr', 'annotate', and 'resolve' into a unified workflow for sequence classification. classify a set of sequences
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+```
+
+This will provide you with an overview of all available commands and options. For specific information about a subcommand, use:
+
+
+```bash
+./squid <COMMAND> -h
+```
+Replace <COMMAND> with the name of the subcommand for which you need detailed help, such as estimate, build, or classify.
+
+
+## 2.1 Seqid2taxid Tool
 
 The seqid2taxid tool is a utility within the kr2r package designed to facilitate the mapping of sequence identifiers (seqid) to taxonomic identifiers (taxid). This tool is essential for researchers and bioinformaticians working with genomic data, enabling them to easily relate sequence data to taxonomic information.
 
 ### Usage
 
 ```bash
-seqid2taxid -h
+squid seqid2taxid -h
 
-Usage: seqid2taxid [OPTIONS] --source <SOURCE>
+Usage: squid seqid2taxid [OPTIONS] --source <SOURCE>
 
 Options:
       --source <SOURCE>      the database directory
@@ -91,7 +140,7 @@ Options:
 To use the seqid2taxid tool, execute it with the required and optional arguments as follows:
 
 ```bash
-seqid2taxid [OPTIONS] --source <SOURCE>
+squid seqid2taxid [OPTIONS] --source <SOURCE>
 ```
 
 ### Required Options
@@ -106,16 +155,16 @@ seqid2taxid [OPTIONS] --source <SOURCE>
 To run the seqid2taxid tool with a specific source directory:
 
 ```bash
-seqid2taxid --source /path/to/database
+squid seqid2taxid --source /path/to/database
 ```
 
 To specify a custom map file path:
 
 ```bash
-seqid2taxid --source /path/to/database -f /path/to/custom/seqid2taxid.map
+squid seqid2taxid --source /path/to/database -f /path/to/custom/seqid2taxid.map
 ```
 
-## 3. Estimate Capacity Tool
+## 2.2 Estimate Capacity Tool
 
 The estimate_capacity tool is designed for estimating the capacity required for building a database from genomic data. It takes into consideration various parameters related to the genomic data processing, such as k-mer length, minimizer length, and hash table load factor, to provide an efficient estimate of the necessary resources.
 
@@ -124,7 +173,7 @@ The estimate_capacity tool is designed for estimating the capacity required for 
 To use the estimate_capacity tool, execute it from the command line with the desired options:
 
 ```bash
-estimate_capacity [OPTIONS]
+squid estimate_capacity [OPTIONS]
 ```
 
 Options
@@ -143,7 +192,7 @@ Options
 ### Example
 
 ```bash
-estimate_capacity -k 35 -l 31 --source /data/ncbi/path -p 10 --load-factor 0.7
+squid estimate_capacity -k 35 -l 31 --source /data/ncbi/path -p 10 --load-factor 0.7
 ```
 
 ### Output
@@ -153,7 +202,195 @@ estimate count: 1213069985, required capacity: 1732968825.0, Estimated hash tabl
 ```
 
 
-## 4. build_k2_db
+## 2.3 build
+
+```bash
+./squid build -h
+build database
+
+Usage: squid build [OPTIONS] --source <SOURCE> -H <HASHTABLE_FILENAME> -o <OPTIONS_FILENAME> -t <TAXONOMY_FILENAME> -m <ID_TO_TAXON_MAP_FILENAME> --ncbi-taxonomy-directory <NCBI_TAXONOMY_DIRECTORY> --required-capacity <REQUIRED_CAPACITY> --chunk-dir <CHUNK_DIR>
+
+Options:
+      --source <SOURCE>
+          build database directory or file
+  -H <HASHTABLE_FILENAME>
+          Kraken 2 hash table filename
+  -o <OPTIONS_FILENAME>
+          Kraken 2 options filename
+  -k, --k-mer <K_MER>
+          Set length of k-mers, k must be positive integer, k=35, k cannot be less than l [default: 35]
+  -l, --l-mer <L_MER>
+          Set length of minimizers, 1 <= l <= 31 [default: 31]
+      --minimizer-spaces <MINIMIZER_SPACES>
+          Number of characters in minimizer that are ignored in comparisons [default: 7]
+  -T, --toggle-mask <TOGGLE_MASK>
+          Minimizer ordering toggle mask [default: 16392584516609989165]
+      --min-clear-hash-value <MIN_CLEAR_HASH_VALUE>
+
+  -r, --requested-bits-for-taxid <REQUESTED_BITS_FOR_TAXID>
+          Bit storage requested for taxid 0 <= r < 31 [default: 0]
+  -p, --threads <THREADS>
+          Number of threads [default: 4]
+  -t <TAXONOMY_FILENAME>
+          Kraken 2 taxonomy filename
+  -m <ID_TO_TAXON_MAP_FILENAME>
+          Sequence ID to taxon map filename
+  -n, --ncbi-taxonomy-directory <NCBI_TAXONOMY_DIRECTORY>
+          NCBI taxonomy directory name
+  -c, --required-capacity <REQUIRED_CAPACITY>
+
+      --chunk-dir <CHUNK_DIR>
+          chunk directory
+      --chunk-size <CHUNK_SIZE>
+          chunk size 1-4(GB) [default: 1073741824]
+      --cache
+          estimate capacity from cache if exists
+      --max-n <MAX_N>
+          Set maximum qualifying hash code [default: 4]
+      --load-factor <LOAD_FACTOR>
+          Proportion of the hash table to be populated (build task only; def: 0.7, must be between 0 and 1) [default: 0.7]
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## 2.4 hashshard
+
+```bash
+./squid hashshard -h
+split hash file
+
+Usage: squid hashshard [OPTIONS] --db <DB>
+
+Options:
+      --db <DB>                The database path for the Kraken 2 index
+      --hash-dir <HASH_DIR>    database hash chunk directory and other files
+      --hash-size <HASH_SIZE>  [default: 1073741824]
+  -h, --help                   Print help (see more with '--help')
+  -V, --version                Print version
+```
+
+## 2.5 splitr
+
+```bash
+./squid splitr -h
+Split fast(q/a) file into ranges
+
+Usage: squid splitr [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR> [INPUT_FILES]...
+
+Arguments:
+  [INPUT_FILES]...  A list of input file paths (FASTA/FASTQ) to be processed by the classify program
+
+Options:
+      --hash-dir <HASH_DIR>
+          database hash chunk directory and other files
+  -P, --paired-end-processing
+          Enable paired-end processing
+  -S, --single-file-pairs
+          Process pairs with mates in the same file
+  -Q, --minimum-quality-score <MINIMUM_QUALITY_SCORE>
+          Minimum quality score for FASTQ data, default is 0 [default: 0]
+  -p, --num-threads <NUM_THREADS>
+          The number of threads to use, default is 1 [default: 10]
+      --chunk-dir <CHUNK_DIR>
+          chunk directory
+  -h, --help
+          Print help (see more with '--help')
+  -V, --version
+          Print version
+```
+
+## 2.6 annotate
+
+```bash
+annotate a set of sequences
+
+Usage: squid annotate [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR>
+
+Options:
+      --hash-dir <HASH_DIR>      database hash chunk directory and other files
+      --chunk-dir <CHUNK_DIR>    The file path for the Kraken 2 options. chunk directory
+      --batch-size <BATCH_SIZE>  批量处理大小 default: 8MB [default: 8388608]
+  -h, --help                     Print help (see more with '--help')
+  -V, --version                  Print version
+```
+
+
+## 2.7 resolve
+
+```bash
+resolve taxonomy tree
+
+Usage: squid resolve [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR>
+
+Options:
+      --hash-dir <HASH_DIR>
+          database hash chunk directory and other files
+      --chunk-dir <CHUNK_DIR>
+
+  -T, --confidence-threshold <CONFIDENCE_THRESHOLD>
+          Confidence score threshold, default is 0.0 [default: 0]
+  -K, --report-kmer-data
+          In comb. w/ -R, provide minimizer information in report
+  -z, --report-zero-counts
+          In comb. w/ -R, report taxa w/ 0 count
+  -g, --minimum-hit-groups <MINIMUM_HIT_GROUPS>
+          The minimum number of hit groups needed for a call [default: 2]
+      --batch-size <BATCH_SIZE>
+          批量处理大小 default: 8MB [default: 8388608]
+      --output-dir <KRAKEN_OUTPUT_DIR>
+          File path for outputting normal Kraken output
+  -h, --help
+          Print help (see more with '--help')
+  -V, --version
+          Print version
+```
+
+
+## 2.8 classify
+
+```bash
+./squid classify -h
+Integrates 'splitr', 'annotate', and 'resolve' into a unified workflow for sequence classification. classify a set of sequences
+
+Usage: squid classify [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR> [INPUT_FILES]...
+
+Arguments:
+  [INPUT_FILES]...  A list of input file paths (FASTA/FASTQ) to be processed by the classify program
+
+Options:
+      --hash-dir <HASH_DIR>
+          database hash chunk directory and other files
+  -P, --paired-end-processing
+          Enable paired-end processing
+  -S, --single-file-pairs
+          Process pairs with mates in the same file
+  -Q, --minimum-quality-score <MINIMUM_QUALITY_SCORE>
+          Minimum quality score for FASTQ data, default is 0 [default: 0]
+  -p, --num-threads <NUM_THREADS>
+          The number of threads to use, default is 1 [default: 10]
+      --chunk-dir <CHUNK_DIR>
+          chunk directory
+      --batch-size <BATCH_SIZE>
+          批量处理大小 default: 8MB [default: 8388608]
+  -T, --confidence-threshold <CONFIDENCE_THRESHOLD>
+          Confidence score threshold, default is 0.0 [default: 0]
+  -g, --minimum-hit-groups <MINIMUM_HIT_GROUPS>
+          The minimum number of hit groups needed for a call [default: 2]
+      --output-dir <KRAKEN_OUTPUT_DIR>
+          File path for outputting normal Kraken output
+  -K, --report-kmer-data
+          In comb. w/ -R, provide minimizer information in report
+  -z, --report-zero-counts
+          In comb. w/ -R, report taxa w/ 0 count
+  -h, --help
+          Print help (see more with '--help')
+  -V, --version
+          Print version
+```
+
+## 3. build_k2_db
 
 The build_k2_db command-line tool facilitates the construction of a Kraken 2 database. It requires specific filenames for the hash table, taxonomy, and the sequence ID to taxon map, among other parameters.
 
@@ -241,7 +478,7 @@ build_k2_db --source /path/to/source -H hash_table.k2 -t taxonomy.k2 -m id_to_ta
 ```
 
 
-## 5. classify
+## 4. classify
 
 The classify tool is a powerful sequence classification program designed for rapid and accurate classification of nucleotide sequences. It leverages the Kraken 2 indexing and taxonomy systems to efficiently assign taxonomic labels to sequences from FASTA/FASTQ files. This document provides a comprehensive guide on how to use the classify tool, including its options and arguments.
 
@@ -281,7 +518,7 @@ classify --index-filename path/to/index --taxonomy-filename path/to/taxonomy --o
 ```
 
 
-## 6. inspect
+## 5. inspect
 
 The inspect tool is designed for analyzing the content of hash table files used by Kraken 2. It provides insights into the index file, allowing users to verify and understand the structure and statistics of their Kraken 2 databases.
 

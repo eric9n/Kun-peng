@@ -248,7 +248,7 @@ pub fn run(args: Args) -> Result<()> {
     }
 
     if let Some(output) = &args.kraken_output_dir {
-        let filename = output.join("output.krepot2");
+        let filename = output.join("output.kreport2");
         report_kraken_style(
             filename,
             args.report_zero_counts,
