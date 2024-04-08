@@ -1,5 +1,5 @@
 use clap::Parser;
-use kr2r::compact_hash::{CHPage, Compact, HashConfig, K2Compact, Slot};
+use kr2r::compact_hash::{CHPage, Compact, HashConfig, K2Compact, Row, Slot};
 use kr2r::utils::find_and_sort_files;
 // use std::collections::HashMap;
 use rayon::prelude::*;
@@ -103,12 +103,15 @@ where
     R: Read + Send,
 {
     let slot_size = std::mem::size_of::<Slot<u64>>();
+    let row_size = std::mem::size_of::<Row>();
     let mut batch_buffer = vec![0u8; slot_size * batch_size];
     let mut last_file_index: Option<u64> = None;
     let mut writer: Option<BufWriter<File>> = None;
 
     let value_mask = chtm.get_value_mask();
     let value_bits = chtm.get_value_bits();
+    let idx_mask = chtm.get_idx_mask();
+    let idx_bits = chtm.get_idx_bits();
 
     while let Ok(bytes_read) = reader.read(&mut batch_buffer) {
         if bytes_read == 0 {
@@ -125,14 +128,19 @@ where
         let result: HashMap<u64, Vec<u8>> = slots
             .into_par_iter()
             .filter_map(|slot| {
-                let taxid = chtm.get_from_page(slot);
+                let indx = slot.idx & idx_mask;
+                let taxid = chtm.get_from_page(indx, slot.value);
 
                 if taxid > 0 {
+                    let kmer_id = slot.idx >> idx_bits;
                     let file_index = slot.value.right(value_mask) >> 32;
+                    let seq_id = slot.get_seq_id() as u32;
                     let left = slot.value.left(value_bits) as u32;
-                    let high = u32::combined(left, taxid, value_bits) as u64;
-                    let value = slot.to_b(high);
-                    let value_bytes = value.to_le_bytes(); // 将u64转换为[u8; 8]
+                    let high = u32::combined(left, taxid, value_bits);
+                    let row = Row::new(high, seq_id, kmer_id as u32);
+                    // let value = slot.to_b(high);
+                    // let value_bytes = value.to_le_bytes(); // 将u64转换为[u8; 8]
+                    let value_bytes = row.as_slice(row_size);
                     Some((file_index, value_bytes.to_vec()))
                 } else {
                     None
@@ -223,7 +231,7 @@ pub fn run(args: Args) -> Result<()> {
     // 计算持续时间
     let duration = start.elapsed();
     // 打印运行时间
-    println!("squid took: {:?}", duration);
+    println!("annotate took: {:?}", duration);
 
     Ok(())
 }

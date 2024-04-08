@@ -133,6 +133,9 @@ pub struct ClassifyArgs {
     #[clap(short = 'z', long, value_parser, default_value_t = false)]
     pub report_zero_counts: bool,
 
+    #[clap(long, value_parser, default_value_t = false)]
+    pub full_output: bool,
+
     /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
     // #[clap(short = 'F', long = "files")]
     pub input_files: Vec<String>,

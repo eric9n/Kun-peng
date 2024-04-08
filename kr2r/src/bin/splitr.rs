@@ -122,6 +122,8 @@ fn process_record<I>(
     hash_config: &HashConfig<u32>,
     seq_id: u64,
     chunk_size: usize,
+    idx_bits: usize,
+    seq_index: &AtomicUsize,
 ) -> (usize, Vec<(usize, Slot<u64>)>)
 where
     I: Iterator<Item = u64>,
@@ -131,8 +133,11 @@ where
 
     for hash_key in iter.into_iter() {
         let mut slot = hash_config.slot_u64(hash_key, seq_id);
+        let seq_sort = seq_index.fetch_add(1, Ordering::SeqCst);
         let partition_index = slot.idx / chunk_size;
-        slot.idx = slot.idx % chunk_size;
+
+        slot.idx = seq_sort << idx_bits | (slot.idx % chunk_size);
+
         k2_slot_list.push((partition_index, slot));
         kmer_count += 1;
     }
@@ -166,6 +171,7 @@ fn process_fastq_file(
     sample_writer: &mut BufWriter<fs::File>,
 ) {
     let chunk_size = hash_config.hash_size;
+    let idx_bits = ((chunk_size as f64).log2().ceil() as usize).max(1);
     let slot_size = std::mem::size_of::<Slot<u64>>();
     let score = args.minimum_quality_score;
 
@@ -191,21 +197,44 @@ fn process_fastq_file(
                 // 拼接seq_id
                 let index = line_index.fetch_add(1, Ordering::SeqCst);
                 let seq_id = (file_index << 32 | index) as u64;
+                let seq_index = AtomicUsize::new(0);
+
                 let seq1 = records.0.seq_x(score);
                 let scan1 = MinimizerScanner::new(&seq1, meros);
 
-                let (kmer_count, slot_list) = if let Some(record3) = records.1 {
+                let (kmer_count1, slot_list1) = process_record(
+                    scan1,
+                    &hash_config,
+                    seq_id,
+                    chunk_size,
+                    idx_bits,
+                    &seq_index,
+                );
+
+                k2_slot_list.extend(slot_list1);
+                let (kmer_count, seq_size) = if let Some(record3) = records.1 {
                     let seq2 = record3.seq_x(score);
                     let scan2 = MinimizerScanner::new(&seq2, meros);
-                    let minimizer_iter = scan1.chain(scan2);
-                    process_record(minimizer_iter, &hash_config, seq_id, chunk_size)
+                    let (kmer_count2, slot_list2) = process_record(
+                        scan2,
+                        &hash_config,
+                        seq_id,
+                        chunk_size,
+                        idx_bits,
+                        &seq_index,
+                    );
+                    k2_slot_list.extend(slot_list2);
+                    (
+                        format!("{}|{}", kmer_count1, kmer_count2),
+                        format!("{}|{}", seq1.len(), seq2.len()),
+                    )
                 } else {
-                    let minimizer_iter = scan1;
-                    process_record(minimizer_iter, &hash_config, seq_id, chunk_size)
+                    (kmer_count1.to_string(), format!("{}", seq1.len()))
                 };
 
-                k2_slot_list.extend(slot_list);
-                buffer.push_str(format!("{}\t{}\t{}\n", index, dna_id, kmer_count).as_str());
+                buffer.push_str(
+                    format!("{}\t{}\t{}\t{}\n", index, dna_id, seq_size, kmer_count).as_str(),
+                );
             }
             (buffer, k2_slot_list)
         },
@@ -227,6 +256,7 @@ fn process_fasta_file(
     sample_writer: &mut BufWriter<fs::File>,
 ) {
     let chunk_size = hash_config.hash_size;
+    let idx_bits = ((chunk_size as f64).log2().ceil() as usize).max(1);
     let slot_size = std::mem::size_of::<Slot<u64>>();
     let score = args.minimum_quality_score;
 
@@ -251,14 +281,25 @@ fn process_fasta_file(
                 // 拼接seq_id
                 let index = line_index.fetch_add(1, Ordering::SeqCst);
                 let seq_id = (file_index << 32 | index) as u64;
+                let seq_index = AtomicUsize::new(0);
+
                 let seq1 = records.seq_x(score);
                 let scan1 = MinimizerScanner::new(&seq1, meros);
 
-                let (kmer_count, slot_list) =
-                    process_record(scan1, &hash_config, seq_id, chunk_size);
+                let (kmer_count1, slot_list) = process_record(
+                    scan1,
+                    &hash_config,
+                    seq_id,
+                    chunk_size,
+                    idx_bits,
+                    &seq_index,
+                );
 
                 k2_slot_list.extend(slot_list);
-                buffer.push_str(format!("{}\t{}\t{}\n", index, dna_id, kmer_count).as_str());
+                let (kmer_count, seq_size) = (kmer_count1.to_string(), format!("{}", seq1.len()));
+                buffer.push_str(
+                    format!("{}\t{}\t{}\t{}\n", index, dna_id, seq_size, kmer_count).as_str(),
+                );
             }
             (buffer, k2_slot_list)
         },

@@ -7,9 +7,7 @@ use std::marker::PhantomData;
 use std::path::Path;
 
 /// 1101010101 => left: 11010, right: 10101;
-pub trait Compact:
-    Default + PartialEq + Clone + Copy + PartialEq + Eq + Sized + Send + Sync + Debug
-{
+pub trait Compact: Default + PartialEq + Clone + Copy + Eq + Sized + Send + Sync + Debug {
     fn compacted(hash_key: u64, value_bits: usize) -> Self;
     fn hash_value(hash_key: u64, value_bits: usize, value: Self) -> Self;
 
@@ -73,6 +71,43 @@ impl Compact for u64 {
     }
     fn from_u32(value: u32) -> Self {
         value as u64
+    }
+}
+
+#[repr(C)]
+#[derive(PartialEq, Clone, Copy, Eq, Debug)]
+pub struct Row {
+    pub value: u32,
+    pub seq_id: u32,
+    pub kmer_id: u32,
+}
+
+impl Row {
+    pub fn new(value: u32, seq_id: u32, kmer_id: u32) -> Self {
+        Self {
+            value,
+            seq_id,
+            kmer_id,
+        }
+    }
+    #[inline]
+    pub fn as_slice(&self, row_size: usize) -> &[u8] {
+        let slot_ptr = self as *const Self as *const u8;
+        unsafe { std::slice::from_raw_parts(slot_ptr, row_size) }
+    }
+}
+
+// 实现 PartialOrd，只比较 index 字段
+impl PartialOrd for Row {
+    fn partial_cmp(&self, other: &Self) -> Option<CmpOrdering> {
+        self.kmer_id.partial_cmp(&other.kmer_id)
+    }
+}
+
+// 实现 Ord，只比较 index 字段
+impl Ord for Row {
+    fn cmp(&self, other: &Self) -> CmpOrdering {
+        self.kmer_id.cmp(&other.kmer_id)
     }
 }
 
@@ -347,9 +382,11 @@ pub trait K2Compact<B>: std::marker::Sync + Send
 where
     B: Compact,
 {
+    fn get_idx_mask(&self) -> usize;
+    fn get_idx_bits(&self) -> usize;
     fn get_value_mask(&self) -> usize;
     fn get_value_bits(&self) -> usize;
-    fn get_from_page(&self, slot: &Slot<u64>) -> B;
+    fn get_from_page(&self, idx: usize, value: u64) -> B;
 }
 
 #[allow(unused)]
@@ -467,6 +504,15 @@ impl<'a, B> K2Compact<B> for CHPage<'a, B>
 where
     B: Compact,
 {
+    fn get_idx_mask(&self) -> usize {
+        let idx_bits = ((self.config.hash_size as f64).log2().ceil() as usize).max(1);
+        (1 << idx_bits) - 1
+    }
+
+    fn get_idx_bits(&self) -> usize {
+        ((self.config.hash_size as f64).log2().ceil() as usize).max(1)
+    }
+
     fn get_value_mask(&self) -> usize {
         self.config.value_mask
     }
@@ -475,10 +521,10 @@ where
         self.config.value_bits
     }
 
-    fn get_from_page(&self, slot: &Slot<u64>) -> B {
-        let compacted_key = B::from_u32(slot.value.left(self.config.value_bits) as u32);
+    fn get_from_page(&self, indx: usize, value: u64) -> B {
+        let compacted_key = B::from_u32(value.left(self.config.value_bits) as u32);
         let value_mask = self.config.value_mask;
-        let mut idx = slot.idx;
+        let mut idx = indx;
         let first_idx = idx;
 
         loop {
@@ -618,6 +664,15 @@ impl<'a, B> K2Compact<B> for CHTable<'a, B>
 where
     B: Compact + 'a,
 {
+    fn get_idx_mask(&self) -> usize {
+        let idx_bits = ((self.config.hash_size as f64).log2().ceil() as usize).max(1);
+        (1 << idx_bits) - 1
+    }
+
+    fn get_idx_bits(&self) -> usize {
+        ((self.config.hash_size as f64).log2().ceil() as usize).max(1)
+    }
+
     fn get_value_mask(&self) -> usize {
         self.config.value_mask
     }
@@ -626,10 +681,10 @@ where
         self.config.value_bits
     }
 
-    fn get_from_page(&self, slot: &Slot<u64>) -> B {
-        let compacted_key = B::from_u32(slot.value.left(self.config.value_bits) as u32);
+    fn get_from_page(&self, indx: usize, value: u64) -> B {
+        let compacted_key = B::from_u32(value.left(self.config.value_bits) as u32);
         let value_mask = self.config.value_mask;
-        let mut idx = slot.idx;
+        let mut idx = indx;
         let first_idx = idx;
 
         loop {
