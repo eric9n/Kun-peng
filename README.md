@@ -328,7 +328,9 @@ Options:
       --hash-dir <HASH_DIR>
           database hash chunk directory and other files
       --chunk-dir <CHUNK_DIR>
-
+          chunk directory
+      --full-output
+          output file contains all unclassified seq
   -T, --confidence-threshold <CONFIDENCE_THRESHOLD>
           Confidence score threshold, default is 0.0 [default: 0]
   -K, --report-kmer-data
@@ -384,6 +386,8 @@ Options:
           In comb. w/ -R, provide minimizer information in report
   -z, --report-zero-counts
           In comb. w/ -R, report taxa w/ 0 count
+      --full-output
+          output file contains all unclassified sequence
   -h, --help
           Print help (see more with '--help')
   -V, --version

@@ -133,6 +133,7 @@ pub struct ClassifyArgs {
     #[clap(short = 'z', long, value_parser, default_value_t = false)]
     pub report_zero_counts: bool,
 
+    /// output file contains all unclassified sequence
     #[clap(long, value_parser, default_value_t = false)]
     pub full_output: bool,
 

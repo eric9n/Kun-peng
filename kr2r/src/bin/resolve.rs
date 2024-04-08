@@ -153,10 +153,11 @@ pub struct Args {
     #[clap(long)]
     pub hash_dir: PathBuf,
 
-    // chunk directory
+    /// chunk directory
     #[clap(long, value_parser, required = true)]
     pub chunk_dir: PathBuf,
 
+    /// output file contains all unclassified sequence
     #[clap(long, value_parser, default_value_t = false)]
     pub full_output: bool,
     /// Confidence score threshold, default is 0.0.
