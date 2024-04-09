@@ -13,6 +13,7 @@ use std::io::{self, BufRead, BufReader, BufWriter, Read, Result, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::time::Instant;
 
 const BATCH_SIZE: usize = 8 * 1024 * 1024;
 
@@ -34,7 +35,11 @@ pub fn read_id_to_seq_map<P: AsRef<Path>>(
                 let seq_size = parts[2].to_string();
                 let count_parts: Vec<&str> = parts[3].split('|').collect();
                 let kmer_count1 = count_parts[0].parse::<u32>().unwrap();
-                let kmer_count2 = count_parts[1].parse::<u32>().map_or(None, |i| Some(i));
+                let kmer_count2 = if count_parts.len() > 1 {
+                    count_parts[1].parse::<u32>().map_or(None, |i| Some(i))
+                } else {
+                    None
+                };
                 id_map.insert(id, (seq_id, seq_size, kmer_count1, kmer_count2));
             }
         }
@@ -50,19 +55,70 @@ fn generate_hit_string(
     value_mask: usize,
     offset: u32,
 ) -> String {
+    let mut result = Vec::new();
+    let mut last_pos = 0;
+
+    for row in rows {
+        if row.kmer_id < offset || row.kmer_id >= offset + count {
+            continue;
+        }
+        let adjusted_pos = row.kmer_id - offset;
+
+        let value = row.value;
+        let key = value.right(value_mask);
+        let ext_code = taxonomy.nodes[key as usize].external_id;
+
+        if last_pos == 0 && adjusted_pos > 0 {
+            result.push((0, adjusted_pos)); // 在开始处添加0
+        } else if adjusted_pos - last_pos > 1 {
+            result.push((0, adjusted_pos - last_pos - 1)); // 在两个特定位置之间添加0
+        }
+        if let Some(last) = result.last_mut() {
+            if last.0 == ext_code {
+                last.1 += 1;
+                last_pos = adjusted_pos;
+                continue;
+            }
+        }
+
+        // 添加当前key的计数
+        result.push((ext_code, 1));
+        last_pos = adjusted_pos;
+    }
+
+    // 填充尾随0
+    if last_pos < count - 1 {
+        result.push((0, count - last_pos - 1));
+    }
+
+    result
+        .iter()
+        .map(|i| format!("{}:{}", i.0, i.1))
+        .collect::<Vec<String>>()
+        .join(" ")
+}
+
+fn generate_hit_string1(
+    count: u32,
+    rows: &Vec<Row>,
+    taxonomy: &Taxonomy,
+    value_mask: usize,
+    offset: u32,
+) -> String {
     let mut result = String::new();
     let mut last_pos = 0;
     let mut has_key = false; // 标记是否处理了特定位置
 
     for row in rows {
-        let value = row.value;
-        let key = value.right(value_mask);
-        let ext_code = taxonomy.nodes[key as usize].external_id;
-
         // 忽略不在当前段的位置
         if row.kmer_id < offset || row.kmer_id >= offset + count {
             continue;
         }
+
+        let value = row.value;
+        let key = value.right(value_mask);
+        let ext_code = taxonomy.nodes[key as usize].external_id;
+
         // 调整位置为相对于当前段的起始
         let adjusted_pos = row.kmer_id - offset;
         // 填充前导0
@@ -302,6 +358,10 @@ pub fn run(args: Args) -> Result<()> {
     let mut total_seqs = 0;
     let mut total_unclassified = 0;
 
+    // 开始计时
+    let start = Instant::now();
+    println!("start...");
+
     for i in 0..partition {
         let sample_file = &sample_files[i];
         let sample_id_map = read_id_to_seq_map(&sample_id_files[i])?;
@@ -360,6 +420,11 @@ pub fn run(args: Args) -> Result<()> {
             total_unclassified as u64,
         )?;
     }
+
+    // 计算持续时间
+    let duration = start.elapsed();
+    // 打印运行时间
+    println!("resolve took: {:?}", duration);
 
     Ok(())
 }
