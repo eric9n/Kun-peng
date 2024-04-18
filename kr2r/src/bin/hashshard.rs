@@ -65,7 +65,7 @@ pub struct Args {
     /// Specifies the hash file capacity. Acceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').
     /// Note: The specified capacity affects the index size, with a factor of 4 applied. For example, specifying '1G' results in an index size of '4G'.
     /// Default: 1G (capacity 1G = file size 4G)
-    #[clap(long = "hash-capacity", value_parser = parse_size, default_value = "1G")]
+    #[clap(long = "hash-capacity", value_parser = parse_size, default_value = "1G", help = "Specifies the hash file capacity.\nAcceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').\nNote: The specified capacity affects the index size, with a factor of 4 applied.\nFor example, specifying '1G' results in an index size of '4G'.\nDefault: 1G (capacity 1G = file size 4G)")]
     hash_capacity: usize,
 }
 
