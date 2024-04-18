@@ -1,6 +1,21 @@
 # kraken2-rust
 
+## 0.Installation Instructions
+To install kraken2-rust, follow these steps:
 
+1. Download the appropriate version for your system:
+
+Navigate to the Releases page of the kraken2-rust GitHub repository.
+Select the release suitable for your operating system. For example, if you are using CentOS 7, download kraken-rust-${VERSION}-centos7.tar.gz, where ${VERSION} is the version number of the release you wish to install.
+
+2. Extract the downloaded archive:
+
+Open a terminal.
+Use the tar command to extract the files from the archive
+
+```bash
+tar -xvf kraken-rust-${VERSION}-centos7.tar.gz
+```
 
 ## 1. NCBI download tool
 
@@ -264,7 +279,7 @@ split hash file
 Usage: squid hashshard [OPTIONS] --db <DB>
 
 Options:
-      --db <DB>                The database path for the Kraken 2 index
+      --db <DB>                The database directory for the Kraken 2 index. contains index file(hash.k2d opts.k2d taxo.k2d)
       --hash-dir <HASH_DIR>    database hash chunk directory and other files
       --hash-capacity <HASH_CAPACITY> default: 1073741824(capacity 1G = file size 4G)
   -h, --help                   Print help (see more with '--help')

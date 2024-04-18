@@ -1,8 +1,8 @@
 use clap::Parser;
 use kr2r::compact_hash::HashConfig;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, create_dir_all, File, OpenOptions};
 use std::io::BufWriter;
-use std::io::{Result, Write};
+use std::io::{Result as IOResult, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -16,7 +16,7 @@ fn mmap_read_write<P: AsRef<Path>, Q: AsRef<Path>>(
     cap: usize,
     offset: u64,
     length: usize,
-) -> Result<()> {
+) -> IOResult<()> {
     // 打开目标文件，准备写入数据
     let mut dest_file = BufWriter::new(File::create(dest_path)?);
     dest_file
@@ -35,10 +35,26 @@ fn mmap_read_write<P: AsRef<Path>, Q: AsRef<Path>>(
     Ok(())
 }
 
+fn parse_size(s: &str) -> Result<usize, String> {
+    let len = s.len();
+    if len < 2 {
+        return Err("Size must be at least two characters".to_string());
+    }
+
+    let (num, suffix) = s.split_at(len - 1);
+    let number: f64 = num.parse().map_err(|_| "Invalid number".to_string())?;
+    match suffix {
+        "G" | "g" => Ok((number * 1_073_741_824.0) as usize), // 2^30
+        "M" | "m" => Ok((number * 1_048_576.0) as usize),     // 2^20
+        "K" | "k" => Ok((number * 1_024.0) as usize),         // 2^10
+        _ => Err("Invalid size suffix. Use 'G', 'M', or 'K'".to_string()),
+    }
+}
+
 #[derive(Parser, Debug, Clone)]
 #[clap(version, about = "split hash file", long_about = "split hash file")]
 pub struct Args {
-    /// The database path for the Kraken 2 index.
+    /// The database directory for the Kraken 2 index. contains index files(hash.k2d opts.k2d taxo.k2d)
     #[clap(long, value_parser, required = true)]
     db: PathBuf,
 
@@ -46,12 +62,14 @@ pub struct Args {
     #[clap(long)]
     hash_dir: Option<PathBuf>,
 
-    /// default: 1073741824(capacity 1G = file size 4G)
-    #[clap(long = "hash-capacity", default_value_t = 1073741824)]
+    /// Specifies the hash file capacity. Acceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').
+    /// Note: The specified capacity affects the index size, with a factor of 4 applied. For example, specifying '1G' results in an index size of '4G'.
+    /// Default: 1G (capacity 1G = file size 4G)
+    #[clap(long = "hash-capacity", value_parser = parse_size, default_value = "1G")]
     hash_capacity: usize,
 }
 
-pub fn run(args: Args) -> Result<()> {
+pub fn run(args: Args) -> IOResult<()> {
     let index_filename = &args.db.join("hash.k2d");
     let hash_config = HashConfig::<u32>::from(index_filename)?;
 
@@ -64,6 +82,9 @@ pub fn run(args: Args) -> Result<()> {
     let b_size = std::mem::size_of::<u32>();
 
     let hash_dir = args.hash_dir.unwrap_or(args.db.clone());
+
+    create_dir_all(&hash_dir).expect(&format!("create hash dir error {:?}", hash_dir));
+
     let config_file = hash_dir.join("hash_config.k2d");
     if config_file.exists() {
         panic!("hash config is exists!!!");
