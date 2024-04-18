@@ -98,55 +98,6 @@ fn generate_hit_string(
         .join(" ")
 }
 
-fn generate_hit_string1(
-    count: u32,
-    rows: &Vec<Row>,
-    taxonomy: &Taxonomy,
-    value_mask: usize,
-    offset: u32,
-) -> String {
-    let mut result = String::new();
-    let mut last_pos = 0;
-    let mut has_key = false; // 标记是否处理了特定位置
-
-    for row in rows {
-        // 忽略不在当前段的位置
-        if row.kmer_id < offset || row.kmer_id >= offset + count {
-            continue;
-        }
-
-        let value = row.value;
-        let key = value.right(value_mask);
-        let ext_code = taxonomy.nodes[key as usize].external_id;
-
-        // 调整位置为相对于当前段的起始
-        let adjusted_pos = row.kmer_id - offset;
-        // 填充前导0
-        if adjusted_pos > last_pos {
-            if has_key {
-                result.push_str(&format!("0:{} ", adjusted_pos - last_pos - 1));
-            } else {
-                result.push_str(&format!("0:{} ", adjusted_pos));
-            }
-        }
-        // 添加当前键的计数
-        result.push_str(&format!("{}:1 ", ext_code));
-        last_pos = adjusted_pos;
-        has_key = true;
-    }
-
-    // 填充尾随0
-    if last_pos < count - 1 {
-        if has_key {
-            result.push_str(&format!("0:{} ", count - last_pos - 1));
-        } else {
-            result.push_str(&format!("0:{} ", count));
-        }
-    }
-
-    result.trim_end().to_string()
-}
-
 pub fn add_hitlist_string(
     rows: &Vec<Row>,
     value_mask: usize,

@@ -46,16 +46,16 @@ pub struct Args {
     #[clap(long)]
     hash_dir: Option<PathBuf>,
 
-    // default: 1073741824(1G)
-    #[clap(long, default_value_t = 1073741824)]
-    hash_size: usize,
+    /// default: 1073741824(capacity 1G = file size 4G)
+    #[clap(long = "hash-capacity", default_value_t = 1073741824)]
+    hash_capacity: usize,
 }
 
 pub fn run(args: Args) -> Result<()> {
     let index_filename = &args.db.join("hash.k2d");
     let hash_config = HashConfig::<u32>::from(index_filename)?;
 
-    let partition = (hash_config.capacity + args.hash_size - 1) / args.hash_size;
+    let partition = (hash_config.capacity + args.hash_capacity - 1) / args.hash_capacity;
     println!("start...");
     // 开始计时
     let start = Instant::now();
@@ -73,15 +73,15 @@ pub fn run(args: Args) -> Result<()> {
         &index_filename,
         config_file,
         partition,
-        args.hash_size,
+        args.hash_capacity,
         0,
         32,
     )?;
 
     for i in 1..=partition {
         let chunk_file = hash_dir.join(format!("hash_{}.k2d", i));
-        let offset = (32 + args.hash_size * (i - 1) * b_size) as u64;
-        let mut length = args.hash_size * b_size;
+        let offset = (32 + args.hash_capacity * (i - 1) * b_size) as u64;
+        let mut length = args.hash_capacity * b_size;
         if (offset as usize + length) > file_len {
             length = file_len - offset as usize;
         }

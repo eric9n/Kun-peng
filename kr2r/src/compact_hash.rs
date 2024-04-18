@@ -266,7 +266,7 @@ where
     // 分区数
     pub partition: usize,
     // 分块大小
-    pub hash_size: usize,
+    pub hash_capacity: usize,
     _phantom: PhantomData<B>,
 }
 
@@ -303,7 +303,7 @@ where
         value_bits: usize,
         size: usize,
         partition: usize,
-        hash_size: usize,
+        hash_capacity: usize,
     ) -> Self {
         let value_mask = (1 << value_bits) - 1;
         Self {
@@ -312,7 +312,7 @@ where
             value_mask,
             size,
             partition,
-            hash_size,
+            hash_capacity,
             _phantom: PhantomData,
         }
     }
@@ -326,7 +326,7 @@ where
         let partition = LittleEndian::read_u64(
             &mmap[Self::PARTITION_OFFSET..Self::PARTITION_OFFSET + Self::U64_SIZE],
         ) as usize;
-        let hash_size = LittleEndian::read_u64(
+        let hash_capacity = LittleEndian::read_u64(
             &mmap[Self::HASH_SIZE_OFFSET..Self::HASH_SIZE_OFFSET + Self::U64_SIZE],
         ) as usize;
         let capacity = LittleEndian::read_u64(
@@ -340,7 +340,13 @@ where
                 ..Self::VALUE_BITS_OFFSET + offset + Self::U64_SIZE],
         ) as usize;
 
-        Ok(Self::new(capacity, value_bits, size, partition, hash_size))
+        Ok(Self::new(
+            capacity,
+            value_bits,
+            size,
+            partition,
+            hash_capacity,
+        ))
     }
 
     pub fn from<P: AsRef<Path>>(filename: P) -> Result<Self> {
@@ -505,12 +511,12 @@ where
     B: Compact,
 {
     fn get_idx_mask(&self) -> usize {
-        let idx_bits = ((self.config.hash_size as f64).log2().ceil() as usize).max(1);
+        let idx_bits = ((self.config.hash_capacity as f64).log2().ceil() as usize).max(1);
         (1 << idx_bits) - 1
     }
 
     fn get_idx_bits(&self) -> usize {
-        ((self.config.hash_size as f64).log2().ceil() as usize).max(1)
+        ((self.config.hash_capacity as f64).log2().ceil() as usize).max(1)
     }
 
     fn get_value_mask(&self) -> usize {
@@ -665,12 +671,12 @@ where
     B: Compact + 'a,
 {
     fn get_idx_mask(&self) -> usize {
-        let idx_bits = ((self.config.hash_size as f64).log2().ceil() as usize).max(1);
+        let idx_bits = ((self.config.hash_capacity as f64).log2().ceil() as usize).max(1);
         (1 << idx_bits) - 1
     }
 
     fn get_idx_bits(&self) -> usize {
-        ((self.config.hash_size as f64).log2().ceil() as usize).max(1)
+        ((self.config.hash_capacity as f64).log2().ceil() as usize).max(1)
     }
 
     fn get_value_mask(&self) -> usize {

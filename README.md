@@ -266,7 +266,7 @@ Usage: squid hashshard [OPTIONS] --db <DB>
 Options:
       --db <DB>                The database path for the Kraken 2 index
       --hash-dir <HASH_DIR>    database hash chunk directory and other files
-      --hash-size <HASH_SIZE>  [default: 1073741824]
+      --hash-capacity <HASH_CAPACITY> default: 1073741824(capacity 1G = file size 4G)
   -h, --help                   Print help (see more with '--help')
   -V, --version                Print version
 ```

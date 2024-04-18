@@ -170,7 +170,7 @@ fn process_fastq_file(
     writers: &mut Vec<BufWriter<fs::File>>,
     sample_writer: &mut BufWriter<fs::File>,
 ) {
-    let chunk_size = hash_config.hash_size;
+    let chunk_size = hash_config.hash_capacity;
     let idx_bits = ((chunk_size as f64).log2().ceil() as usize).max(1);
     let slot_size = std::mem::size_of::<Slot<u64>>();
     let score = args.minimum_quality_score;
@@ -255,7 +255,7 @@ fn process_fasta_file(
     writers: &mut Vec<BufWriter<fs::File>>,
     sample_writer: &mut BufWriter<fs::File>,
 ) {
-    let chunk_size = hash_config.hash_size;
+    let chunk_size = hash_config.hash_capacity;
     let idx_bits = ((chunk_size as f64).log2().ceil() as usize).max(1);
     let slot_size = std::mem::size_of::<Slot<u64>>();
     let score = args.minimum_quality_score;
@@ -314,7 +314,7 @@ fn process_fasta_file(
 fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>) -> Result<()> {
     let partition = hash_config.partition;
     let mut writers: Vec<BufWriter<fs::File>> =
-        init_chunk_writers(&args, partition, hash_config.hash_size);
+        init_chunk_writers(&args, partition, hash_config.hash_capacity);
 
     let file_path = args.chunk_dir.join("sample_file.map");
     let mut file_writer = create_sample_file(&file_path);
@@ -398,8 +398,8 @@ pub fn run(args: Args) -> Result<()> {
     }
     let hash_config = HashConfig::<u32>::from_hash_header(&args.hash_dir.join("hash_config.k2d"))?;
 
-    if hash_config.hash_size == 0 {
-        panic!("`hash_size` can't be zero!");
+    if hash_config.hash_capacity == 0 {
+        panic!("`hash_capacity` can't be zero!");
     }
     println!("start...");
     let file_num_limit = get_file_limit();
