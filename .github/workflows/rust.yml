@@ -77,7 +77,6 @@ jobs:
 
       - name: Upload Release Asset
         run: |
-          mv ./target/release/ncbi ./target/release/${{ env.ASSET_NAME }}
           gh release upload ${{ github.ref_name }} \
             ./target/release/${{ env.ASSET_NAME }} \
             --clobber
