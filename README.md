@@ -519,7 +519,7 @@ classify [OPTIONS] --index-filename <INDEX_FILENAME> --taxonomy-filename <TAXONO
 * -t, --taxonomy-filename <TAXONOMY_FILENAME>: Path to the Kraken 2 taxonomy file. This file contains taxonomic information used for classification.
 * -o, --options-filename <OPTIONS_FILENAME>: Path to the Kraken 2 options file. This file includes additional configuration options for Kraken 2.
 * -T, --confidence-threshold <CONFIDENCE_THRESHOLD>: Sets the confidence score threshold for classification. Sequences with a confidence score below this threshold will not be * classified. The default value is 0.0.
-* -p, --num-threads <NUM_THREADS>: Specifies the number of threads to use for processing. Increasing the number of threads can speed up the classification process. The default is 1.
+* -p, --num-threads <NUM_THREADS>: Specifies the number of threads to use for processing. Increasing the number of threads can speed up the classification process. The default is 10.
 * -g, --minimum-hit-groups <MINIMUM_HIT_GROUPS>: The minimum number of hit groups required for a classification call. The default is 2.
 * -P, --paired-end-processing: Enables processing of paired-end reads. This option should be used if your input files contain paired-end sequence data.
 * -S, --single-file-pairs: Indicates that pairs with mates are located in the same file. This option is relevant for paired-end processing.

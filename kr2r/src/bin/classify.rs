@@ -49,8 +49,8 @@ struct Args {
     // /// Enable quick mode for faster processing.
     // #[clap(short = 'q', long = "quick-mode", action)]
     // quick_mode: bool,
-    /// The number of threads to use, default is 1.
-    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = 1)]
+    /// The number of threads to use, default is 10.
+    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = 10)]
     num_threads: i32,
 
     /// The minimum number of hit groups needed for a call.

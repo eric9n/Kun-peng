@@ -52,7 +52,7 @@ pub struct Args {
     )]
     pub minimum_quality_score: i32,
 
-    /// The number of threads to use, default is 1.
+    /// The number of threads to use, default is 10.
     #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = 10)]
     pub num_threads: i32,
 
