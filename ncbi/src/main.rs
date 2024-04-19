@@ -82,7 +82,7 @@ enum Mode {
     Fna {
         /// library fna 文件存储目录，为了不和原始文件混淆
         #[clap(value_parser)]
-        out_dir: PathBuf,
+        out_dir: Option<PathBuf>,
     },
     /// 仅下载和解析 assembly 文件
     Assembly,
@@ -205,7 +205,11 @@ async fn async_run(args: Args) -> Result<()> {
                         }
                     },
                     Some(Mode::Fna { out_dir }) => {
-                        let fna_out_dir = out_dir.join("library").join(grp.clone());
+                        let fna_out_dir = out_dir
+                            .clone()
+                            .unwrap_or(db_path.clone())
+                            .join("library")
+                            .join(grp.clone());
                         utils::create_dir(&fna_out_dir)?;
                         let _ = write_to_fna(
                             &site.to_string(),

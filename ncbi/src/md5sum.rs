@@ -5,7 +5,12 @@ use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 
 async fn get_md5_for_file(target_file: &PathBuf, md5_file: &PathBuf) -> Result<String> {
-    let file = File::open(md5_file).await?;
+    let file = File::open(md5_file).await.map_err(|e| {
+        tokio::io::Error::new(
+            tokio::io::ErrorKind::NotFound,
+            format!("File operation failed: {:?}-{:?}", md5_file, e),
+        )
+    })?;
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
 

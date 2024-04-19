@@ -94,7 +94,7 @@ pub async fn run_task(
     asm_levels: &Vec<&str>,
     num_threads: usize,
 ) -> Result<()> {
-    log::info!("{} {} download assembly file start...", group, site);
+    log::info!("{} {} download file start...", group, site);
     let (tx, rx) = mpsc::channel(4096); // 通道大小可以根据需要调整
     let (tx1, rx1) = mpsc::channel(4096); // 通道大小可以根据需要调整
     let assembly_tasks = process_assembly_tasks(site, group, data_dir, asm_levels, tx);
