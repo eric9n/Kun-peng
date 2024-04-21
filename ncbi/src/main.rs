@@ -211,14 +211,14 @@ async fn async_run(args: Args) -> Result<()> {
                             .join("library")
                             .join(grp.clone());
                         utils::create_dir(&fna_out_dir)?;
-                        let _ = write_to_fna(
+                        write_to_fna(
                             &site.to_string(),
                             &trans_group,
                             &levels,
                             &data_dir,
                             &fna_out_dir,
                         )
-                        .await;
+                        .await?;
                     }
                     Some(Mode::Assembly) => match site {
                         Site::All => {

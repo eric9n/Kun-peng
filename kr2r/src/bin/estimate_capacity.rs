@@ -42,7 +42,7 @@ pub struct Args {
     pub load_factor: f64,
 
     /// Number of threads
-    #[clap(short = 'p', long, default_value = "4")]
+    #[clap(short = 'p', long, default_value_t = 10)]
     pub threads: usize,
 }
 
