@@ -1,6 +1,6 @@
 // 使用时需要引用模块路径
 use clap::Parser;
-use kr2r::args::{Build, Taxo};
+use kr2r::args::{Build, Taxo, ONEGB, U32MAXPLUS};
 use kr2r::compact_hash::{CHTableMut, HashConfig};
 use kr2r::db::{convert_fna_to_k2_format, generate_taxonomy, get_bits_for_taxid, process_k2file};
 use kr2r::utils::{
@@ -10,9 +10,6 @@ use kr2r::utils::{
 use kr2r::IndexOptions;
 use std::path::PathBuf;
 use std::time::Instant;
-
-pub const U32MAXPLUS: u64 = u32::MAX as u64 + 2;
-pub const ONEGB: u64 = 1073741824;
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about="build database", long_about = None)]
@@ -33,7 +30,7 @@ pub struct Args {
     #[clap(long)]
     pub chunk_dir: PathBuf,
 
-    /// chunk size 1-4(GB)
+    /// chunk size 1-4(GB) [1073741824-4294967295]
     #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS), default_value_t = ONEGB)]
     pub chunk_size: u64,
 }

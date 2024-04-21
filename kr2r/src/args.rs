@@ -7,6 +7,9 @@ use crate::{
 use clap::Parser;
 use std::path::PathBuf;
 
+pub const U32MAXPLUS: u64 = u32::MAX as u64;
+pub const ONEGB: u64 = 1073741824;
+
 #[derive(Parser, Debug, Clone)]
 #[clap(version, about = "build database")]
 pub struct Build {
@@ -181,5 +184,21 @@ impl KLMTArgs {
             Some(self.toggle_mask),
             self.min_clear_hash_value,
         )
+    }
+}
+
+pub fn parse_size(s: &str) -> Result<usize, String> {
+    let len = s.len();
+    if len < 2 {
+        return Err("Size must be at least two characters".to_string());
+    }
+
+    let (num, suffix) = s.split_at(len - 1);
+    let number: f64 = num.parse().map_err(|_| "Invalid number".to_string())?;
+    match suffix {
+        "G" | "g" => Ok((number * 1_073_741_824.0) as usize), // 2^30
+        "M" | "m" => Ok((number * 1_048_576.0) as usize),     // 2^20
+        "K" | "k" => Ok((number * 1_024.0) as usize),         // 2^10
+        _ => Err("Invalid size suffix. Use 'G', 'M', or 'K'".to_string()),
     }
 }

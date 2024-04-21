@@ -200,7 +200,7 @@ Options
 * --minimizer-spaces <MINIMIZER_SPACES>: Specifies the number of characters in the minimizer that are ignored in comparisons (default is 7).
 * -T, --toggle-mask <TOGGLE_MASK>: Defines the minimizer ordering toggle mask.
 * --load-factor <LOAD_FACTOR>: Sets the proportion of the hash table to be populated (only for build task; default is 0.7, must be between 0 and 1).
-* -p, --threads <THREADS>: Specifies the number of threads to use (default is 4).
+* -p, --threads <THREADS>: Specifies the number of threads to use (default is 10).
 * -h, --help: Prints help information (for more details, use '--help').
 * -V, --version: Prints the version of the tool.
 
