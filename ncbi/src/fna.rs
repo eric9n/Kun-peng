@@ -115,6 +115,10 @@ pub async fn write_to_fna(
 
     for (gz_path, taxid) in gz_files {
         let gz_file = data_dir.join(gz_path);
+        if !gz_file.exists() {
+            continue;
+        }
+
         let file = File::open(gz_file).await?;
         let decompressor = GzipDecoder::new(BufReader::new(file));
         let mut reader = BufReader::new(decompressor);
