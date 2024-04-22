@@ -13,16 +13,16 @@ pub const ONEGB: u64 = 1073741824;
 #[derive(Parser, Debug, Clone)]
 #[clap(version, about = "build database")]
 pub struct Build {
-    /// build database directory or file
-    #[arg(long, required = true)]
+    /// ncbi library fna database directory
+    #[arg(long = "db", required = true)]
     pub source: PathBuf,
 
-    /// Kraken 2 hash table filename
-    #[clap(short = 'H', required = true)]
+    /// Kraken 2 hash table filename, default = $database/hash.k2d
+    #[clap(short = 'H')]
     pub hashtable_filename: Option<PathBuf>,
 
-    /// Kraken 2 options filename
-    #[clap(short = 'o', required = true)]
+    /// Kraken 2 options filename, default = $database/opts.k2d
+    #[clap(short = 'o')]
     pub options_filename: Option<PathBuf>,
 
     /// 包含原始配置
@@ -34,24 +34,27 @@ pub struct Build {
     pub requested_bits_for_taxid: u8,
 
     /// Number of threads
-    #[clap(short = 'p', long, default_value_t = 4)]
+    #[clap(short = 'p', long, default_value_t = 10)]
     pub threads: usize,
 }
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, about = "taxonomy")]
 pub struct Taxo {
-    /// Kraken 2 taxonomy filename
-    #[clap(short = 't', required = true)]
+    /// Kraken 2 taxonomy filename, default = $database/taxo.k2d
+    #[clap(short = 't')]
     pub taxonomy_filename: Option<PathBuf>,
 
+    // #[clap(short = 'm', required = true)]
+    // pub id_to_taxon_map_filename: PathBuf,
     /// Sequence ID to taxon map filename
-    #[clap(short = 'm', required = true)]
-    pub id_to_taxon_map_filename: PathBuf,
+    /// seqid2taxid.map file path, default = $database/seqid2taxid.map
+    #[arg(short = 'm')]
+    pub id_to_taxon_map_filename: Option<PathBuf>,
 
-    /// NCBI taxonomy directory name
-    #[clap(short, long, required = true)]
-    pub ncbi_taxonomy_directory: PathBuf,
+    /// NCBI taxonomy directory name, default = $database/taxonomy
+    #[clap(short, long)]
+    pub ncbi_taxonomy_directory: Option<PathBuf>,
 }
 
 const BATCH_SIZE: usize = 8 * 1024 * 1024;

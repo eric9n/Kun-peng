@@ -30,14 +30,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let meros = args.build.klmt.as_meros();
 
-    let id_to_taxon_map = read_id_to_taxon_map(&args.taxo.id_to_taxon_map_filename)?;
+    let id_to_taxon_map_filename = args
+        .taxo
+        .id_to_taxon_map_filename
+        .unwrap_or(args.build.source.join("seqid2taxid.map"));
+
+    let id_to_taxon_map = read_id_to_taxon_map(&id_to_taxon_map_filename)?;
 
     let taxonomy_filename = args
         .taxo
         .taxonomy_filename
         .unwrap_or(args.build.source.join("taxo.k2d"));
+
+    let ncbi_taxonomy_directory = args
+        .taxo
+        .ncbi_taxonomy_directory
+        .unwrap_or(args.build.source.join("taxonomy"));
+
     let taxonomy = generate_taxonomy(
-        &args.taxo.ncbi_taxonomy_directory,
+        &ncbi_taxonomy_directory,
         &taxonomy_filename,
         &id_to_taxon_map,
     )?;

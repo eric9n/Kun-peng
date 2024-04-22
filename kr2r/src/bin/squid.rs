@@ -120,6 +120,15 @@ impl From<BuildArgs> for build_k2_db::Args {
     }
 }
 
+impl From<BuildArgs> for seqid2taxid::Args {
+    fn from(item: BuildArgs) -> Self {
+        Self {
+            source: item.build.source,
+            id_to_taxon_map_filename: item.taxo.id_to_taxon_map_filename,
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 enum Commands {
     Estimate(estimate_capacity::Args),
@@ -143,6 +152,8 @@ fn main() -> Result<()> {
             seqid2taxid::run(cmd_args)?;
         }
         Commands::Build(cmd_args) => {
+            let seq_args = seqid2taxid::Args::from(cmd_args.clone());
+            seqid2taxid::run(seq_args)?;
             let ec_args = estimate_capacity::Args::from(cmd_args.clone());
             let required_capacity = estimate_capacity::run(ec_args);
 
