@@ -30,7 +30,7 @@ pub struct Args {
     #[clap(long)]
     pub chunk_dir: PathBuf,
 
-    /// chunk size 1-4(GB) [1073741824-4294967295]
+    /// chunk size 1-4(GB) [1073741824-4294967295] default: 1GB
     #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS), default_value_t = ONEGB)]
     pub chunk_size: u64,
 }
@@ -41,9 +41,14 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
 
     let id_to_taxon_map = read_id_to_taxon_map(&args.taxo.id_to_taxon_map_filename)?;
 
+    let taxonomy_filename = args
+        .taxo
+        .taxonomy_filename
+        .unwrap_or(args.build.source.join("taxo.k2d"));
+
     let taxonomy = generate_taxonomy(
         &args.taxo.ncbi_taxonomy_directory,
-        &args.taxo.taxonomy_filename,
+        &taxonomy_filename,
         &id_to_taxon_map,
     )?;
 
@@ -93,7 +98,11 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
         );
     }
 
-    let hash_filename = args.build.hashtable_filename.clone();
+    let hash_filename = args
+        .build
+        .hashtable_filename
+        .unwrap_or(source.join("hash.k2d"))
+        .clone();
     let partition = chunk_files.len();
     for i in 0..partition {
         let mut chtm = CHTableMut::new(&hash_filename, hash_config, i, chunk_size)?;
@@ -104,8 +113,12 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     // 打印运行时间
     println!("build k2 db took: {:?}", duration);
 
+    let options_filename = args
+        .build
+        .options_filename
+        .unwrap_or(source.clone().join("opts.k2d"));
     let idx_opts = IndexOptions::from_meros(meros);
-    idx_opts.write_to_file(args.build.options_filename)?;
+    idx_opts.write_to_file(options_filename)?;
 
     Ok(())
 }

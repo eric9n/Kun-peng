@@ -19,11 +19,11 @@ pub struct Build {
 
     /// Kraken 2 hash table filename
     #[clap(short = 'H', required = true)]
-    pub hashtable_filename: PathBuf,
+    pub hashtable_filename: Option<PathBuf>,
 
     /// Kraken 2 options filename
     #[clap(short = 'o', required = true)]
-    pub options_filename: PathBuf,
+    pub options_filename: Option<PathBuf>,
 
     /// 包含原始配置
     #[clap(flatten)]
@@ -43,7 +43,7 @@ pub struct Build {
 pub struct Taxo {
     /// Kraken 2 taxonomy filename
     #[clap(short = 't', required = true)]
-    pub taxonomy_filename: PathBuf,
+    pub taxonomy_filename: Option<PathBuf>,
 
     /// Sequence ID to taxon map filename
     #[clap(short = 'm', required = true)]

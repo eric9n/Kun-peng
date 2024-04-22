@@ -32,9 +32,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let id_to_taxon_map = read_id_to_taxon_map(&args.taxo.id_to_taxon_map_filename)?;
 
+    let taxonomy_filename = args
+        .taxo
+        .taxonomy_filename
+        .unwrap_or(args.build.source.join("taxo.k2d"));
     let taxonomy = generate_taxonomy(
         &args.taxo.ncbi_taxonomy_directory,
-        &args.taxo.taxonomy_filename,
+        &taxonomy_filename,
         &id_to_taxon_map,
     )?;
 
@@ -46,8 +50,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let capacity = args.required_capacity as usize;
 
+    let hashtable_filename = args
+        .build
+        .hashtable_filename
+        .unwrap_or(args.build.source.clone().join("hash.k2d"));
     let hash_config = HashConfig::<u32>::new(capacity, value_bits, 0, 0, 0);
-    let mut chtm = CHTableMut::new(args.build.hashtable_filename, hash_config, 0, capacity)?;
+    let mut chtm = CHTableMut::new(hashtable_filename, hash_config, 0, capacity)?;
 
     let source: PathBuf = args.build.source.clone();
     let fna_files = if source.is_file() {
@@ -75,7 +83,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("build db took: {:?}", duration);
 
     let idx_opts = IndexOptions::from_meros(meros);
-    idx_opts.write_to_file(args.build.options_filename)?;
+    let options_filename = args
+        .build
+        .options_filename
+        .unwrap_or(source.join("opts.k2d"));
+    idx_opts.write_to_file(options_filename)?;
 
     Ok(())
 }
