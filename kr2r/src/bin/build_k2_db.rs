@@ -2,7 +2,13 @@
 use clap::Parser;
 use kr2r::args::{Build, Taxo, ONEGB, U32MAXPLUS};
 use kr2r::compact_hash::{CHTableMut, HashConfig};
-use kr2r::db::{convert_fna_to_k2_format, generate_taxonomy, get_bits_for_taxid, process_k2file};
+use kr2r::db::{
+    convert_fna_to_k2_format,
+    generate_taxonomy,
+    get_bits_for_taxid,
+    process_k2file,
+    // process_k2file1,
+};
 use kr2r::utils::{
     create_partition_files, create_partition_writers, find_library_fna_files, format_bytes,
     get_file_limit, read_id_to_taxon_map,
@@ -31,7 +37,7 @@ pub struct Args {
     pub chunk_dir: PathBuf,
 
     /// chunk size 1-4(GB) [1073741824-4294967295] default: 1GB
-    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS), default_value_t = ONEGB)]
+    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS + 1), default_value_t = ONEGB)]
     pub chunk_size: u64,
 }
 
@@ -77,7 +83,6 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     let chunk_size = args.chunk_size as usize;
 
     let partition = (capacity + chunk_size - 1) / chunk_size;
-    println!("start...");
 
     if partition >= file_num_limit {
         panic!("Exceeds File Number Limit");
@@ -86,7 +91,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     let chunk_files = create_partition_files(partition, &args.chunk_dir, "chunk");
     let mut writers = create_partition_writers(&chunk_files);
 
-    println!("chunk_size {:?}", format_bytes(chunk_size as f64));
+    println!("chunk_size {}", format_bytes(chunk_size as f64));
 
     let source: PathBuf = args.build.source.clone();
     let fna_files = if source.is_file() {
@@ -96,6 +101,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     };
 
     for fna_file in &fna_files {
+        println!("convert fna file {:?}", fna_file);
         convert_fna_to_k2_format(
             fna_file,
             meros,
@@ -115,6 +121,13 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
         .clone();
     let partition = chunk_files.len();
     for i in 0..partition {
+        // 计算持续时间
+        // process_k2file1(hash_config, &chunk_files[i], &taxonomy, chunk_size, i)?;
+        let duration = start.elapsed();
+        println!(
+            "process chunk file {:?}/{:}: duration: {:?}",
+            i, partition, duration
+        );
         let mut chtm = CHTableMut::new(&hash_filename, hash_config, i, chunk_size)?;
         process_k2file(&chunk_files[i], &mut chtm, &taxonomy)?;
     }

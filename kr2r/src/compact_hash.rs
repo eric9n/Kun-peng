@@ -171,19 +171,13 @@ where
 
 /// 与Slot的区别,只是idx的类型
 #[repr(C)]
-pub struct Cell<B>
-where
-    B: Compact,
-{
+pub struct Cell {
     pub idx: u32,
-    value: B,
+    value: u32,
 }
 
-impl<B> Cell<B>
-where
-    B: Compact,
-{
-    pub fn new(idx: u32, value: B) -> Self {
+impl Cell {
+    pub fn new(idx: u32, value: u32) -> Self {
         Self { idx, value }
     }
 
@@ -192,7 +186,7 @@ where
         unsafe { std::slice::from_raw_parts(cell_ptr, cell_size) }
     }
 
-    pub fn as_slot(&self) -> Slot<B> {
+    pub fn as_slot(&self) -> Slot<u32> {
         Slot::new(self.idx as usize, self.value)
     }
 }
@@ -559,165 +553,165 @@ where
     }
 }
 
-#[allow(unused)]
-pub struct CHTable<'a, B>
-where
-    B: Compact + 'a,
-{
-    // memmap
-    mmap: Mmap,
-    // 哈希表的容量
-    pub config: HashConfig<B>,
-    pub table: &'a [B],
-    pub page: Page<B>,
-}
+// #[allow(unused)]
+// pub struct CHTable<'a, B>
+// where
+//     B: Compact + 'a,
+// {
+//     // memmap
+//     mmap: Mmap,
+//     // 哈希表的容量
+//     pub config: HashConfig<B>,
+//     pub table: &'a [B],
+//     pub page: Page<B>,
+// }
 
-impl<'a, B> CHTable<'a, B>
-where
-    B: Compact + 'a,
-{
-    pub fn from<P: AsRef<Path>>(
-        filename: P,
-        page_index: usize,
-        page_size: usize,
-    ) -> Result<CHTable<'a, B>> {
-        let file = OpenOptions::new().read(true).open(&filename)?;
+// impl<'a, B> CHTable<'a, B>
+// where
+//     B: Compact + 'a,
+// {
+//     pub fn from<P: AsRef<Path>>(
+//         filename: P,
+//         page_index: usize,
+//         page_size: usize,
+//     ) -> Result<CHTable<'a, B>> {
+//         let file = OpenOptions::new().read(true).open(&filename)?;
 
-        let mmap = unsafe { MmapOptions::new().populate().map(&file)? };
-        let config = HashConfig::from_mmap(&mmap);
-        let table = unsafe {
-            std::slice::from_raw_parts(mmap.as_ptr().add(32) as *const B, config.capacity)
-        };
+//         let mmap = unsafe { MmapOptions::new().populate().map(&file)? };
+//         let config = HashConfig::from_mmap(&mmap);
+//         let table = unsafe {
+//             std::slice::from_raw_parts(mmap.as_ptr().add(32) as *const B, config.capacity)
+//         };
 
-        let start_index = page_index * page_size;
-        let end_index = std::cmp::min((page_index + 1) * page_size, config.capacity);
-        if start_index > config.capacity {
-            return Err(Error::new(ErrorKind::Other, "out of capacity"));
-        }
+//         let start_index = page_index * page_size;
+//         let end_index = std::cmp::min((page_index + 1) * page_size, config.capacity);
+//         if start_index > config.capacity {
+//             return Err(Error::new(ErrorKind::Other, "out of capacity"));
+//         }
 
-        let page_data = table[start_index..end_index].to_vec();
-        let page = Page::<B>::new(page_index, page_size, page_data);
+//         let page_data = table[start_index..end_index].to_vec();
+//         let page = Page::<B>::new(page_index, page_size, page_data);
 
-        let chtm = CHTable {
-            config,
-            table,
-            mmap,
-            page,
-        };
-        Ok(chtm)
-    }
+//         let chtm = CHTable {
+//             config,
+//             table,
+//             mmap,
+//             page,
+//         };
+//         Ok(chtm)
+//     }
 
-    pub fn get_none_counts(&self) -> usize {
-        self.table
-            .iter()
-            .filter(|&&item| item == B::default())
-            .count()
-    }
+//     pub fn get_none_counts(&self) -> usize {
+//         self.table
+//             .iter()
+//             .filter(|&&item| item == B::default())
+//             .count()
+//     }
 
-    pub fn get_from_table(&self, index: usize, compacted_key: B) -> B {
-        let value_mask = self.config.value_mask;
-        let mut idx = index;
-        let first_idx = idx;
+//     pub fn get_from_table(&self, index: usize, compacted_key: B) -> B {
+//         let value_mask = self.config.value_mask;
+//         let mut idx = index;
+//         let first_idx = idx;
 
-        loop {
-            if let Some(cell) = self.table.get(idx) {
-                if cell.right(value_mask) == B::default()
-                    || cell.left(self.config.value_bits) == compacted_key
-                {
-                    return cell.right(value_mask);
-                }
+//         loop {
+//             if let Some(cell) = self.table.get(idx) {
+//                 if cell.right(value_mask) == B::default()
+//                     || cell.left(self.config.value_bits) == compacted_key
+//                 {
+//                     return cell.right(value_mask);
+//                 }
 
-                idx = (idx + 1) % self.config.capacity;
-                if idx == first_idx {
-                    break;
-                }
-            } else {
-                // 如果get(idx)失败，返回默认值
-                return B::default();
-            }
-        }
-        B::default()
-    }
+//                 idx = (idx + 1) % self.config.capacity;
+//                 if idx == first_idx {
+//                     break;
+//                 }
+//             } else {
+//                 // 如果get(idx)失败，返回默认值
+//                 return B::default();
+//             }
+//         }
+//         B::default()
+//     }
 
-    pub fn get(&self, hash_key: u64) -> B {
-        let compacted_key = B::compacted(hash_key, self.config.value_bits);
-        let value_mask = self.config.value_mask;
-        let mut idx = self.config.index(hash_key);
-        let first_idx = idx;
+//     pub fn get(&self, hash_key: u64) -> B {
+//         let compacted_key = B::compacted(hash_key, self.config.value_bits);
+//         let value_mask = self.config.value_mask;
+//         let mut idx = self.config.index(hash_key);
+//         let first_idx = idx;
 
-        loop {
-            if let Some(cell) = self.table.get(idx) {
-                if cell.right(value_mask) == B::default()
-                    || cell.left(self.config.value_bits) == compacted_key
-                {
-                    return cell.right(value_mask);
-                }
-            } else {
-                // 如果get(idx)失败，返回默认值
-                return B::default();
-            }
+//         loop {
+//             if let Some(cell) = self.table.get(idx) {
+//                 if cell.right(value_mask) == B::default()
+//                     || cell.left(self.config.value_bits) == compacted_key
+//                 {
+//                     return cell.right(value_mask);
+//                 }
+//             } else {
+//                 // 如果get(idx)失败，返回默认值
+//                 return B::default();
+//             }
 
-            idx = (idx + 1) % self.config.capacity;
-            if idx == first_idx {
-                break;
-            }
-        }
-        B::default()
-    }
-}
+//             idx = (idx + 1) % self.config.capacity;
+//             if idx == first_idx {
+//                 break;
+//             }
+//         }
+//         B::default()
+//     }
+// }
 
-impl<'a, B> K2Compact<B> for CHTable<'a, B>
-where
-    B: Compact + 'a,
-{
-    fn get_idx_mask(&self) -> usize {
-        let idx_bits = ((self.config.hash_capacity as f64).log2().ceil() as usize).max(1);
-        (1 << idx_bits) - 1
-    }
+// impl<'a, B> K2Compact<B> for CHTable<'a, B>
+// where
+//     B: Compact + 'a,
+// {
+//     fn get_idx_mask(&self) -> usize {
+//         let idx_bits = ((self.config.hash_capacity as f64).log2().ceil() as usize).max(1);
+//         (1 << idx_bits) - 1
+//     }
 
-    fn get_idx_bits(&self) -> usize {
-        ((self.config.hash_capacity as f64).log2().ceil() as usize).max(1)
-    }
+//     fn get_idx_bits(&self) -> usize {
+//         ((self.config.hash_capacity as f64).log2().ceil() as usize).max(1)
+//     }
 
-    fn get_value_mask(&self) -> usize {
-        self.config.value_mask
-    }
+//     fn get_value_mask(&self) -> usize {
+//         self.config.value_mask
+//     }
 
-    fn get_value_bits(&self) -> usize {
-        self.config.value_bits
-    }
+//     fn get_value_bits(&self) -> usize {
+//         self.config.value_bits
+//     }
 
-    fn get_from_page(&self, indx: usize, value: u64) -> B {
-        let compacted_key = B::from_u32(value.left(self.config.value_bits) as u32);
-        let value_mask = self.config.value_mask;
-        let mut idx = indx;
-        let first_idx = idx;
+//     fn get_from_page(&self, indx: usize, value: u64) -> B {
+//         let compacted_key = B::from_u32(value.left(self.config.value_bits) as u32);
+//         let value_mask = self.config.value_mask;
+//         let mut idx = indx;
+//         let first_idx = idx;
 
-        loop {
-            if let Some(cell) = self.page.data.get(idx) {
-                if cell.right(value_mask) == B::default()
-                    || cell.left(self.config.value_bits) == compacted_key
-                {
-                    return cell.right(value_mask);
-                }
+//         loop {
+//             if let Some(cell) = self.page.data.get(idx) {
+//                 if cell.right(value_mask) == B::default()
+//                     || cell.left(self.config.value_bits) == compacted_key
+//                 {
+//                     return cell.right(value_mask);
+//                 }
 
-                idx = idx + 1;
-                if idx >= self.page.size {
-                    // 需要确定在table中的位置, page index 从0开始
-                    let index = self.page.size * self.page.index + idx;
-                    return self.get_from_table(index, compacted_key);
-                }
-                if idx == first_idx {
-                    break;
-                }
-            } else {
-                // 如果get(idx)失败，返回默认值
-                return B::default();
-            }
-        }
-        B::default()
-    }
-}
+//                 idx = idx + 1;
+//                 if idx >= self.page.size {
+//                     // 需要确定在table中的位置, page index 从0开始
+//                     let index = self.page.size * self.page.index + idx;
+//                     return self.get_from_table(index, compacted_key);
+//                 }
+//                 if idx == first_idx {
+//                     break;
+//                 }
+//             } else {
+//                 // 如果get(idx)失败，返回默认值
+//                 return B::default();
+//             }
+//         }
+//         B::default()
+//     }
+// }
 
 #[allow(unused)]
 pub struct CHTableMut<'a, B>

@@ -1,4 +1,4 @@
-pub mod iclassify;
+// pub mod iclassify;
 pub mod kr2r_data;
 mod kv_store;
 pub mod mmscanner;

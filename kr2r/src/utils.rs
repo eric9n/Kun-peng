@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, create_dir_all, File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Result, Seek, Write};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -217,13 +217,9 @@ pub fn get_file_limit() -> usize {
     8192
 }
 
-pub fn create_partition_files<P: AsRef<Path>>(
-    partition: usize,
-    base_path: P,
-    prefix: &str,
-) -> Vec<PathBuf> {
-    let file_path = base_path.as_ref();
-
+pub fn create_partition_files(partition: usize, base_path: &PathBuf, prefix: &str) -> Vec<PathBuf> {
+    create_dir_all(&base_path).expect(&format!("create dir error {:?}", base_path));
+    let file_path = base_path.clone();
     (1..=partition)
         .into_iter()
         .map(|item| file_path.join(format!("{}_{}.k2", prefix, item)))

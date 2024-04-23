@@ -31,7 +31,7 @@ struct BuildArgs {
     chunk_dir: PathBuf,
 
     /// chunk size 1-4(GB) [1073741824-4294967295]
-    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS), default_value_t = ONEGB)]
+    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS + 1), default_value_t = ONEGB)]
     chunk_size: u64,
 
     /// estimate capacity from cache if exists

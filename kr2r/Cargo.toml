@@ -6,14 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [[bin]]
-name = "build_db"
-path = "src/bin/build_db.rs"
-
-[[bin]]
-name = "classify"
-path = "src/bin/classify.rs"
-
-[[bin]]
 name = "inspect"
 path = "src/bin/inspect.rs"
 

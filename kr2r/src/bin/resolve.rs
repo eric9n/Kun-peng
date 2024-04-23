@@ -1,7 +1,7 @@
 use clap::Parser;
 use dashmap::{DashMap, DashSet};
 use kr2r::compact_hash::{Compact, HashConfig, Row};
-use kr2r::iclassify::{resolve_tree, trim_pair_info};
+// use kr2r::iclassify::{resolve_tree, trim_pair_info};
 use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
 use kr2r::report::report_kraken_style;
 use kr2r::taxonomy::Taxonomy;
@@ -96,6 +96,64 @@ fn generate_hit_string(
         .map(|i| format!("{}:{}", i.0, i.1))
         .collect::<Vec<String>>()
         .join(" ")
+}
+
+pub fn trim_pair_info(id: &str) -> String {
+    let sz = id.len();
+    if sz <= 2 {
+        return id.to_string();
+    }
+    if id.ends_with("/1") || id.ends_with("/2") {
+        return id[0..sz - 2].to_string();
+    }
+    id.to_string()
+}
+
+// &HashMap<u32, u64>,
+pub fn resolve_tree(
+    hit_counts: &HashMap<u32, u64>,
+    taxonomy: &Taxonomy,
+    total_minimizers: usize,
+    confidence_threshold: f64,
+) -> u32 {
+    let required_score = (confidence_threshold * total_minimizers as f64).ceil() as u64;
+
+    let mut max_taxon = 0u32;
+    let mut max_score = 0;
+
+    for (&taxon, _) in hit_counts {
+        let mut score = 0;
+
+        for (&taxon2, &count2) in hit_counts {
+            if taxonomy.is_a_ancestor_of_b(taxon2, taxon) {
+                score += count2;
+            }
+        }
+
+        if score > max_score {
+            max_score = score;
+            max_taxon = taxon;
+        } else if score == max_score {
+            max_taxon = taxonomy.lca(max_taxon, taxon);
+        }
+    }
+
+    max_score = *hit_counts.get(&max_taxon).unwrap_or(&0);
+
+    while max_taxon != 0 && max_score < required_score {
+        max_score = hit_counts
+            .iter()
+            .filter(|(&taxon, _)| taxonomy.is_a_ancestor_of_b(max_taxon, taxon))
+            .map(|(_, &count)| count)
+            .sum();
+
+        if max_score >= required_score {
+            break;
+        }
+        max_taxon = taxonomy.nodes[max_taxon as usize].parent_id as u32;
+    }
+
+    max_taxon
 }
 
 pub fn add_hitlist_string(

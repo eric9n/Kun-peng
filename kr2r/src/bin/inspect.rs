@@ -1,5 +1,5 @@
 use clap::Parser;
-use kr2r::compact_hash::{CHTable, HashConfig};
+use kr2r::compact_hash::{CHPage, HashConfig};
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
 use std::io::Result;
@@ -40,11 +40,11 @@ fn main() -> Result<()> {
 
     println!("compact hash table {:?}", config);
     if args.value_count {
-        let chtm = CHTable::<u32>::from(args.index_filename, 0, 1)?;
-        println!(
-            "value counts {:?}",
-            config.capacity - chtm.get_none_counts()
-        );
+        // let chtm = CHPage::<u32>::from(args.index_filename, 0, 1)?;
+        // println!(
+        //     "value counts {:?}",
+        //     config.capacity - chtm.get_none_counts()
+        // );
     }
 
     Ok(())

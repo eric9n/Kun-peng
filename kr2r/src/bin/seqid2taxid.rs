@@ -21,9 +21,14 @@ pub fn run(args: Args) -> Result<()> {
     let map_file = args
         .id_to_taxon_map_filename
         .unwrap_or(args.source.join("seqid2taxid.map"));
-    create_seqid2taxid_file(prelim_file, map_file.clone())?;
 
-    println!("finished {:?}", &map_file);
+    if map_file.exists() {
+        println!("id_to_taxon_map_filename {:?} exists", map_file);
+    } else {
+        create_seqid2taxid_file(prelim_file, map_file.clone())?;
+        println!("finished {:?}", &map_file);
+    }
+
     Ok(())
 }
 
