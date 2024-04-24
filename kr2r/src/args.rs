@@ -72,13 +72,18 @@ pub struct ClassifyArgs {
     #[clap(long)]
     pub k2d_dir: PathBuf,
 
+    /// chunk directory
+    #[clap(long)]
+    pub chunk_dir: PathBuf,
+
     /// Enables use of a Kraken 2 compatible shared database. Default is false.
     #[clap(long, default_value_t = false)]
     pub kraken_db_type: bool,
 
-    // /// The file path for the Kraken 2 options.
-    // #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
-    // options_filename: String,
+    /// File path for outputting normal Kraken output.
+    #[clap(long = "output-dir", value_parser)]
+    pub kraken_output_dir: Option<PathBuf>,
+
     /// Enable paired-end processing.
     #[clap(short = 'P', long = "paired-end-processing", action)]
     pub paired_end_processing: bool,
@@ -99,10 +104,6 @@ pub struct ClassifyArgs {
     /// The number of threads to use, default is 10.
     #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = 10)]
     pub num_threads: i32,
-
-    /// chunk directory
-    #[clap(long)]
-    pub chunk_dir: PathBuf,
 
     /// 批量处理大小 default: 8MB
     #[clap(long, default_value_t = BATCH_SIZE)]
@@ -125,10 +126,6 @@ pub struct ClassifyArgs {
         default_value_t = 2
     )]
     pub minimum_hit_groups: usize,
-
-    /// File path for outputting normal Kraken output.
-    #[clap(long = "output-dir", value_parser)]
-    pub kraken_output_dir: Option<PathBuf>,
 
     /// In comb. w/ -R, provide minimizer information in report
     #[clap(short = 'K', long, value_parser, default_value_t = false)]
