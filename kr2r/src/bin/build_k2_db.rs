@@ -18,16 +18,9 @@ use std::time::Instant;
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about="build database", long_about = None)]
 pub struct Args {
-    /// 包含原始配置
-    #[clap(flatten)]
-    pub build: Build,
-
     /// database hash chunk directory and other files
     #[clap(long)]
     pub k2d_dir: Option<PathBuf>,
-
-    #[clap(flatten)]
-    pub taxo: Taxo,
 
     #[clap(long, value_parser = parse_size, default_value = "1G", help = "Specifies the hash file capacity.\nAcceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').\nNote: The specified capacity affects the index size, with a factor of 4 applied.\nFor example, specifying '1G' results in an index size of '4G'.\nDefault: 1G (capacity 1G = file size 4G)")]
     pub hash_capacity: usize,
@@ -35,6 +28,13 @@ pub struct Args {
     /// chunk temp directory
     #[clap(long)]
     pub chunk_dir: PathBuf,
+
+    /// 包含原始配置
+    #[clap(flatten)]
+    pub build: Build,
+
+    #[clap(flatten)]
+    pub taxo: Taxo,
 }
 
 pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::error::Error>> {

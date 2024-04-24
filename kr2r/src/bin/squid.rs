@@ -17,25 +17,22 @@ use std::time::Instant;
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about="build database", long_about = None)]
 struct BuildArgs {
-    #[clap(flatten)]
-    pub build: Build,
-
     /// database hash chunk directory and other files
     #[clap(long)]
     pub k2d_dir: Option<PathBuf>,
 
-    #[clap(flatten)]
-    taxo: Taxo,
-
-    // /// Name of Kraken 2 database
-    // #[arg(short, long = "db")]
-    // database: PathBuf,
     /// chunk directory
     #[clap(long)]
     chunk_dir: PathBuf,
 
     #[clap(long, value_parser = parse_size, default_value = "1G", help = "Specifies the hash file capacity.\nAcceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').\nNote: The specified capacity affects the index size, with a factor of 4 applied.\nFor example, specifying '1G' results in an index size of '4G'.\nDefault: 1G (capacity 1G = file size 4G)")]
     pub hash_capacity: usize,
+
+    #[clap(flatten)]
+    pub build: Build,
+
+    #[clap(flatten)]
+    taxo: Taxo,
 
     /// estimate capacity from cache if exists
     #[arg(long, default_value_t = true)]
