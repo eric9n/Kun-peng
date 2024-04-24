@@ -36,7 +36,7 @@ fn main() -> Result<()> {
         println!("taxonomy node count {:?}", taxo.node_count());
     }
 
-    let config = HashConfig::<u32>::from(args.index_filename.clone())?;
+    let config = HashConfig::from(args.index_filename.clone())?;
 
     println!("compact hash table {:?}", config);
     if args.value_count {

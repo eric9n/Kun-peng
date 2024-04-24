@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 pub struct Args {
     /// build database directory or file
     #[arg(long, default_value = "lib")]
-    pub source: PathBuf,
+    pub database: PathBuf,
 
     /// 包含原始配置
     #[clap(flatten)]
@@ -131,16 +131,16 @@ pub fn run(args: Args) -> usize {
     let mut hllp: HyperLogLogPlus<u64, KBuildHasher> =
         HyperLogLogPlus::new(16, KBuildHasher::default()).unwrap();
 
-    let source: PathBuf = args.source.clone();
+    let source: PathBuf = args.database.clone();
     let fna_files = if source.is_file() {
         vec![source.to_string_lossy().to_string()]
     } else {
-        find_library_fna_files(args.source)
+        find_library_fna_files(args.database)
     };
 
     for fna_file in fna_files {
         let args_clone = Args {
-            source: source.clone(),
+            database: source.clone(),
             ..args
         };
         let local_hllp = process_sequence(&fna_file, args_clone);

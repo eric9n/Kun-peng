@@ -8,9 +8,9 @@ mod seqid2taxid;
 mod splitr;
 
 use kr2r::args::ClassifyArgs;
-use kr2r::args::{Build, Taxo, ONEGB, U32MAXPLUS};
+use kr2r::args::{parse_size, Build, Taxo};
 use kr2r::utils::find_and_sort_files;
-use std::io::Result;
+// use std::io::Result;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -19,6 +19,10 @@ use std::time::Instant;
 struct BuildArgs {
     #[clap(flatten)]
     pub build: Build,
+
+    /// database hash chunk directory and other files
+    #[clap(long)]
+    pub k2d_dir: Option<PathBuf>,
 
     #[clap(flatten)]
     taxo: Taxo,
@@ -30,9 +34,8 @@ struct BuildArgs {
     #[clap(long)]
     chunk_dir: PathBuf,
 
-    /// chunk size 1-4(GB) [1073741824-4294967295]
-    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS + 1), default_value_t = ONEGB)]
-    chunk_size: u64,
+    #[clap(long, value_parser = parse_size, default_value = "1G", help = "Specifies the hash file capacity.\nAcceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').\nNote: The specified capacity affects the index size, with a factor of 4 applied.\nFor example, specifying '1G' results in an index size of '4G'.\nDefault: 1G (capacity 1G = file size 4G)")]
+    pub hash_capacity: usize,
 
     /// estimate capacity from cache if exists
     #[arg(long, default_value_t = true)]
@@ -59,7 +62,7 @@ struct Args {
 impl From<ClassifyArgs> for splitr::Args {
     fn from(item: ClassifyArgs) -> Self {
         Self {
-            hash_dir: item.hash_dir,
+            k2d_dir: item.k2d_dir,
             paired_end_processing: item.paired_end_processing,
             single_file_pairs: item.single_file_pairs,
             minimum_quality_score: item.minimum_quality_score,
@@ -73,9 +76,10 @@ impl From<ClassifyArgs> for splitr::Args {
 impl From<ClassifyArgs> for annotate::Args {
     fn from(item: ClassifyArgs) -> Self {
         Self {
-            hash_dir: item.hash_dir,
+            k2d_dir: item.k2d_dir,
             chunk_dir: item.chunk_dir,
             batch_size: item.batch_size,
+            kraken_db_type: item.kraken_db_type,
         }
     }
 }
@@ -83,7 +87,7 @@ impl From<ClassifyArgs> for annotate::Args {
 impl From<ClassifyArgs> for resolve::Args {
     fn from(item: ClassifyArgs) -> Self {
         Self {
-            hash_dir: item.hash_dir,
+            k2d_dir: item.k2d_dir,
             chunk_dir: item.chunk_dir,
             batch_size: item.batch_size,
             confidence_threshold: item.confidence_threshold,
@@ -99,7 +103,7 @@ impl From<ClassifyArgs> for resolve::Args {
 impl From<BuildArgs> for estimate_capacity::Args {
     fn from(item: BuildArgs) -> Self {
         Self {
-            source: item.build.source,
+            database: item.build.database,
             klmt: item.build.klmt,
             cache: item.cache,
             n: item.max_n,
@@ -113,9 +117,10 @@ impl From<BuildArgs> for build_k2_db::Args {
     fn from(item: BuildArgs) -> Self {
         Self {
             build: item.build,
+            k2d_dir: item.k2d_dir,
             taxo: item.taxo,
             chunk_dir: item.chunk_dir,
-            chunk_size: item.chunk_size,
+            hash_capacity: item.hash_capacity,
         }
     }
 }
@@ -123,7 +128,7 @@ impl From<BuildArgs> for build_k2_db::Args {
 impl From<BuildArgs> for seqid2taxid::Args {
     fn from(item: BuildArgs) -> Self {
         Self {
-            source: item.build.source,
+            database: item.build.database,
             id_to_taxon_map_filename: item.taxo.id_to_taxon_map_filename,
         }
     }
@@ -141,7 +146,7 @@ enum Commands {
     Classify(ClassifyArgs),
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     match args.cmd {
@@ -158,9 +163,7 @@ fn main() -> Result<()> {
             let required_capacity = estimate_capacity::run(ec_args);
 
             let build_args = build_k2_db::Args::from(cmd_args.clone());
-            if let Err(e) = build_k2_db::run(build_args, required_capacity) {
-                panic!("Application error: {}", e);
-            }
+            build_k2_db::run(build_args, required_capacity)?;
         }
         Commands::Hashshard(cmd_args) => {
             hashshard::run(cmd_args)?;
@@ -180,7 +183,10 @@ fn main() -> Result<()> {
             let splitr_args = splitr::Args::from(cmd_args.clone());
             let chunk_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".k2")?;
             if !chunk_files.is_empty() {
-                panic!("{} must be empty", &splitr_args.chunk_dir.display());
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("{} must be empty", &splitr_args.chunk_dir.display()),
+                )));
             }
             splitr::run(splitr_args)?;
             let annotate_args = annotate::Args::from(cmd_args.clone());

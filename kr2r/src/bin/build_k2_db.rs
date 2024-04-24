@@ -1,13 +1,10 @@
 // 使用时需要引用模块路径
 use clap::Parser;
-use kr2r::args::{Build, Taxo, ONEGB, U32MAXPLUS};
-use kr2r::compact_hash::{CHTableMut, HashConfig};
+use kr2r::args::{parse_size, Build, Taxo};
+use kr2r::compact_hash::HashConfig;
 use kr2r::db::{
-    convert_fna_to_k2_format,
-    generate_taxonomy,
-    get_bits_for_taxid,
-    process_k2file,
-    // process_k2file1,
+    convert_fna_to_k2_format, generate_taxonomy, get_bits_for_taxid, process_k2file,
+    write_config_to_file,
 };
 use kr2r::utils::{
     create_partition_files, create_partition_writers, find_library_fna_files, format_bytes,
@@ -24,21 +21,19 @@ pub struct Args {
     #[clap(flatten)]
     pub build: Build,
 
+    /// database hash chunk directory and other files
+    #[clap(long)]
+    pub k2d_dir: Option<PathBuf>,
+
     #[clap(flatten)]
     pub taxo: Taxo,
 
-    // // /// Name of Kraken 2 database
-    // // #[arg(short, long = "db")]
-    // // database: PathBuf,
-    // #[arg(short = 'c', long, required = true)]
-    // pub required_capacity: u64,
-    /// chunk directory
+    #[clap(long, value_parser = parse_size, default_value = "1G", help = "Specifies the hash file capacity.\nAcceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').\nNote: The specified capacity affects the index size, with a factor of 4 applied.\nFor example, specifying '1G' results in an index size of '4G'.\nDefault: 1G (capacity 1G = file size 4G)")]
+    pub hash_capacity: usize,
+
+    /// chunk temp directory
     #[clap(long)]
     pub chunk_dir: PathBuf,
-
-    /// chunk size 1-4(GB) [1073741824-4294967295] default: 1GB
-    #[clap(long, value_parser = clap::value_parser!(u64).range(ONEGB..U32MAXPLUS + 1), default_value_t = ONEGB)]
-    pub chunk_size: u64,
 }
 
 pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::error::Error>> {
@@ -48,19 +43,19 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     let id_to_taxon_map_filename = args
         .taxo
         .id_to_taxon_map_filename
-        .unwrap_or(args.build.source.join("seqid2taxid.map"));
+        .unwrap_or(args.build.database.join("seqid2taxid.map"));
 
     let id_to_taxon_map = read_id_to_taxon_map(&id_to_taxon_map_filename)?;
 
-    let taxonomy_filename = args
-        .taxo
-        .taxonomy_filename
-        .unwrap_or(args.build.source.join("taxo.k2d"));
+    let source: PathBuf = args.build.database.clone();
+    let k2d_dir = args.k2d_dir.unwrap_or(source.clone());
+
+    let taxonomy_filename = k2d_dir.join("taxo.k2d");
 
     let ncbi_taxonomy_directory = args
         .taxo
         .ncbi_taxonomy_directory
-        .unwrap_or(args.build.source.join("taxonomy"));
+        .unwrap_or(args.build.database.join("taxonomy"));
 
     let taxonomy = generate_taxonomy(
         &ncbi_taxonomy_directory,
@@ -75,14 +70,13 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     .expect("more bits required for storing taxid");
 
     let capacity = required_capacity;
-    let hash_config = HashConfig::<u32>::new(capacity, value_bits, 0, 0, 0);
+    let partition = (capacity + args.hash_capacity - 1) / args.hash_capacity;
+    let hash_config = HashConfig::new(capacity, value_bits, 0, partition, args.hash_capacity);
 
     // 开始计时
     let start = Instant::now();
 
-    let chunk_size = args.chunk_size as usize;
-
-    let partition = (capacity + chunk_size - 1) / chunk_size;
+    let chunk_size = args.hash_capacity as usize;
 
     if partition >= file_num_limit {
         panic!("Exceeds File Number Limit");
@@ -93,12 +87,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
 
     println!("chunk_size {}", format_bytes(chunk_size as f64));
 
-    let source: PathBuf = args.build.source.clone();
-    let fna_files = if source.is_file() {
-        vec![source.to_string_lossy().to_string()]
-    } else {
-        find_library_fna_files(args.build.source)
-    };
+    let fna_files = find_library_fna_files(args.build.database);
 
     for fna_file in &fna_files {
         println!("convert fna file {:?}", fna_file);
@@ -114,32 +103,44 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
         );
     }
 
-    let hash_filename = args
-        .build
-        .hashtable_filename
-        .unwrap_or(source.join("hash.k2d"))
-        .clone();
+    let hash_filename = source.join("hash_config.k2d");
     let partition = chunk_files.len();
-    for i in 0..partition {
+    let mut size: u64 = 0;
+
+    for i in 1..=partition {
         // 计算持续时间
-        // process_k2file1(hash_config, &chunk_files[i], &taxonomy, chunk_size, i)?;
+        let count = process_k2file(
+            hash_config,
+            &k2d_dir,
+            &chunk_files[i - 1],
+            &taxonomy,
+            chunk_size,
+            i,
+        )?;
+        size += count as u64;
         let duration = start.elapsed();
         println!(
             "process chunk file {:?}/{:}: duration: {:?}",
             i, partition, duration
         );
-        let mut chtm = CHTableMut::new(&hash_filename, hash_config, i, chunk_size)?;
-        process_k2file(&chunk_files[i], &mut chtm, &taxonomy)?;
     }
+
+    write_config_to_file(
+        &hash_filename,
+        partition as u64,
+        args.hash_capacity as u64,
+        capacity as u64,
+        size,
+        32 - hash_config.value_bits as u64,
+        hash_config.value_bits as u64,
+    )?;
+
     // 计算持续时间
     let duration = start.elapsed();
     // 打印运行时间
     println!("build k2 db took: {:?}", duration);
 
-    let options_filename = args
-        .build
-        .options_filename
-        .unwrap_or(source.clone().join("opts.k2d"));
+    let options_filename = k2d_dir.join("opts.k2d");
     let idx_opts = IndexOptions::from_meros(meros);
     idx_opts.write_to_file(options_filename)?;
 
