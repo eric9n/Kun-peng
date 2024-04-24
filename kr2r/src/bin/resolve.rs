@@ -88,7 +88,11 @@ fn generate_hit_string(
 
     // 填充尾随0
     if last_pos < count - 1 {
-        result.push((0, count - last_pos - 1));
+        if last_pos == 0 {
+            result.push((0, count - last_pos));
+        } else {
+            result.push((0, count - last_pos - 1));
+        }
     }
 
     result
@@ -164,6 +168,7 @@ pub fn add_hitlist_string(
     taxonomy: &Taxonomy,
 ) -> String {
     let result1 = generate_hit_string(kmer_count1, &rows, taxonomy, value_mask, 0);
+    println!("result1 {:?}", result1);
     if let Some(count) = kmer_count2 {
         let result2 = generate_hit_string(count, &rows, taxonomy, value_mask, kmer_count1);
         format!("{} |:| {}", result1, result2)
@@ -216,7 +221,7 @@ pub fn count_values(
 pub struct Args {
     /// database hash chunk directory and other files
     #[clap(long)]
-    pub hash_dir: PathBuf,
+    pub k2d_dir: PathBuf,
 
     /// chunk directory
     #[clap(long, value_parser, required = true)]
@@ -352,15 +357,15 @@ fn process_batch<P: AsRef<Path>>(
 }
 
 pub fn run(args: Args) -> Result<()> {
-    let hash_dir = &args.hash_dir;
-    let taxonomy_filename = hash_dir.join("taxo.k2d");
+    let k2d_dir = &args.k2d_dir;
+    let taxonomy_filename = k2d_dir.join("taxo.k2d");
     let taxo = Taxonomy::from_file(taxonomy_filename)?;
 
     let sample_files = find_and_sort_files(&args.chunk_dir, "sample_file", ".bin")?;
     let sample_id_files = find_and_sort_files(&args.chunk_dir, "sample_id", ".map")?;
 
     let partition = sample_files.len();
-    let hash_config = HashConfig::<u32>::from_hash_header(&args.hash_dir.join("hash_config.k2d"))?;
+    let hash_config = HashConfig::from_hash_header(&args.k2d_dir.join("hash_config.k2d"))?;
     let value_mask = hash_config.value_mask;
 
     let mut total_taxon_counts = TaxonCounters::new();

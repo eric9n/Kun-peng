@@ -30,7 +30,7 @@ use clap::Parser;
 pub struct Args {
     /// database hash chunk directory and other files
     #[clap(long)]
-    pub hash_dir: PathBuf,
+    pub k2d_dir: PathBuf,
 
     // /// The file path for the Kraken 2 options.
     // #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
@@ -119,7 +119,7 @@ fn get_lastest_file_index(file_path: &PathBuf) -> Result<usize> {
 /// 处理record
 fn process_record<I>(
     iter: I,
-    hash_config: &HashConfig<u32>,
+    hash_config: &HashConfig,
     seq_id: u64,
     chunk_size: usize,
     idx_bits: usize,
@@ -164,7 +164,7 @@ fn write_data_to_file(
 fn process_fastq_file(
     args: &Args,
     meros: Meros,
-    hash_config: HashConfig<u32>,
+    hash_config: HashConfig,
     file_index: usize,
     files: &[String],
     writers: &mut Vec<BufWriter<fs::File>>,
@@ -249,7 +249,7 @@ fn process_fastq_file(
 fn process_fasta_file(
     args: &Args,
     meros: Meros,
-    hash_config: HashConfig<u32>,
+    hash_config: HashConfig,
     file_index: usize,
     files: &[String],
     writers: &mut Vec<BufWriter<fs::File>>,
@@ -311,7 +311,7 @@ fn process_fasta_file(
     )
 }
 
-fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>) -> Result<()> {
+fn convert(args: Args, meros: Meros, hash_config: HashConfig) -> Result<()> {
     let partition = hash_config.partition;
     let mut writers: Vec<BufWriter<fs::File>> =
         init_chunk_writers(&args, partition, hash_config.hash_capacity);
@@ -386,7 +386,7 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig<u32>) -> Result<()>
 
 pub fn run(args: Args) -> Result<()> {
     // let args = Args::parse();
-    let options_filename = &args.hash_dir.join("opts.k2d");
+    let options_filename = &args.k2d_dir.join("opts.k2d");
     let idx_opts = IndexOptions::read_index_options(options_filename)?;
 
     if args.paired_end_processing && !args.single_file_pairs && args.input_files.len() % 2 != 0 {
@@ -396,8 +396,9 @@ pub fn run(args: Args) -> Result<()> {
             "Paired-end processing requires an even number of input files.",
         ));
     }
-    let hash_config = HashConfig::<u32>::from_hash_header(&args.hash_dir.join("hash_config.k2d"))?;
+    let hash_config = HashConfig::from_hash_header(&args.k2d_dir.join("hash_config.k2d"))?;
 
+    println!("hash_config {:?}", hash_config);
     if hash_config.hash_capacity == 0 {
         panic!("`hash_capacity` can't be zero!");
     }

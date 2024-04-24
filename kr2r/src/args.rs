@@ -15,16 +15,11 @@ pub const ONEGB: u64 = 1073741824;
 pub struct Build {
     /// ncbi library fna database directory
     #[arg(long = "db", required = true)]
-    pub source: PathBuf,
+    pub database: PathBuf,
 
-    /// Kraken 2 hash table filename, default = $database/hash.k2d
-    #[clap(short = 'H')]
-    pub hashtable_filename: Option<PathBuf>,
-
-    /// Kraken 2 options filename, default = $database/opts.k2d
-    #[clap(short = 'o')]
-    pub options_filename: Option<PathBuf>,
-
+    // /// Kraken 2 options filename, default = $database/opts.k2d
+    // #[clap(short = 'o')]
+    // pub options_filename: Option<PathBuf>,
     /// 包含原始配置
     #[clap(flatten)]
     pub klmt: KLMTArgs,
@@ -41,9 +36,9 @@ pub struct Build {
 #[derive(Parser, Debug, Clone)]
 #[clap(version, about = "taxonomy")]
 pub struct Taxo {
-    /// Kraken 2 taxonomy filename, default = $database/taxo.k2d
-    #[clap(short = 't')]
-    pub taxonomy_filename: Option<PathBuf>,
+    // /// Kraken 2 taxonomy filename, default = $database/taxo.k2d
+    // #[clap(short = 't')]
+    // pub taxonomy_filename: Option<PathBuf>,
 
     // #[clap(short = 'm', required = true)]
     // pub id_to_taxon_map_filename: PathBuf,
@@ -75,7 +70,11 @@ const BATCH_SIZE: usize = 8 * 1024 * 1024;
 pub struct ClassifyArgs {
     /// database hash chunk directory and other files
     #[clap(long)]
-    pub hash_dir: PathBuf,
+    pub k2d_dir: PathBuf,
+
+    /// Enables use of a Kraken 2 compatible shared database. Default is false.
+    #[clap(long, default_value_t = false)]
+    pub kraken_db_type: bool,
 
     // /// The file path for the Kraken 2 options.
     // #[clap(short = 'o', long = "options-filename", value_parser, required = true)]

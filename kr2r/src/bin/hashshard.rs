@@ -1,13 +1,13 @@
 use clap::Parser;
+use kr2r::args::parse_size;
 use kr2r::compact_hash::HashConfig;
+use memmap2::MmapOptions;
 use std::fs::{self, create_dir_all, File, OpenOptions};
 use std::io::BufWriter;
 use std::io::{Result as IOResult, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
-
-use memmap2::MmapOptions;
 
 fn mmap_read_write<P: AsRef<Path>, Q: AsRef<Path>>(
     source_path: P,
@@ -35,32 +35,16 @@ fn mmap_read_write<P: AsRef<Path>, Q: AsRef<Path>>(
     Ok(())
 }
 
-fn parse_size(s: &str) -> Result<usize, String> {
-    let len = s.len();
-    if len < 2 {
-        return Err("Size must be at least two characters".to_string());
-    }
-
-    let (num, suffix) = s.split_at(len - 1);
-    let number: f64 = num.parse().map_err(|_| "Invalid number".to_string())?;
-    match suffix {
-        "G" | "g" => Ok((number * 1_073_741_824.0) as usize), // 2^30
-        "M" | "m" => Ok((number * 1_048_576.0) as usize),     // 2^20
-        "K" | "k" => Ok((number * 1_024.0) as usize),         // 2^10
-        _ => Err("Invalid size suffix. Use 'G', 'M', or 'K'".to_string()),
-    }
-}
-
 #[derive(Parser, Debug, Clone)]
 #[clap(version, about = "split hash file", long_about = "split hash file")]
 pub struct Args {
     /// The database directory for the Kraken 2 index. contains index files(hash.k2d opts.k2d taxo.k2d)
-    #[clap(long, value_parser, required = true)]
-    db: PathBuf,
+    #[clap(long = "db", value_parser, required = true)]
+    database: PathBuf,
 
     /// database hash chunk directory and other files
     #[clap(long)]
-    hash_dir: Option<PathBuf>,
+    k2d_dir: Option<PathBuf>,
 
     /// Specifies the hash file capacity. Acceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').
     /// Note: The specified capacity affects the index size, with a factor of 4 applied. For example, specifying '1G' results in an index size of '4G'.
@@ -70,8 +54,8 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> IOResult<()> {
-    let index_filename = &args.db.join("hash.k2d");
-    let hash_config = HashConfig::<u32>::from(index_filename)?;
+    let index_filename = &args.database.join("hash.k2d");
+    let hash_config = HashConfig::from(index_filename)?;
 
     let partition = (hash_config.capacity + args.hash_capacity - 1) / args.hash_capacity;
     println!("start...");
@@ -81,11 +65,11 @@ pub fn run(args: Args) -> IOResult<()> {
     let file_len = hash_config.capacity * 4 + 32;
     let b_size = std::mem::size_of::<u32>();
 
-    let hash_dir = args.hash_dir.unwrap_or(args.db.clone());
+    let k2d_dir = args.k2d_dir.unwrap_or(args.database.clone());
 
-    create_dir_all(&hash_dir).expect(&format!("create hash dir error {:?}", hash_dir));
+    create_dir_all(&k2d_dir).expect(&format!("create hash dir error {:?}", k2d_dir));
 
-    let config_file = hash_dir.join("hash_config.k2d");
+    let config_file = k2d_dir.join("hash_config.k2d");
     if config_file.exists() {
         panic!("hash config is exists!!!");
     }
@@ -100,7 +84,7 @@ pub fn run(args: Args) -> IOResult<()> {
     )?;
 
     for i in 1..=partition {
-        let chunk_file = hash_dir.join(format!("hash_{}.k2d", i));
+        let chunk_file = k2d_dir.join(format!("hash_{}.k2d", i));
         let offset = (32 + args.hash_capacity * (i - 1) * b_size) as u64;
         let mut length = args.hash_capacity * b_size;
         if (offset as usize + length) > file_len {
@@ -116,14 +100,14 @@ pub fn run(args: Args) -> IOResult<()> {
     // 打印运行时间
     println!("hashshard took: {:?}", duration);
 
-    let source_taxo_file = &args.db.join("taxo.k2d");
-    let dst_tax_file = hash_dir.join("taxo.k2d");
+    let source_taxo_file = &args.database.join("taxo.k2d");
+    let dst_tax_file = k2d_dir.join("taxo.k2d");
     if !dst_tax_file.exists() {
         fs::copy(source_taxo_file, dst_tax_file)?;
     }
 
-    let source_opts_file = &args.db.join("opts.k2d");
-    let dst_opts_file = hash_dir.join("opts.k2d");
+    let source_opts_file = &args.database.join("opts.k2d");
+    let dst_opts_file = k2d_dir.join("opts.k2d");
     if !dst_opts_file.exists() {
         fs::copy(source_opts_file, dst_opts_file)?;
     }

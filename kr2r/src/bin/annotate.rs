@@ -26,13 +26,11 @@ pub const BATCH_SIZE: usize = 8 * 1024 * 1024;
 pub struct Args {
     /// database hash chunk directory and other files
     #[clap(long)]
-    pub hash_dir: PathBuf,
-    // /// The file path for the Kraken 2 index.
-    // #[clap(short = 'H', long = "index-filename", value_parser, required = true)]
-    // index_filename: PathBuf,
-    /// The file path for the Kraken 2 options.
-    // #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
-    // options_filename: String,
+    pub k2d_dir: PathBuf,
+
+    /// Enables use of a Kraken 2 compatible shared database. Default is false.
+    #[clap(long, default_value_t = false)]
+    pub kraken_db_type: bool,
 
     /// chunk directory
     #[clap(long)]
@@ -97,9 +95,10 @@ fn process_batch<R, K>(
     chtm: &K,
     chunk_dir: PathBuf,
     batch_size: usize,
+    kraken_db_type: bool,
 ) -> std::io::Result<()>
 where
-    K: K2Compact<u32> + Send,
+    K: K2Compact + Send,
     R: Read + Send,
 {
     let slot_size = std::mem::size_of::<Slot<u64>>();
@@ -129,7 +128,7 @@ where
             .into_par_iter()
             .filter_map(|slot| {
                 let indx = slot.idx & idx_mask;
-                let taxid = chtm.get_from_page(indx, slot.value);
+                let taxid = chtm.get_from_page(indx, slot.value, kraken_db_type);
 
                 if taxid > 0 {
                     let kmer_id = slot.idx >> idx_bits;
@@ -200,7 +199,7 @@ fn process_chunk_file<P: AsRef<Path>>(
 
     let start = Instant::now();
 
-    let config = HashConfig::<u32>::from_hash_header(&args.hash_dir.join("hash_config.k2d"))?;
+    let config = HashConfig::from_hash_header(&args.k2d_dir.join("hash_config.k2d"))?;
     let parition = hash_files.len();
     let chtm = CHPage::from(
         config,
@@ -211,7 +210,13 @@ fn process_chunk_file<P: AsRef<Path>>(
     let duration = start.elapsed();
     // 打印运行时间
     println!("load table took: {:?}", duration);
-    process_batch(&mut reader, &chtm, args.chunk_dir.clone(), args.batch_size)?;
+    process_batch(
+        &mut reader,
+        &chtm,
+        args.chunk_dir.clone(),
+        args.batch_size,
+        args.kraken_db_type,
+    )?;
 
     Ok(())
 }
@@ -219,7 +224,7 @@ fn process_chunk_file<P: AsRef<Path>>(
 pub fn run(args: Args) -> Result<()> {
     let chunk_files = find_and_sort_files(&args.chunk_dir, "sample", ".k2")?;
 
-    let hash_files = find_and_sort_files(&args.hash_dir, "hash", ".k2d")?;
+    let hash_files = find_and_sort_files(&args.k2d_dir, "hash", ".k2d")?;
 
     // 开始计时
     let start = Instant::now();

@@ -233,7 +233,7 @@ pub fn create_partition_writers(partition_files: &Vec<PathBuf>) -> Vec<BufWriter
             // 尝试创建文件，如果失败则直接返回错误
             let file = OpenOptions::new()
                 .write(true)
-                .append(true) // 确保以追加模式打开文件
+                // .append(true) // 确保以追加模式打开文件
                 .create(true) // 如果文件不存在，则创建
                 .open(item)
                 .unwrap();

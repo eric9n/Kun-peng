@@ -9,18 +9,18 @@ use std::path::PathBuf;
 pub struct Args {
     /// the database directory
     #[arg(long, required = true)]
-    pub source: PathBuf,
+    pub database: PathBuf,
 
-    /// seqid2taxid.map file path, default = $source/seqid2taxid.map
+    /// seqid2taxid.map file path, default = $database/seqid2taxid.map
     #[arg(short = 'm', long)]
     pub id_to_taxon_map_filename: Option<PathBuf>,
 }
 
 pub fn run(args: Args) -> Result<()> {
-    let prelim_file = summary_prelim_map_files(&args.source)?;
+    let prelim_file = summary_prelim_map_files(&args.database)?;
     let map_file = args
         .id_to_taxon_map_filename
-        .unwrap_or(args.source.join("seqid2taxid.map"));
+        .unwrap_or(args.database.join("seqid2taxid.map"));
 
     if map_file.exists() {
         println!("id_to_taxon_map_filename {:?} exists", map_file);
