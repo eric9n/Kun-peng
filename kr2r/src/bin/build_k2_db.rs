@@ -11,6 +11,7 @@ use kr2r::utils::{
     get_file_limit, read_id_to_taxon_map,
 };
 use kr2r::IndexOptions;
+use std::fs::remove_file;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -144,6 +145,9 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     let idx_opts = IndexOptions::from_meros(meros);
     idx_opts.write_to_file(options_filename)?;
 
+    for chunk_file in chunk_files {
+        remove_file(chunk_file)?;
+    }
     Ok(())
 }
 
