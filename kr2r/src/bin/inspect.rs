@@ -1,5 +1,5 @@
 use clap::Parser;
-use kr2r::compact_hash::{CHPage, HashConfig};
+use kr2r::compact_hash::HashConfig;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::IndexOptions;
 use std::io::Result;
@@ -19,10 +19,6 @@ struct Args {
     /// The file path for the Kraken 2 options.
     #[clap(short = 'o', long = "options-filename", value_parser)]
     options_filename: Option<String>,
-
-    /// iter the index file to count the value
-    #[clap(short = 'v', long, value_parser)]
-    value_count: bool,
 }
 
 fn main() -> Result<()> {
@@ -39,13 +35,6 @@ fn main() -> Result<()> {
     let config = HashConfig::from(args.index_filename.clone())?;
 
     println!("compact hash table {:?}", config);
-    if args.value_count {
-        // let chtm = CHPage::<u32>::from(args.index_filename, 0, 1)?;
-        // println!(
-        //     "value counts {:?}",
-        //     config.capacity - chtm.get_none_counts()
-        // );
-    }
 
     Ok(())
 }

@@ -1,4 +1,4 @@
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use kr2r::compact_hash::{CHPage, Compact, HashConfig, K2Compact, Row, Slot};
 use kr2r::utils::find_and_sort_files;
 // use std::collections::HashMap;
@@ -13,11 +13,6 @@ use std::time::Instant;
 // 定义每批次处理的 Slot 数量
 pub const BATCH_SIZE: usize = 8 * 1024 * 1024;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-enum DbType {
-    Kraken,
-    Squid,
-}
 /// Command line arguments for the splitr program.
 ///
 /// This structure defines the command line arguments that are accepted by the splitr program.
