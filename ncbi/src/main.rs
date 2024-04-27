@@ -79,6 +79,7 @@ enum Mode {
     /// 仅检查文件的 md5
     Md5,
     /// 解析 genomic 文件，并且生成 library fna 文件
+    /// 同时将单个fna文件拼接成group为组的总的fna格式文件, 以便于构建database
     Fna {
         /// library fna 文件存储目录，为了不和原始文件混淆
         #[clap(value_parser)]
