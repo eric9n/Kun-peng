@@ -166,24 +166,51 @@ pub fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<FileFormat> {
         Box::new(file)
     };
 
-    let mut reader = BufReader::new(read1);
-    let mut buffer = [0; 1]; // 仅分配一个字节的缓冲区
+    let reader = BufReader::new(read1);
+    let mut lines = reader.lines();
 
-    // 读取文件的第一个字节
-    let bytes_read = reader.read(&mut buffer)?;
+    if let Some(first_line) = lines.next() {
+        let line = first_line?;
 
-    if bytes_read == 0 {
-        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Empty file"));
+        if line.starts_with('>') {
+            return Ok(FileFormat::Fasta);
+        } else if line.starts_with('@') {
+            let _ = lines.next();
+            if let Some(third_line) = lines.next() {
+                let line: String = third_line?;
+                if line.starts_with('+') {
+                    return Ok(FileFormat::Fastq);
+                }
+            }
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Unrecognized fasta(fastq) file format",
+            ));
+        }
     }
 
-    match buffer[0] {
-        b'>' => Ok(FileFormat::Fasta),
-        b'@' => Ok(FileFormat::Fastq),
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Unrecognized file format",
-        )),
-    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "Unrecognized fasta(fastq) file format",
+    ))
+    // let mut buffer = [0; 1]; // 仅分配一个字节的缓冲区
+
+    // // 读取文件的第一个字节
+    // let bytes_read = reader.read(&mut buffer)?;
+
+    // if bytes_read == 0 {
+    //     return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Empty file"));
+    // }
+
+    // match buffer[0] {
+    //     b'>' => Ok(FileFormat::Fasta),
+    //     b'@' => Ok(FileFormat::Fastq),
+    //     _ => Err(io::Error::new(
+    //         io::ErrorKind::Other,
+    //         "Unrecognized file format",
+    //     )),
+    // }
 }
 
 #[cfg(unix)]

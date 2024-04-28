@@ -207,7 +207,10 @@ where
                     Some(Ok(()))
                 }
             }
-            Err(_) => None,
+            Err(e) => {
+                println!("{:?}", e);
+                None
+            }
         }
 
         // If both reads are successful, return Ok(())
@@ -265,94 +268,3 @@ impl SeqSet for fasta::RecordSet {
         seq_pair_set
     }
 }
-
-// pub struct PairFastaRecordSet(fasta::RecordSet, fasta::RecordSet);
-
-// impl Default for PairFastaRecordSet {
-//     fn default() -> Self {
-//         PairFastaRecordSet(fasta::RecordSet::default(), fasta::RecordSet::default())
-//     }
-// }
-
-// pub struct PairFastaReader<R: io::Read, P = DefaultBufPolicy> {
-//     reader1: fasta::Reader<R, P>,
-//     reader2: fasta::Reader<R, P>,
-// }
-
-// impl PairFastaReader<File, DefaultBufPolicy> {
-//     #[inline]
-//     pub fn from_path<P: AsRef<Path>>(path1: P, path2: P) -> io::Result<PairFastaReader<File>> {
-//         let file1 = File::open(path1)?;
-//         let file2 = File::open(path2)?;
-
-//         let reader1 = fasta::Reader::new(file1);
-//         let reader2 = fasta::Reader::new(file2);
-
-//         Ok(PairFastaReader { reader1, reader2 })
-//     }
-// }
-
-// impl<'a> iter::IntoIterator for &'a PairFastaRecordSet {
-//     type Item = (fasta::RefRecord<'a>, fasta::RefRecord<'a>);
-//     type IntoIter = PairFastaRecordSetIter<'a>;
-
-//     #[inline]
-//     fn into_iter(self) -> Self::IntoIter {
-//         PairFastaRecordSetIter(self.0.into_iter(), self.1.into_iter())
-//     }
-// }
-
-// pub struct PairFastaRecordSetIter<'a>(fasta::RecordSetIter<'a>, fasta::RecordSetIter<'a>);
-
-// impl<'a> Iterator for PairFastaRecordSetIter<'a> {
-//     type Item = (fasta::RefRecord<'a>, fasta::RefRecord<'a>);
-
-//     #[inline]
-//     fn next(&mut self) -> Option<Self::Item> {
-//         match (self.0.next(), self.1.next()) {
-//             (Some(record1), Some(record2)) => Some((record1, record2)),
-//             _ => None,
-//         }
-//     }
-// }
-
-// impl<R, P> Reader for PairFastaReader<R, P>
-// where
-//     R: io::Read,
-//     P: seq_io::policy::BufPolicy + Send,
-// {
-//     type DataSet = PairFastaRecordSet;
-//     type Err = fasta::Error;
-
-//     #[inline]
-//     fn fill_data(&mut self, rset: &mut PairFastaRecordSet) -> Option<Result<(), Self::Err>> {
-//         let res1 = self.reader1.read_record_set(&mut rset.0)?.is_err();
-//         let res2 = self.reader2.read_record_set(&mut rset.1)?.is_err();
-
-//         if res1 || res2 {
-//             return None;
-//         }
-
-//         // If both reads are successful, return Ok(())
-//         Some(Ok(()))
-//     }
-// }
-
-// impl SeqSet for PairFastaRecordSet {
-//     fn to_seq_reads(&self, score: i32, meros: Meros) -> HashSet<SeqReads> {
-//         let mut seq_pair_set = HashSet::<SeqReads>::new();
-
-//         for records in self.into_iter() {
-//             let dna_id = records.0.id().unwrap_or_default().to_string();
-//             let seq1 = records.0.seq_x(score);
-//             let seq2 = records.1.seq_x(score);
-
-//             let kmers1 = KmerIterator::new(&seq1, meros).collect();
-//             let kmers2 = KmerIterator::new(&seq2, meros).collect();
-
-//             let seq_paired: Vec<Vec<u64>> = vec![kmers1, kmers2];
-//             seq_pair_set.insert(SeqReads { dna_id, seq_paired });
-//         }
-//         seq_pair_set
-//     }
-// }
