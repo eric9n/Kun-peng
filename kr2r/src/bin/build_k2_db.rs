@@ -104,7 +104,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
         );
     }
 
-    let hash_filename = source.join("hash_config.k2d");
+    let hash_filename = k2d_dir.join("hash_config.k2d");
     let partition = chunk_files.len();
     let mut size: u64 = 0;
 

@@ -6,7 +6,7 @@ use walkdir::WalkDir;
 
 /// 读取 seqid2taxid.map 文件。为了裁剪 ncbi 的 taxonomy 树
 pub fn read_id_to_taxon_map<P: AsRef<Path>>(filename: P) -> Result<HashMap<String, u64>> {
-    let file = File::open(filename)?;
+    let file = open_file(filename)?;
     let reader = BufReader::new(file);
     let mut id_map = HashMap::new();
 
@@ -97,7 +97,7 @@ pub fn summary_prelim_map_files<P: AsRef<Path>>(data_dir: P) -> Result<PathBuf> 
     let mut summary_file = File::create(&summary_file_path)?;
     // 遍历找到的文件并汇总内容
     for path in prelim_map_files {
-        let file = File::open(path)?;
+        let file = open_file(path)?;
         let reader = BufReader::new(file);
         for line in reader.lines() {
             let line = line?;
@@ -109,7 +109,7 @@ pub fn summary_prelim_map_files<P: AsRef<Path>>(data_dir: P) -> Result<PathBuf> 
 }
 
 pub fn create_seqid2taxid_file<P: AsRef<Path>>(prelim_map_file: P, output_file: P) -> Result<()> {
-    let file = File::open(prelim_map_file)?;
+    let file = open_file(prelim_map_file)?;
     let reader = BufReader::new(file);
     let mut output = File::create(output_file).unwrap();
 
@@ -159,7 +159,7 @@ pub fn is_gzipped(file: &mut File) -> io::Result<bool> {
 }
 
 pub fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<FileFormat> {
-    let mut file = File::open(path)?;
+    let mut file = open_file(path)?;
     let read1: Box<dyn io::Read + Send> = if is_gzipped(&mut file)? {
         Box::new(GzDecoder::new(file))
     } else {
@@ -304,4 +304,14 @@ pub fn find_and_sort_files(
 
     // 返回排序后的文件路径
     Ok(sorted_entries.into_iter().map(|(path, _)| path).collect())
+}
+
+pub fn open_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
+    File::open(&path).map_err(|e| {
+        if e.kind() == io::ErrorKind::NotFound {
+            io::Error::new(e.kind(), format!("File not found: {:?}", path.as_ref()))
+        } else {
+            e
+        }
+    })
 }

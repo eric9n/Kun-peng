@@ -1,6 +1,6 @@
 use clap::Parser;
 use kr2r::compact_hash::{CHPage, Compact, HashConfig, K2Compact, Row, Slot};
-use kr2r::utils::find_and_sort_files;
+use kr2r::utils::{find_and_sort_files, open_file};
 // use std::collections::HashMap;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -192,7 +192,7 @@ fn process_chunk_file<P: AsRef<Path>>(
     chunk_file: P,
     hash_files: &Vec<PathBuf>,
 ) -> Result<()> {
-    let file = File::open(chunk_file)?;
+    let file = open_file(chunk_file)?;
     let mut reader = BufReader::new(file);
 
     let (page_index, _) = read_chunk_header(&mut reader)?;

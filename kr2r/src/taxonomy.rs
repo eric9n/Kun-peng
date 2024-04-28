@@ -1,3 +1,4 @@
+use crate::utils::open_file;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
 use std::fs::File;
@@ -13,7 +14,7 @@ pub fn parse_nodes_file<P: AsRef<Path>>(
     HashMap<u64, String>,
     HashSet<String>,
 )> {
-    let nodes_file = File::open(nodes_filename)?;
+    let nodes_file = open_file(nodes_filename)?;
     let reader = BufReader::new(nodes_file);
 
     let mut parent_map = HashMap::new();
@@ -60,7 +61,7 @@ pub fn parse_nodes_file<P: AsRef<Path>>(
 
 /// 解析 ncbi 文件的 taxonomy names 文件
 pub fn parse_names_file<P: AsRef<Path>>(names_filename: P) -> Result<HashMap<u64, String>> {
-    let names_file = File::open(names_filename)?;
+    let names_file = open_file(names_filename)?;
     let reader = BufReader::new(names_file);
 
     let mut name_map = HashMap::new();
@@ -257,7 +258,7 @@ impl Taxonomy {
     const MAGIC: &'static [u8] = b"K2TAXDAT"; // 替换为实际的 magic bytes
 
     pub fn from_file<P: AsRef<Path> + Debug>(filename: P) -> Result<Taxonomy> {
-        let mut file = std::fs::File::open(&filename)?;
+        let mut file = open_file(&filename)?;
 
         let mut magic = vec![0; Self::MAGIC.len()];
         file.read_exact(&mut magic)?;

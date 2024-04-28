@@ -4,6 +4,7 @@ use crate::mmscanner::MinimizerScanner;
 use crate::taxonomy::{NCBITaxonomy, Taxonomy};
 use crate::Meros;
 
+use crate::utils::open_file;
 use byteorder::{LittleEndian, WriteBytesExt};
 use rayon::prelude::*;
 use seq_io::fasta::{Reader, Record};
@@ -123,7 +124,7 @@ pub fn process_k2file(
 
     let page: Vec<AtomicU32> = (0..capacity).map(|_| AtomicU32::new(0)).collect();
 
-    let file = File::open(&chunk_file)?;
+    let file = open_file(&chunk_file)?;
     let mut reader = BufReader::new(file);
 
     let cell_size = std::mem::size_of::<Slot<u32>>();
@@ -151,142 +152,6 @@ pub fn process_k2file(
         write_hashtable_to_file(&page, &page_file, page_index as u64, capacity as u64)?;
     Ok(size_count)
 }
-
-/// 处理k2格式的临时文件,构建数据库
-// pub fn process_k2file<P: AsRef<Path>>(
-//     chunk_file: P,
-//     chtm: &mut CHTableMut<u32>,
-//     taxonomy: &Taxonomy,
-// ) -> IOResult<()> {
-//     let total_counter = AtomicUsize::new(0);
-//     let size_counter = AtomicUsize::new(0);
-
-//     let value_mask = chtm.config.value_mask;
-//     let value_bits = chtm.config.value_bits;
-
-//     let file = File::open(chunk_file)?;
-//     let mut reader = BufReader::new(file);
-
-//     let cell_size = std::mem::size_of::<Cell>();
-//     let batch_buffer_size = cell_size * BATCH_SIZE;
-//     let mut batch_buffer = vec![0u8; batch_buffer_size];
-
-//     while let Ok(bytes_read) = reader.read(&mut batch_buffer) {
-//         if bytes_read == 0 {
-//             break;
-//         } // 文件末尾
-
-//         // 处理读取的数据批次
-//         let cells_in_batch = bytes_read / cell_size;
-
-//         let cells = unsafe {
-//             std::slice::from_raw_parts(batch_buffer.as_ptr() as *const Cell, cells_in_batch)
-//         };
-
-//         cells.iter().for_each(|cell| {
-//             let item = cell.as_slot();
-//             let item_taxid: u32 = item.value.right(value_mask).to_u32();
-
-//             if let Some((flag, mut slot)) = &chtm.set_page_cell(item) {
-//                 let slot_taxid = slot.value.right(value_mask).to_u32();
-//                 let new_taxid = taxonomy.lca(item_taxid, slot_taxid);
-//                 if slot_taxid != new_taxid {
-//                     slot.update_right(u32::from_u32(new_taxid), value_bits);
-//                     chtm.update_cell(flag, slot);
-//                 }
-//             } else {
-//                 size_counter.fetch_add(1, Ordering::SeqCst);
-//             }
-//         });
-//         total_counter.fetch_add(cells.len(), Ordering::SeqCst);
-//     }
-
-//     println!("total_counter {:?}", total_counter.load(Ordering::SeqCst));
-//     chtm.copy_from_page();
-
-//     let size_count = size_counter.load(Ordering::SeqCst);
-//     let total_count = total_counter.load(Ordering::SeqCst);
-//     println!("size_count {:?}", size_count);
-//     println!("total_count {:?}", total_count);
-//     chtm.add_size(size_count);
-
-//     Ok(())
-// }
-
-// /// 直接处理fna文件构建数据库
-// pub fn process_fna<P: AsRef<Path>>(
-//     fna_file: P,
-//     meros: Meros,
-//     chtm: &mut CHTableMut<u32>,
-//     taxonomy: &Taxonomy,
-//     id_to_taxon_map: &HashMap<String, u64>,
-//     threads: u32,
-// ) {
-//     let reader = Reader::from_path(fna_file).unwrap();
-//     let queue_len = (threads - 2) as usize;
-
-//     let total_counter = AtomicUsize::new(0);
-//     let size_counter = AtomicUsize::new(0);
-//     let seq_counter = AtomicUsize::new(0);
-//     // let update_counter = AtomicUsize::new(0);
-
-//     // let capacity = chtm.config.capacity;
-//     let value_bits = chtm.config.value_bits;
-//     let hash_config = chtm.config;
-//     let value_mask = hash_config.value_mask;
-
-//     read_parallel(
-//         reader,
-//         threads,
-//         queue_len,
-//         |record_set| {
-//             let mut hash_set = BTreeSet::<Slot<u32>>::new();
-
-//             for record in record_set.into_iter() {
-//                 seq_counter.fetch_add(1, Ordering::SeqCst);
-//                 if let Ok(seq_id) = record.id() {
-//                     if let Some(ext_taxid) = id_to_taxon_map.get(seq_id) {
-//                         let taxid = taxonomy.get_internal_id(*ext_taxid);
-//                         let kmer_iter = MinimizerScanner::new(record.seq(), meros)
-//                             .into_iter()
-//                             .map(|hash_key| hash_config.slot(hash_key, taxid as u32))
-//                             .collect::<BTreeSet<Slot<u32>>>();
-
-//                         total_counter.fetch_add(kmer_iter.len(), Ordering::SeqCst);
-//                         hash_set.extend(kmer_iter);
-//                     };
-//                 }
-//             }
-//             hash_set
-//         },
-//         |record_sets| {
-//             while let Some(Ok((_, hash_set))) = record_sets.next() {
-//                 hash_set.into_iter().for_each(|item| {
-//                     let item_taxid = item.value.right(value_mask);
-//                     if let Some(mut slot) = &chtm.set_table_cell(item.idx, item.value) {
-//                         let slot_taxid = slot.value.right(value_mask);
-//                         let new_taxid = taxonomy.lca(item_taxid, slot_taxid);
-//                         if slot_taxid != new_taxid {
-//                             slot.update_right(new_taxid, value_bits);
-//                             chtm.update_cell(&1, slot);
-//                             // update_counter.fetch_add(1, Ordering::SeqCst);
-//                         }
-//                     } else {
-//                         size_counter.fetch_add(1, Ordering::SeqCst);
-//                     }
-//                 });
-//             }
-//         },
-//     );
-//     let size_count = size_counter.load(Ordering::SeqCst);
-//     let seq_count = seq_counter.load(Ordering::SeqCst);
-//     let total_count = total_counter.load(Ordering::SeqCst);
-//     // let update_count = update_counter.load(Ordering::SeqCst);
-//     println!("seq_count {:?}", seq_count);
-//     println!("size_count {:?}", size_count);
-//     println!("total_count {:?}", total_count);
-//     chtm.add_size(size_count);
-// }
 
 /// 生成taxonomy树文件
 pub fn generate_taxonomy(

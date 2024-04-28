@@ -5,7 +5,7 @@ use kr2r::compact_hash::{Compact, HashConfig, Row};
 use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
 use kr2r::report::report_kraken_style;
 use kr2r::taxonomy::Taxonomy;
-use kr2r::utils::find_and_sort_files;
+use kr2r::utils::{find_and_sort_files, open_file};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fs::File;
@@ -20,7 +20,7 @@ const BATCH_SIZE: usize = 8 * 1024 * 1024;
 pub fn read_id_to_seq_map<P: AsRef<Path>>(
     filename: P,
 ) -> Result<DashMap<u32, (String, String, u32, Option<u32>)>> {
-    let file = File::open(filename)?;
+    let file = open_file(filename)?;
     let reader = BufReader::new(file);
     let id_map = DashMap::new();
 
@@ -168,7 +168,6 @@ pub fn add_hitlist_string(
     taxonomy: &Taxonomy,
 ) -> String {
     let result1 = generate_hit_string(kmer_count1, &rows, taxonomy, value_mask, 0);
-    println!("result1 {:?}", result1);
     if let Some(count) = kmer_count2 {
         let result2 = generate_hit_string(count, &rows, taxonomy, value_mask, kmer_count1);
         format!("{} |:| {}", result1, result2)
@@ -273,7 +272,7 @@ fn process_batch<P: AsRef<Path>>(
     writer: &Mutex<Box<dyn Write + Send>>,
     value_mask: usize,
 ) -> Result<(TaxonCountersDash, usize, DashSet<u32>)> {
-    let file = File::open(sample_file)?;
+    let file = open_file(sample_file)?;
     let mut reader = BufReader::new(file);
     let size = std::mem::size_of::<Row>();
     let mut batch_buffer = vec![0u8; size * BATCH_SIZE];

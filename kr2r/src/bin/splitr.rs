@@ -1,6 +1,6 @@
 use kr2r::compact_hash::{HashConfig, Slot};
 use kr2r::mmscanner::MinimizerScanner;
-use kr2r::seq::{self, SeqX};
+use kr2r::seq::{self, open_fasta_reader, SeqX};
 use kr2r::utils::{
     create_partition_files, create_partition_writers, create_sample_file, detect_file_format,
     get_file_limit, FileFormat,
@@ -265,8 +265,7 @@ fn process_fasta_file(
 
     let line_index = AtomicUsize::new(0);
 
-    let reader =
-        seq_io::fasta::Reader::from_path(&file1).expect("Unable to create pair reader from paths");
+    let reader = open_fasta_reader(&file1).expect("Unable to create pair reader from paths");
     read_parallel(
         reader,
         args.num_threads as u32,
@@ -340,8 +339,8 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig) -> Result<()> {
             let mut sample_writer =
                 create_sample_file(args.chunk_dir.join(format!("sample_id_{}.map", file_index)));
 
-            match detect_file_format(&file_pair[0]) {
-                Ok(FileFormat::Fastq) => {
+            match detect_file_format(&file_pair[0])? {
+                FileFormat::Fastq => {
                     process_fastq_file(
                         &args,
                         meros,
@@ -352,7 +351,7 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig) -> Result<()> {
                         &mut sample_writer,
                     );
                 }
-                Ok(FileFormat::Fasta) => {
+                FileFormat::Fasta => {
                     process_fasta_file(
                         &args,
                         meros,
@@ -362,10 +361,6 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig) -> Result<()> {
                         &mut writers,
                         &mut sample_writer,
                     );
-                }
-                Err(err) => {
-                    println!("file {:?}: {:?}", &file_pair, err);
-                    continue;
                 }
             }
         }

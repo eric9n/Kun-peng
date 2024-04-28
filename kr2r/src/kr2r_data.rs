@@ -1,3 +1,4 @@
+use crate::utils::open_file;
 // use crate::{Meros, CURRENT_REVCOM_VERSION};
 use crate::{
     BITS_PER_CHAR, CURRENT_REVCOM_VERSION, DEFAULT_KMER_LENGTH, DEFAULT_MINIMIZER_LENGTH,
@@ -126,7 +127,7 @@ impl IndexOptions {
     }
 
     pub fn read_index_options<P: AsRef<Path>>(file_path: P) -> IoResult<Self> {
-        let mut file = File::open(file_path)?;
+        let mut file = open_file(file_path)?;
         let mut buffer = vec![0; std::mem::size_of::<Self>()];
         file.read_exact(&mut buffer)?;
 

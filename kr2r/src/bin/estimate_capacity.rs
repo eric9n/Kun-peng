@@ -2,7 +2,7 @@ use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use kr2r::args::KLMTArgs;
 use kr2r::mmscanner::MinimizerScanner;
-use kr2r::utils::{find_library_fna_files, format_bytes};
+use kr2r::utils::{find_library_fna_files, format_bytes, open_file};
 use kr2r::KBuildHasher;
 use seq_io::fasta::{Reader, Record};
 use seq_io::parallel::read_parallel;
@@ -70,7 +70,7 @@ fn process_sequence(
     // 检查是否存在 JSON 文件
     if args.cache && Path::new(&json_path).exists() {
         // 如果存在，从文件读取并反序列化
-        let mut file = File::open(json_path).unwrap();
+        let mut file = open_file(json_path).unwrap();
         let mut serialized_hllp = String::new();
         file.read_to_string(&mut serialized_hllp).unwrap();
         let hllp: HyperLogLogPlus<u64, KBuildHasher> =

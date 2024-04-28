@@ -1,4 +1,5 @@
 use crate::mmscanner::MinimizerScanner;
+use crate::utils::open_file;
 use seq_io::fasta;
 use seq_io::fasta::Record as FaRecord;
 use seq_io::fastq;
@@ -10,7 +11,6 @@ use crate::utils::is_gzipped;
 use crate::Meros;
 use seq_io::policy::StdPolicy;
 use std::collections::HashSet;
-use std::fs::File;
 use std::io;
 use std::iter;
 use std::path::Path;
@@ -80,6 +80,21 @@ pub trait SeqSet {
     fn to_seq_reads(&self, score: i32, meros: Meros) -> HashSet<SeqReads>;
 }
 
+pub fn open_fasta_reader<P: AsRef<Path>>(
+    path1: P,
+) -> io::Result<fasta::Reader<Box<dyn io::Read + Send>>> {
+    let mut file1 = open_file(&path1)?;
+
+    let read1: Box<dyn io::Read + Send> = if is_gzipped(&mut file1)? {
+        Box::new(GzDecoder::new(file1))
+    } else {
+        Box::new(file1)
+    };
+
+    let reader1 = fasta::Reader::new(read1);
+    Ok(reader1)
+}
+
 pub struct PairFastqReader<P = DefaultBufPolicy> {
     reader1: fastq::Reader<Box<dyn io::Read + Send>, P>,
     reader2: Option<fastq::Reader<Box<dyn io::Read + Send>, P>>,
@@ -90,7 +105,7 @@ impl<'a> PairFastqReader<DefaultBufPolicy> {
     #[inline]
     pub fn from_path<P: AsRef<Path>>(path1: P, path2: Option<P>) -> io::Result<PairFastqReader> {
         // 分别打开两个文件
-        let mut file1 = File::open(&path1)?;
+        let mut file1 = open_file(&path1)?;
 
         let read1: Box<dyn io::Read + Send> = if is_gzipped(&mut file1)? {
             Box::new(GzDecoder::new(file1))
@@ -102,7 +117,7 @@ impl<'a> PairFastqReader<DefaultBufPolicy> {
 
         let reader2 = match path2 {
             Some(path2) => {
-                let mut file2 = File::open(path2)?;
+                let mut file2 = open_file(path2)?;
                 let read2: Box<dyn io::Read + Send> = if is_gzipped(&mut file2)? {
                     Box::new(GzDecoder::new(file2))
                 } else {

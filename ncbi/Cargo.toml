@@ -6,15 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-reqwest = { version = "0.11", features = ["stream", "multipart", "gzip"] }
+reqwest = { version = "0.12.4", features = ["stream", "multipart", "gzip"] }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1.0"
 futures = "0.3"
 regex = "1"
 clap = { version = "4.4.10", features = ["derive"] }
 futures-util = "0.3.30"
-reqwest-retry = "0.3"
-reqwest-middleware = "0.2.4"
+reqwest-retry = "0.5"
+reqwest-middleware = "0.3"
 lazy_static = "1.4"
 log = "0.4"
 env_logger = "0.11.0"
