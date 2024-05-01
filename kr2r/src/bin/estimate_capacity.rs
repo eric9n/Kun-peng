@@ -66,7 +66,7 @@ fn process_sequence(
     args: Args,
 ) -> HyperLogLogPlus<u64, KBuildHasher> {
     // 构建预期的 JSON 文件路径
-    let json_path = build_output_path(fna_file, "hllp.json");
+    let json_path = build_output_path(fna_file, &format!("hllp_{}.json", args.n));
     // 检查是否存在 JSON 文件
     if args.cache && Path::new(&json_path).exists() {
         // 如果存在，从文件读取并反序列化
