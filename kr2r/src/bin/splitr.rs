@@ -322,7 +322,7 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig) -> Result<()> {
 
     let mut process_files = |files: Vec<&[String]>| -> Result<()> {
         let file_bits = (((files.len() + file_index) as f64).log2().ceil() as usize).max(1);
-        if file_bits > 32 - hash_config.value_bits {
+        if file_bits > hash_config.value_bits {
             panic!("The number of files is too large to process.");
         }
 
