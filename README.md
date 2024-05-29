@@ -105,8 +105,8 @@ To get started with Squid, you can invoke the tool with the -h or --help option 
 
 
 ```bash
-./squid -h
-Usage: squid <COMMAND>
+./KunPeng -h
+Usage: KunPeng <COMMAND>
 
 Commands:
   estimate     estimate capacity
@@ -128,7 +128,7 @@ This will provide you with an overview of all available commands and options. Fo
 
 
 ```bash
-./squid <COMMAND> -h
+./KunPeng <COMMAND> -h
 ```
 Replace <COMMAND> with the name of the subcommand for which you need detailed help, such as estimate, build, or classify.
 
@@ -140,9 +140,9 @@ The seqid2taxid tool is a utility within the kr2r package designed to facilitate
 ### Usage
 
 ```bash
-squid seqid2taxid -h
+KunPeng seqid2taxid -h
 
-Usage: squid seqid2taxid [OPTIONS] --source <SOURCE>
+Usage: KunPeng seqid2taxid [OPTIONS] --source <SOURCE>
 
 Options:
       --source <SOURCE>      the database directory
@@ -155,7 +155,7 @@ Options:
 To use the seqid2taxid tool, execute it with the required and optional arguments as follows:
 
 ```bash
-squid seqid2taxid [OPTIONS] --source <SOURCE>
+KunPeng seqid2taxid [OPTIONS] --source <SOURCE>
 ```
 
 ### Required Options
@@ -170,13 +170,13 @@ squid seqid2taxid [OPTIONS] --source <SOURCE>
 To run the seqid2taxid tool with a specific source directory:
 
 ```bash
-squid seqid2taxid --source /path/to/database
+KunPeng seqid2taxid --source /path/to/database
 ```
 
 To specify a custom map file path:
 
 ```bash
-squid seqid2taxid --source /path/to/database -f /path/to/custom/seqid2taxid.map
+KunPeng seqid2taxid --source /path/to/database -f /path/to/custom/seqid2taxid.map
 ```
 
 ## 2.2 Estimate Capacity Tool
@@ -188,7 +188,7 @@ The estimate_capacity tool is designed for estimating the capacity required for 
 To use the estimate_capacity tool, execute it from the command line with the desired options:
 
 ```bash
-squid estimate_capacity [OPTIONS]
+KunPeng estimate_capacity [OPTIONS]
 ```
 
 Options
@@ -207,7 +207,7 @@ Options
 ### Example
 
 ```bash
-squid estimate_capacity -k 35 -l 31 --source /data/ncbi/path -p 10 --load-factor 0.7
+KunPeng estimate_capacity -k 35 -l 31 --source /data/ncbi/path -p 10 --load-factor 0.7
 ```
 
 ### Output
@@ -220,10 +220,10 @@ estimate count: 1213069985, required capacity: 1732968825.0, Estimated hash tabl
 ## 2.3 build
 
 ```bash
-./squid build -h
+./KunPeng build -h
 build database
 
-Usage: squid build [OPTIONS] --source <SOURCE> -H <HASHTABLE_FILENAME> -o <OPTIONS_FILENAME> -t <TAXONOMY_FILENAME> -m <ID_TO_TAXON_MAP_FILENAME> --ncbi-taxonomy-directory <NCBI_TAXONOMY_DIRECTORY> --required-capacity <REQUIRED_CAPACITY> --chunk-dir <CHUNK_DIR>
+Usage: KunPeng build [OPTIONS] --source <SOURCE> -H <HASHTABLE_FILENAME> -o <OPTIONS_FILENAME> -t <TAXONOMY_FILENAME> -m <ID_TO_TAXON_MAP_FILENAME> --ncbi-taxonomy-directory <NCBI_TAXONOMY_DIRECTORY> --required-capacity <REQUIRED_CAPACITY> --chunk-dir <CHUNK_DIR>
 
 Options:
       --source <SOURCE>
@@ -273,10 +273,10 @@ Options:
 ## 2.4 hashshard
 
 ```bash
-./squid hashshard -h
+./KunPeng hashshard -h
 split hash file
 
-Usage: squid hashshard [OPTIONS] --db <DB>
+Usage: KunPeng hashshard [OPTIONS] --db <DB>
 
 Options:
       --db <DB>                The database directory for the Kraken 2 index. contains index file(hash.k2d opts.k2d taxo.k2d)
@@ -289,10 +289,10 @@ Options:
 ## 2.5 splitr
 
 ```bash
-./squid splitr -h
+./KunPeng splitr -h
 Split fast(q/a) file into ranges
 
-Usage: squid splitr [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR> [INPUT_FILES]...
+Usage: KunPeng splitr [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR> [INPUT_FILES]...
 
 Arguments:
   [INPUT_FILES]...  A list of input file paths (FASTA/FASTQ) to be processed by the classify program
@@ -321,7 +321,7 @@ Options:
 ```bash
 annotate a set of sequences
 
-Usage: squid annotate [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR>
+Usage: KunPeng annotate [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR>
 
 Options:
       --hash-dir <HASH_DIR>      database hash chunk directory and other files
@@ -337,7 +337,7 @@ Options:
 ```bash
 resolve taxonomy tree
 
-Usage: squid resolve [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR>
+Usage: KunPeng resolve [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR>
 
 Options:
       --hash-dir <HASH_DIR>
@@ -368,10 +368,10 @@ Options:
 ## 2.8 classify
 
 ```bash
-./squid classify -h
+./KunPeng classify -h
 Integrates 'splitr', 'annotate', and 'resolve' into a unified workflow for sequence classification. classify a set of sequences
 
-Usage: squid classify [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR> [INPUT_FILES]...
+Usage: KunPeng classify [OPTIONS] --hash-dir <HASH_DIR> --chunk-dir <CHUNK_DIR> [INPUT_FILES]...
 
 Arguments:
   [INPUT_FILES]...  A list of input file paths (FASTA/FASTQ) to be processed by the classify program

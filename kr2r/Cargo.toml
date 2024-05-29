@@ -11,8 +11,8 @@ path = "src/bin/inspect.rs"
 
 
 [[bin]]
-name = "squid"
-path = "src/bin/squid.rs"
+name = "Kun"
+path = "src/bin/kun.rs"
 
 [features]
 default = ["dna"]

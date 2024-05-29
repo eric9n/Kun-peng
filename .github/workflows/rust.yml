@@ -9,7 +9,7 @@ on:
 # On each push to the `release` branch it will create or update a GitHub release, build your app, and upload the artifacts to the release.
 env:
   CARGO_TERM_COLOR: always
-  BINARIES_LIST: 'ncbi squid'
+  BINARIES_LIST: 'ncbi KunPeng'
   PROJECT_PREFIX: 'kraken-rust-'
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-20.04, windows-latest]
+        platform: [macos-latest, ubuntu-20.04, windows-latest, macos-13]
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -27,14 +27,25 @@ jobs:
       - name: Set Version Number
         shell: bash
         run: echo "VERSION=$(echo $GITHUB_REF | sed -e 's|refs/tags/||')" >> $GITHUB_ENV
+
       - name: Build
         run: cargo build --release
+
+      # - name: Install Rust (macOS)
+      #   if: matrix.platform == 'macos-latest'
+      #   run: |
+      #     rustup target add x86_64-apple-darwin
+
+      # - name: Build (macOS)
+      #   if: matrix.platform == 'macos-latest'
+      #   run: |
+      #     cargo build --release --target x86_64-apple-darwin
 
       # Set up the GitHub CLI
       - name: Install GitHub CLI
         run: |
           brew install gh
-        if: matrix.platform == 'macos-latest'
+        if: matrix.platform == 'macos-latest' || matrix.platform == 'macos-13'
 
       - name: Install GitHub CLI
         run: |
@@ -62,7 +73,7 @@ jobs:
 
       - name: Prepare asset name
         run: |
-          PLATFORM_TAG=$(echo ${{ matrix.platform }} | sed -e 's/-latest//' -e 's/ubuntu-20.04/linux-x86_64/' -e 's/macos/macos-x86_64/' -e 's/windows/windows-x86_64/')
+          PLATFORM_TAG=$(echo ${{ matrix.platform }} | sed -e 's/-latest//' -e 's/ubuntu-20.04/linux-x86_64/' -e 's/macos/macos-arm64/' -e 's/macos-13/macos-x86_64/' -e 's/windows/windows-x86_64/')
           echo "ASSET_NAME=${PROJECT_PREFIX}${VERSION}-${PLATFORM_TAG}.tar.gz" >> $GITHUB_ENV
         shell: bash
 
