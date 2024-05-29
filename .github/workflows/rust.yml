@@ -73,7 +73,7 @@ jobs:
 
       - name: Prepare asset name
         run: |
-          PLATFORM_TAG=$(echo ${{ matrix.platform }} | sed -e 's/-latest//' -e 's/ubuntu-20.04/linux-x86_64/' -e 's/macos/macos-arm64/' -e 's/macos-13/macos-x86_64/' -e 's/windows/windows-x86_64/')
+          PLATFORM_TAG=$(echo ${{ matrix.platform }} | sed -e 's/macos-latest/macos-arm64/' -e 's/macos-13/macos-x86_64/' -e 's/ubuntu-20.04/linux-x86_64/' -e 's/windows-latest/windows-x86_64/')
           echo "ASSET_NAME=${PROJECT_PREFIX}${VERSION}-${PLATFORM_TAG}.tar.gz" >> $GITHUB_ENV
         shell: bash
 
