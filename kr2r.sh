@@ -18,7 +18,7 @@ ${DIR}/ncbi --db $DATABASE taxonomy
 ${DIR}/ncbi --db $DATABASE gen -g bacteria,viral fna
 
 # 3. 预估数据库大小
-# ${DIR}/squid estimate_capacity --db $DATABASE -k 35 -l 31
+# ${DIR}/Kun estimate_capacity --db $DATABASE -k 35 -l 31
 
 # 4. build
-${DIR}/squid build --db $DATABASE --chunk-dir ${DATABASE_CHUNK}
+${DIR}/KunPeng build --db $DATABASE --chunk-dir ${DATABASE_CHUNK}
