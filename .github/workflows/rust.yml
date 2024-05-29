@@ -10,7 +10,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   BINARIES_LIST: 'ncbi KunPeng'
-  PROJECT_PREFIX: 'kraken-rust-'
+  PROJECT_PREFIX: 'kraken2-rust-'
 
 jobs:
   build-and-release:
