@@ -21,4 +21,4 @@ ${DIR}/ncbi --db $DATABASE gen -g bacteria,viral fna
 # ${DIR}/Kun estimate_capacity --db $DATABASE -k 35 -l 31
 
 # 4. build
-${DIR}/KunPeng build --db $DATABASE --chunk-dir ${DATABASE_CHUNK}
+${DIR}/kun_peng build --db $DATABASE --chunk-dir ${DATABASE_CHUNK}

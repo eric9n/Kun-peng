@@ -410,13 +410,35 @@ pub fn run(args: Args) -> Result<()> {
                 });
         }
 
+        let mut sample_taxon_counts: HashMap<
+            u64,
+            kr2r::readcounts::ReadCounts<hyperloglogplus::HyperLogLogPlus<u64, kr2r::KBuildHasher>>,
+        > = HashMap::new();
         thread_taxon_counts.iter().for_each(|entry| {
             total_taxon_counts
                 .entry(*entry.key())
                 .or_default()
                 .merge(&entry.value())
                 .unwrap();
+            sample_taxon_counts
+                .entry(*entry.key())
+                .or_default()
+                .merge(&entry.value())
+                .unwrap();
         });
+        if let Some(output) = &args.kraken_output_dir {
+            let filename = output.join(format!("output_{}.kreport2", i + 1));
+            report_kraken_style(
+                filename,
+                args.report_zero_counts,
+                args.report_kmer_data,
+                &taxo,
+                &sample_taxon_counts,
+                thread_sequences as u64,
+                (thread_sequences - thread_classified) as u64,
+            )?;
+        }
+
         total_seqs += thread_sequences;
         total_unclassified += thread_sequences - thread_classified;
     }

@@ -11,7 +11,7 @@ path = "src/bin/inspect.rs"
 
 
 [[bin]]
-name = "KunPeng"
+name = "kun_peng"
 path = "src/bin/kun.rs"
 
 [features]

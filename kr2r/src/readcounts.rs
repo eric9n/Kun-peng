@@ -75,6 +75,19 @@ where
     kmers: T,
 }
 
+// impl<T> Clone for ReadCounts<T>
+// where
+//     T: Unionable + Clone,
+// {
+//     fn clone(&self) -> Self {
+//         ReadCounts {
+//             n_reads: AtomicU64::new(self.n_reads.load(Ordering::Relaxed)),
+//             n_kmers: AtomicU64::new(self.n_kmers.load(Ordering::Relaxed)),
+//             kmers: self.kmers.clone(),
+//         }
+//     }
+// }
+
 impl<T> ReadCounts<T>
 where
     T: Unionable,

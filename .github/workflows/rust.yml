@@ -9,7 +9,7 @@ on:
 # On each push to the `release` branch it will create or update a GitHub release, build your app, and upload the artifacts to the release.
 env:
   CARGO_TERM_COLOR: always
-  BINARIES_LIST: 'ncbi KunPeng'
+  BINARIES_LIST: 'ncbi kun_peng'
   PROJECT_PREFIX: 'kraken2-rust-'
 
 jobs:
