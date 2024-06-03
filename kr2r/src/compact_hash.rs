@@ -188,19 +188,32 @@ impl Page {
 
 pub struct PagePtr<'a> {
     #[allow(dead_code)]
-    mmap: Mmap,
+    mmap: Option<Mmap>,
     pub index: usize,
     pub size: usize,
     pub data: &'a [u32],
 }
 
 impl<'a> PagePtr<'a> {
-    pub fn new(mmap: Mmap, index: usize, size: usize, data: &'a [u32]) -> Self {
+    pub fn new(mmap: Option<Mmap>, index: usize, size: usize, data: &'a [u32]) -> Self {
         Self {
             mmap,
             index,
             size,
             data,
+        }
+    }
+}
+
+impl<'a> Default for PagePtr<'a> {
+    fn default() -> Self {
+        // 创建一个包含0的静态数组
+        static DEFAULT_DATA: [u32; 1] = [0];
+        Self {
+            mmap: None,
+            index: 1,
+            size: 1,
+            data: &DEFAULT_DATA,
         }
     }
 }
@@ -390,7 +403,7 @@ fn read_pageptr_from_file<'a, P: AsRef<Path>>(filename: P) -> Result<PagePtr<'a>
     // let page_data =
     //     unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const u32, capacity) };
 
-    Ok(PagePtr::new(mmap, index, first_zero_end, page_data))
+    Ok(PagePtr::new(Some(mmap), index, first_zero_end, page_data))
 }
 
 impl<'a> CHPage<'a> {
@@ -400,7 +413,11 @@ impl<'a> CHPage<'a> {
         chunk_file2: P,
     ) -> Result<CHPage<'a>> {
         let page = read_page_from_file(chunk_file1)?;
-        let next_page = read_pageptr_from_file(chunk_file2)?;
+        let next_page = if page.data.last().map_or(false, |&x| x == 0) {
+            read_pageptr_from_file(chunk_file2)?
+        } else {
+            PagePtr::default()
+        };
 
         let chtm = CHPage {
             config,
