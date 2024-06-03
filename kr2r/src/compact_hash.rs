@@ -377,10 +377,20 @@ fn read_pageptr_from_file<'a, P: AsRef<Path>>(filename: P) -> Result<PagePtr<'a>
     let index = LittleEndian::read_u64(&mmap[0..8]) as usize;
     let capacity = LittleEndian::read_u64(&mmap[8..16]) as usize;
 
-    let page_data =
+    let raw_page_data =
         unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const u32, capacity) };
 
-    Ok(PagePtr::new(mmap, index, capacity, page_data))
+    let first_zero_end = raw_page_data
+        .iter()
+        .position(|&x| x == 0)
+        .map(|pos| pos + 1)
+        .unwrap_or(capacity);
+    let page_data = &raw_page_data[..first_zero_end];
+
+    // let page_data =
+    //     unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const u32, capacity) };
+
+    Ok(PagePtr::new(mmap, index, first_zero_end, page_data))
 }
 
 impl<'a> CHPage<'a> {
