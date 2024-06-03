@@ -138,6 +138,10 @@ pub fn run(args: Args) -> usize {
         find_library_fna_files(args.database)
     };
 
+    if fna_files.is_empty() {
+        panic!("Error: No library.fna files found in the specified directory. Please ensure that the directory contains at least one library.fna file and try again.");
+    }
+
     for fna_file in fna_files {
         let args_clone = Args {
             database: source.clone(),

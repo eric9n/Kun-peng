@@ -126,7 +126,7 @@ pub fn create_seqid2taxid_file<P: AsRef<Path>>(prelim_map_file: P, output_file: 
 }
 
 pub fn format_bytes(size: f64) -> String {
-    let suffixes = ["B", "kB", "MB", "GB", "TB", "PB", "EB"];
+    let suffixes = ["B", "KB", "MB", "GB", "TB", "PB", "EB"];
     let mut size = size;
     let mut current_suffix = &suffixes[0];
 
