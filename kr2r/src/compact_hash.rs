@@ -384,7 +384,7 @@ fn read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
     Ok(Page::new(index, capacity, page_data))
 }
 
-fn read_pageptr_from_file<'a, P: AsRef<Path>>(filename: P) -> Result<PagePtr<'a>> {
+fn _read_pageptr_from_file<'a, P: AsRef<Path>>(filename: P) -> Result<PagePtr<'a>> {
     let file = OpenOptions::new().read(true).open(&filename)?;
     let mmap = unsafe { MmapOptions::new().populate().map(&file)? };
     let index = LittleEndian::read_u64(&mmap[0..8]) as usize;
@@ -406,6 +406,38 @@ fn read_pageptr_from_file<'a, P: AsRef<Path>>(filename: P) -> Result<PagePtr<'a>
     Ok(PagePtr::new(Some(mmap), index, first_zero_end, page_data))
 }
 
+fn read_pageptr_from_file_chunk<'a, P: AsRef<Path>>(filename: P) -> Result<PagePtr<'a>> {
+    let file = OpenOptions::new().read(true).open(&filename)?;
+    let mmap = unsafe { MmapOptions::new().populate().map(&file)? };
+    let index = LittleEndian::read_u64(&mmap[0..8]) as usize;
+    let capacity = LittleEndian::read_u64(&mmap[8..16]) as usize;
+
+    let mut first_zero_end = capacity;
+    let chunk_size = 1024; // 定义每次读取的块大小
+    let mut found_zero = false;
+
+    for i in (0..capacity).step_by(chunk_size) {
+        let end = usize::min(i + chunk_size, capacity);
+        let chunk = unsafe {
+            std::slice::from_raw_parts(mmap.as_ptr().add(16 + i * 4) as *const u32, end - i)
+        };
+        if let Some(pos) = chunk.iter().position(|&x| x == 0) {
+            first_zero_end = i + pos + 1;
+            found_zero = true;
+            break;
+        }
+    }
+
+    if !found_zero {
+        first_zero_end = capacity;
+    }
+
+    let page_data =
+        unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const u32, first_zero_end) };
+
+    Ok(PagePtr::new(Some(mmap), index, first_zero_end, page_data))
+}
+
 impl<'a> CHPage<'a> {
     pub fn from<P: AsRef<Path> + Debug>(
         config: HashConfig,
@@ -414,7 +446,7 @@ impl<'a> CHPage<'a> {
     ) -> Result<CHPage<'a>> {
         let page = read_page_from_file(chunk_file1)?;
         let next_page = if page.data.last().map_or(false, |&x| x == 0) {
-            read_pageptr_from_file(chunk_file2)?
+            read_pageptr_from_file_chunk(chunk_file2)?
         } else {
             PagePtr::default()
         };
