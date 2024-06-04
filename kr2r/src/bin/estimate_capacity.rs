@@ -114,8 +114,15 @@ fn process_sequence(
 
     // 序列化 hllp 对象并将其写入文件
     let serialized_hllp = serde_json::to_string(&hllp).unwrap();
-    let mut file = File::create(&json_path).unwrap();
-    file.write_all(serialized_hllp.as_bytes()).unwrap();
+
+    if let Ok(mut file) = File::create(&json_path) {
+        // 尝试写入数据
+        if let Err(e) = file.write_all(serialized_hllp.as_bytes()) {
+            eprintln!("Failed to write to file: {}", e);
+        }
+    } else {
+        eprintln!("Failed to create file: {}", json_path);
+    }
 
     hllp
 }
