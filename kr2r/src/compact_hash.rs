@@ -380,7 +380,6 @@ fn _read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
         page_data_slice.copy_from_slice(data);
     }
 
-    // let page_data = data.to_vec();
     Ok(Page::new(index, capacity, page_data))
 }
 
