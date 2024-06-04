@@ -1,6 +1,8 @@
 use async_compression::tokio::bufread::GzipDecoder;
 use regex::Regex;
 use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 use tokio::fs::OpenOptions;
 use tokio::{
     fs::File,
@@ -8,7 +10,6 @@ use tokio::{
 };
 
 use anyhow::Result;
-use std::path::PathBuf;
 use tar::Archive;
 
 pub async fn decompress_and_extract_tar_gz(
@@ -32,6 +33,27 @@ pub async fn decompress_and_extract_tar_gz(
     // Use the tar crate to decompress the TAR archive
     let mut archive = Archive::new(&decompressed_data[..]);
     archive.unpack(out_path)?;
+
+    Ok(())
+}
+
+async fn delete_hllp_json_files(out_dir: &Path) -> Result<()> {
+    let entries = fs::read_dir(out_dir)?;
+
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(file_name) = path.file_name() {
+                if let Some(file_name_str) = file_name.to_str() {
+                    if file_name_str.starts_with("hllp_") && file_name_str.ends_with(".json") {
+                        tokio::fs::remove_file(&path).await?;
+                        println!("Deleted: {:?}", path);
+                    }
+                }
+            }
+        }
+    }
 
     Ok(())
 }
@@ -103,6 +125,7 @@ pub async fn write_to_fna(
             .open(&library_fna_path)
             .await?,
     );
+    delete_hllp_json_files(&out_dir).await?;
     let mut map_writer = BufWriter::new(
         OpenOptions::new()
             .create(true)
