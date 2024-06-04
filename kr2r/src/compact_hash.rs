@@ -2,7 +2,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use memmap2::{Mmap, MmapOptions};
 use std::cmp::Ordering as CmpOrdering;
 use std::fs::OpenOptions;
-use std::io::Result;
+use std::io::{Read, Result};
 use std::path::Path;
 
 /// 1101010101 => left: 11010, right: 10101;
@@ -360,7 +360,7 @@ pub struct CHPage<'a> {
     pub next_page: PagePtr<'a>,
 }
 
-fn read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
+fn _read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
     let file = OpenOptions::new().read(true).open(&filename)?;
     let mmap = unsafe { MmapOptions::new().populate().map(&file)? };
     let index = LittleEndian::read_u64(&mmap[0..8]) as usize;
@@ -382,6 +382,29 @@ fn read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
 
     // let page_data = data.to_vec();
     Ok(Page::new(index, capacity, page_data))
+}
+
+fn read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
+    let mut file = std::fs::File::open(filename)?;
+
+    // 读取索引和容量
+    let mut buffer = [0u8; 16];
+    file.read_exact(&mut buffer)?;
+
+    let index = LittleEndian::read_u64(&buffer[0..8]) as usize;
+    let capacity = LittleEndian::read_u64(&buffer[8..16]) as usize;
+
+    // 读取数据部分
+    let mut data = vec![0u32; capacity];
+    let data_bytes = unsafe {
+        std::slice::from_raw_parts_mut(
+            data.as_mut_ptr() as *mut u8,
+            capacity * std::mem::size_of::<u32>(),
+        )
+    };
+    file.read_exact(data_bytes)?;
+
+    Ok(Page::new(index, capacity, data))
 }
 
 fn _read_pageptr_from_file<'a, P: AsRef<Path>>(filename: P) -> Result<PagePtr<'a>> {
