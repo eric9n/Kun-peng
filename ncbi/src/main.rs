@@ -290,6 +290,7 @@ async fn async_run(args: Args) -> Result<()> {
 fn main() -> Result<()> {
     env_logger::Builder::new()
         .filter_level(log::LevelFilter::Info)
+        .filter_module("reqwest_retry::middleware", log::LevelFilter::Error)
         .init();
 
     let args = Args::parse();
