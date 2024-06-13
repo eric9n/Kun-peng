@@ -22,7 +22,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]
-#[clap(version, about = "classify", long_about = "classify")]
+#[clap(
+    version,
+    about = "Directly load all hash tables for classification annotation",
+    long_about = "Directly load all hash tables for classification annotation"
+)]
 pub struct Args {
     /// database hash chunk directory and other files
     #[clap(long)]
