@@ -1,5 +1,4 @@
-use byteorder::{ByteOrder, LittleEndian};
-use memmap2::{Mmap, MmapOptions};
+use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use std::cmp::Ordering as CmpOrdering;
 use std::fs::OpenOptions;
 use std::io::{Read, Result};
@@ -166,36 +165,6 @@ where
     }
 }
 
-pub struct Page {
-    pub index: usize,
-    pub size: usize,
-    pub data: Vec<u32>,
-}
-
-impl Default for Page {
-    fn default() -> Self {
-        Self {
-            index: 1,
-            size: 1,
-            data: vec![0],
-        }
-    }
-}
-
-impl Page {
-    pub fn new(index: usize, size: usize, data: Vec<u32>) -> Self {
-        Self { index, size, data }
-    }
-
-    pub fn start(&self) -> usize {
-        self.index * self.size
-    }
-
-    pub fn end(&self, capacity: usize) -> usize {
-        std::cmp::min((self.index + 1) * self.size, capacity)
-    }
-}
-
 use std::fmt::{self, Debug};
 
 #[derive(Clone, Copy)]
@@ -229,14 +198,6 @@ impl fmt::Debug for HashConfig {
 }
 
 impl HashConfig {
-    // 使用常量替代硬编码的数字，增加代码可读性
-    const PARTITION_OFFSET: usize = 0;
-    const HASH_SIZE_OFFSET: usize = 8;
-    const CAPACITY_OFFSET: usize = 0;
-    const SIZE_OFFSET: usize = 8;
-    const VALUE_BITS_OFFSET: usize = 24;
-    const U64_SIZE: usize = 8;
-
     pub fn new(
         capacity: usize,
         value_bits: usize,
@@ -256,27 +217,14 @@ impl HashConfig {
     }
 
     pub fn from_hash_header<P: AsRef<Path>>(filename: P) -> Result<Self> {
-        let file = OpenOptions::new().read(true).open(&filename)?;
-        let mmap = unsafe { MmapOptions::new().map(&file)? };
+        let mut file = OpenOptions::new().read(true).open(&filename)?;
+        let partition = file.read_u64::<LittleEndian>()? as usize;
+        let hash_capacity = file.read_u64::<LittleEndian>()? as usize;
 
-        let offset = 2 * Self::U64_SIZE;
-
-        let partition = LittleEndian::read_u64(
-            &mmap[Self::PARTITION_OFFSET..Self::PARTITION_OFFSET + Self::U64_SIZE],
-        ) as usize;
-        let hash_capacity = LittleEndian::read_u64(
-            &mmap[Self::HASH_SIZE_OFFSET..Self::HASH_SIZE_OFFSET + Self::U64_SIZE],
-        ) as usize;
-        let capacity = LittleEndian::read_u64(
-            &mmap[Self::CAPACITY_OFFSET + offset..Self::CAPACITY_OFFSET + offset + Self::U64_SIZE],
-        ) as usize;
-        let size = LittleEndian::read_u64(
-            &mmap[Self::SIZE_OFFSET + offset..Self::SIZE_OFFSET + offset + Self::U64_SIZE],
-        ) as usize;
-        let value_bits = LittleEndian::read_u64(
-            &mmap[Self::VALUE_BITS_OFFSET + offset
-                ..Self::VALUE_BITS_OFFSET + offset + Self::U64_SIZE],
-        ) as usize;
+        let capacity = file.read_u64::<LittleEndian>()? as usize;
+        let size = file.read_u64::<LittleEndian>()? as usize;
+        let _ = file.read_u64::<LittleEndian>()? as usize;
+        let value_bits = file.read_u64::<LittleEndian>()? as usize;
 
         Ok(Self::new(
             capacity,
@@ -287,24 +235,21 @@ impl HashConfig {
         ))
     }
 
-    pub fn from<P: AsRef<Path>>(filename: P) -> Result<Self> {
-        let file = OpenOptions::new().read(true).open(&filename)?;
-        let mmap = unsafe { MmapOptions::new().map(&file)? };
-        Ok(Self::from_mmap(&mmap))
+    pub fn get_idx_mask(&self) -> usize {
+        let idx_bits = ((self.hash_capacity as f64).log2().ceil() as usize).max(1);
+        (1 << idx_bits) - 1
     }
 
-    pub fn from_mmap(mmap: &Mmap) -> Self {
-        let capacity = LittleEndian::read_u64(
-            &mmap[Self::CAPACITY_OFFSET..Self::CAPACITY_OFFSET + Self::U64_SIZE],
-        ) as usize;
-        let size =
-            LittleEndian::read_u64(&mmap[Self::SIZE_OFFSET..Self::SIZE_OFFSET + Self::U64_SIZE])
-                as usize;
-        let value_bits = LittleEndian::read_u64(
-            &mmap[Self::VALUE_BITS_OFFSET..Self::VALUE_BITS_OFFSET + Self::U64_SIZE],
-        ) as usize;
+    pub fn get_idx_bits(&self) -> usize {
+        ((self.hash_capacity as f64).log2().ceil() as usize).max(1)
+    }
 
-        Self::new(capacity, value_bits, size, 0, 0)
+    pub fn get_value_mask(&self) -> usize {
+        self.value_mask
+    }
+
+    pub fn get_value_bits(&self) -> usize {
+        self.value_bits
     }
 
     pub fn index(&self, hash_key: u64) -> usize {
@@ -320,45 +265,6 @@ impl HashConfig {
         let idx = self.index(hash_key);
         Slot::<u64>::new(idx, u64::hash_value(hash_key, self.value_bits, seq_id))
     }
-}
-
-pub trait K2Compact: std::marker::Sync + Send {
-    fn get_idx_mask(&self) -> usize;
-    fn get_idx_bits(&self) -> usize;
-    fn get_value_mask(&self) -> usize;
-    fn get_value_bits(&self) -> usize;
-    fn get_from_page(&self, idx: usize, value: u64, next: bool) -> u32;
-}
-
-#[allow(unused)]
-pub struct CHPage {
-    // 哈希表的容量
-    pub config: HashConfig,
-    pub page: Page,
-    pub next_page: Page,
-}
-
-fn _read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
-    let file = OpenOptions::new().read(true).open(&filename)?;
-    let mmap = unsafe { MmapOptions::new().populate().map(&file)? };
-    let index = LittleEndian::read_u64(&mmap[0..8]) as usize;
-    let capacity = LittleEndian::read_u64(&mmap[8..16]) as usize;
-
-    let data = unsafe { std::slice::from_raw_parts(mmap.as_ptr().add(16) as *const u32, capacity) };
-
-    // 初始化Vec<B>，预分配足够容量
-    let mut page_data: Vec<u32> = Vec::with_capacity(capacity);
-    // 为Vec<B>安全地设置长度
-    unsafe {
-        page_data.set_len(capacity);
-    }
-    // 使用copy_from_slice进行数据复制
-    unsafe {
-        let page_data_slice = std::slice::from_raw_parts_mut(page_data.as_mut_ptr(), capacity);
-        page_data_slice.copy_from_slice(data);
-    }
-
-    Ok(Page::new(index, capacity, page_data))
 }
 
 fn read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
@@ -384,7 +290,7 @@ fn read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
     Ok(Page::new(index, capacity, data))
 }
 
-fn read_pageptr_from_file_chunk<P: AsRef<Path>>(filename: P) -> Result<Page> {
+fn read_first_block_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
     let mut file = std::fs::File::open(filename)?;
 
     // Read the index and capacity
@@ -426,41 +332,64 @@ fn read_pageptr_from_file_chunk<P: AsRef<Path>>(filename: P) -> Result<Page> {
     Ok(Page::new(index, first_zero_end, data))
 }
 
-impl CHPage {
-    pub fn from<P: AsRef<Path> + Debug>(
-        config: HashConfig,
-        chunk_file1: P,
-        chunk_file2: P,
-    ) -> Result<CHPage> {
-        let page = read_page_from_file(chunk_file1)?;
-        let next_page = if page.data.last().map_or(false, |&x| x == 0) {
-            read_pageptr_from_file_chunk(chunk_file2)?
-        } else {
-            Page::default()
-        };
+#[derive(Clone)]
+pub struct Page {
+    pub index: usize,
+    pub size: usize,
+    pub data: Vec<u32>,
+}
 
-        let chtm = CHPage {
-            config,
-            next_page,
-            page,
-        };
-        Ok(chtm)
+impl Default for Page {
+    fn default() -> Self {
+        Self {
+            index: 1,
+            size: 1,
+            data: vec![0],
+        }
+    }
+}
+
+impl Page {
+    pub fn new(index: usize, size: usize, data: Vec<u32>) -> Self {
+        Self { index, size, data }
     }
 
-    pub fn get_from_next_page(&self, index: usize, compacted_key: u32) -> u32 {
-        let value_mask = self.config.value_mask;
+    pub fn start(&self) -> usize {
+        self.index * self.size
+    }
+
+    pub fn end(&self, capacity: usize) -> usize {
+        std::cmp::min((self.index + 1) * self.size, capacity)
+    }
+
+    pub fn merge(&mut self, other: Self) {
+        self.size = self.size + other.size;
+        self.data.extend_from_slice(&other.data);
+    }
+
+    pub fn find_index(
+        &self,
+        index: usize,
+        value: u64,
+        value_bits: usize,
+        value_mask: usize,
+    ) -> u32 {
+        let compacted_key = value.left(value_bits) as u32;
         let mut idx = index;
+        if idx > self.size {
+            return u32::default();
+        }
 
         loop {
-            if let Some(cell) = self.next_page.data.get(idx) {
+            if let Some(cell) = self.data.get(idx) {
                 if cell.right(value_mask) == u32::default()
-                    || cell.left(self.config.value_bits) == compacted_key
+                    || cell.left(value_bits) == compacted_key
                 {
                     return cell.right(value_mask);
                 }
 
                 idx = idx + 1;
-                if idx >= self.next_page.size {
+                if idx >= self.size {
                     break;
                 }
             } else {
@@ -472,57 +401,74 @@ impl CHPage {
     }
 }
 
-impl K2Compact for CHPage {
-    fn get_idx_mask(&self) -> usize {
-        let idx_bits = ((self.config.hash_capacity as f64).log2().ceil() as usize).max(1);
-        (1 << idx_bits) - 1
+#[allow(unused)]
+pub struct CHTable {
+    pub config: HashConfig,
+    pub pages: Vec<Page>,
+}
+
+impl CHTable {
+    pub fn from_pair<P: AsRef<Path> + Debug>(
+        config: HashConfig,
+        chunk_file1: P,
+        chunk_file2: P,
+    ) -> Result<CHTable> {
+        let mut page = read_page_from_file(chunk_file1)?;
+        let next_page = if page.data.last().map_or(false, |&x| x == 0) {
+            read_first_block_from_file(chunk_file2)?
+        } else {
+            Page::default()
+        };
+        page.merge(next_page);
+        let count = page.index;
+        let mut pages = vec![Page::default(); count - 1];
+        pages.push(page);
+        let chtm: CHTable = CHTable { config, pages };
+        Ok(chtm)
     }
 
-    fn get_idx_bits(&self) -> usize {
-        ((self.config.hash_capacity as f64).log2().ceil() as usize).max(1)
-    }
-
-    fn get_value_mask(&self) -> usize {
-        self.config.value_mask
-    }
-
-    fn get_value_bits(&self) -> usize {
-        self.config.value_bits
-    }
-
-    fn get_from_page(&self, indx: usize, value: u64, next: bool) -> u32 {
-        let compacted_key = value.left(self.config.value_bits) as u32;
-        let value_mask = self.config.value_mask;
-        let mut idx = indx;
-        let first_idx = idx;
-
-        loop {
-            if let Some(cell) = self.page.data.get(idx) {
-                if cell.right(value_mask) == u32::default()
-                    || cell.left(self.config.value_bits) == compacted_key
-                {
-                    return cell.right(value_mask);
-                }
-
-                if next {
-                    idx = idx + 1;
-                    if idx >= self.page.size {
-                        // 需要确定在table中的位置, page index 从0开始
-                        let index = idx % self.page.size;
-                        return self.get_from_next_page(index, compacted_key);
-                    }
-                } else {
-                    idx = (idx + 1) % self.page.size;
-                }
-
-                if idx == first_idx {
-                    break;
-                }
+    pub fn from_hash_files<P: AsRef<Path> + Debug>(
+        config: HashConfig,
+        hash_files: Vec<P>,
+    ) -> Result<CHTable> {
+        let mut pages = vec![Page::default(); hash_files.len() + 1];
+        for hash_file in hash_files {
+            let mut page = read_page_from_file(&hash_file)?;
+            let next_page = if page.data.last().map_or(false, |&x| x == 0) {
+                read_first_block_from_file(&hash_file)?
             } else {
-                // 如果get(idx)失败，返回默认值
-                return u32::default();
+                Page::default()
+            };
+            page.merge(next_page);
+            if let Some(elem) = pages.get_mut(page.index) {
+                *elem = page;
             }
         }
-        u32::default()
+
+        let chtm = CHTable { config, pages };
+        Ok(chtm)
+    }
+
+    pub fn from<P: AsRef<Path> + Debug>(config: HashConfig, chunk_file1: P) -> Result<CHTable> {
+        let mut page = read_page_from_file(&chunk_file1)?;
+        let next_page = if page.data.last().map_or(false, |&x| x == 0) {
+            read_first_block_from_file(&chunk_file1)?
+        } else {
+            Page::default()
+        };
+        page.merge(next_page);
+        let count = page.index;
+        let mut pages = vec![Page::default(); count - 1];
+        pages.push(page);
+        let chtm = CHTable { config, pages };
+        Ok(chtm)
+    }
+
+    pub fn get_from_page(&self, indx: usize, value: u64, page_index: usize) -> u32 {
+        if let Some(page) = self.pages.get(page_index) {
+            page.find_index(indx, value, self.config.value_bits, self.config.value_mask)
+        } else {
+            0
+        }
     }
 }

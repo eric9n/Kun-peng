@@ -3,7 +3,7 @@ use kr2r::mmscanner::MinimizerScanner;
 use kr2r::seq::{self, open_fasta_reader, SeqX};
 use kr2r::utils::{
     create_partition_files, create_partition_writers, create_sample_file, detect_file_format,
-    get_file_limit, FileFormat,
+    get_file_limit, get_lastest_file_index, FileFormat,
 };
 use kr2r::{IndexOptions, Meros};
 use seq_io::fasta::Record;
@@ -97,23 +97,6 @@ fn init_chunk_writers(
     });
 
     writers
-}
-
-/// 获取最新的文件序号
-fn get_lastest_file_index(file_path: &PathBuf) -> Result<usize> {
-    let file_content = fs::read_to_string(&file_path)?;
-    // 如果文件内容为空，则默认最大值为0
-    let index = if file_content.is_empty() {
-        0
-    } else {
-        file_content
-            .lines() // 将内容按行分割
-            .filter_map(|line| line.split('\t').next()) // 获取每行的第一列
-            .filter_map(|num_str| num_str.parse::<usize>().ok()) // 尝试将第一列的字符串转换为整型
-            .max() // 找到最大值
-            .unwrap_or(1)
-    };
-    Ok(index)
 }
 
 /// 处理record
@@ -265,7 +248,7 @@ fn process_fasta_file(
 
     let line_index = AtomicUsize::new(0);
 
-    let reader = open_fasta_reader(&file1).expect("Unable to create pair reader from paths");
+    let reader = open_fasta_reader(&file1).expect("Unable to create fasta reader from path");
     read_parallel(
         reader,
         args.num_threads as u32,

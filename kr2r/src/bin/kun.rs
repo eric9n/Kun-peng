@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 mod annotate;
 mod build_k2_db;
+mod classify;
 mod estimate_capacity;
 mod hashshard;
 mod resolve;
@@ -141,6 +142,7 @@ enum Commands {
     Annotate(annotate::Args),
     Resolve(resolve::Args),
     Classify(ClassifyArgs),
+    Direct(classify::Args),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -193,6 +195,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let duration = start.elapsed();
             println!("Classify took: {:?}", duration);
+        }
+        Commands::Direct(cmd_args) => {
+            classify::run(cmd_args)?;
         }
     }
 

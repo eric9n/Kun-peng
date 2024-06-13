@@ -18,4 +18,5 @@ pub use kv_store::*;
 pub use readcounts::TaxonCounts;
 
 pub mod args;
+pub mod classify;
 pub mod compact_hash;

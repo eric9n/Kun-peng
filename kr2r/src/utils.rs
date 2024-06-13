@@ -342,3 +342,20 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
         }
     })
 }
+
+/// 获取最新的文件序号
+pub fn get_lastest_file_index(file_path: &PathBuf) -> Result<usize> {
+    let file_content = fs::read_to_string(&file_path)?;
+    // 如果文件内容为空，则默认最大值为0
+    let index = if file_content.is_empty() {
+        0
+    } else {
+        file_content
+            .lines() // 将内容按行分割
+            .filter_map(|line| line.split('\t').next()) // 获取每行的第一列
+            .filter_map(|num_str| num_str.parse::<usize>().ok()) // 尝试将第一列的字符串转换为整型
+            .max() // 找到最大值
+            .unwrap_or(1)
+    };
+    Ok(index)
+}

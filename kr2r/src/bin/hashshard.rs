@@ -1,10 +1,10 @@
 use clap::Parser;
 use kr2r::args::parse_size;
 use kr2r::compact_hash::HashConfig;
-use memmap2::MmapOptions;
+// use memmap2::MmapOptions;
 use std::fs::{self, create_dir_all, File, OpenOptions};
 use std::io::BufWriter;
-use std::io::{Result as IOResult, Write};
+use std::io::{self, BufReader, Read, Result as IOResult, Seek, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -26,11 +26,22 @@ fn mmap_read_write<P: AsRef<Path>, Q: AsRef<Path>>(
         .write_all(&cap.to_le_bytes())
         .expect("Failed to write capacity");
 
-    let file = OpenOptions::new().read(true).open(&source_path)?;
-    let mmap = unsafe { MmapOptions::new().offset(offset).len(length).map(&file)? };
+    // 打开源文件，并创建一个缓冲读取器
+    let mut file = OpenOptions::new().read(true).open(&source_path)?;
+    file.seek(io::SeekFrom::Start(offset))?;
+    let mut reader = BufReader::new(file);
 
-    // 将内存映射的数据写入目标文件
-    dest_file.write_all(&mmap)?;
+    // 创建一个缓冲区，用于存储读取的数据
+    let mut buffer = vec![0; length];
+    reader.read_exact(&mut buffer)?;
+
+    // 将读取的数据写入目标文件
+    dest_file.write_all(&buffer)?;
+    // let file = OpenOptions::new().read(true).open(&source_path)?;
+    // let mmap = unsafe { MmapOptions::new().offset(offset).len(length).map(&file)? };
+
+    // // 将内存映射的数据写入目标文件
+    // dest_file.write_all(&mmap)?;
 
     Ok(())
 }
@@ -55,7 +66,7 @@ pub struct Args {
 
 pub fn run(args: Args) -> IOResult<()> {
     let index_filename = &args.database.join("hash.k2d");
-    let hash_config = HashConfig::from(index_filename)?;
+    let hash_config = HashConfig::from_hash_header(index_filename)?;
 
     let partition = (hash_config.capacity + args.hash_capacity - 1) / args.hash_capacity;
     println!("start...");

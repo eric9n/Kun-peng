@@ -1,5 +1,5 @@
 use clap::Parser;
-use kr2r::compact_hash::{CHPage, Compact, HashConfig, K2Compact, Row, Slot};
+use kr2r::compact_hash::{CHTable, Compact, HashConfig, Row, Slot};
 use kr2r::utils::{find_and_sort_files, open_file};
 // use std::collections::HashMap;
 use rayon::prelude::*;
@@ -90,15 +90,15 @@ fn write_to_file(
     Ok(())
 }
 
-fn process_batch<R, K>(
+fn process_batch<R>(
     reader: &mut R,
-    chtm: &K,
+    hash_config: &HashConfig,
+    chtm: &CHTable,
     chunk_dir: PathBuf,
     batch_size: usize,
-    kraken_db_type: bool,
+    page_index: usize,
 ) -> std::io::Result<()>
 where
-    K: K2Compact + Send,
     R: Read + Send,
 {
     let slot_size = std::mem::size_of::<Slot<u64>>();
@@ -107,10 +107,10 @@ where
     let mut last_file_index: Option<u64> = None;
     let mut writer: Option<BufWriter<File>> = None;
 
-    let value_mask = chtm.get_value_mask();
-    let value_bits = chtm.get_value_bits();
-    let idx_mask = chtm.get_idx_mask();
-    let idx_bits = chtm.get_idx_bits();
+    let value_mask = hash_config.get_value_mask();
+    let value_bits = hash_config.get_value_bits();
+    let idx_mask = hash_config.get_idx_mask();
+    let idx_bits = hash_config.get_idx_bits();
 
     while let Ok(bytes_read) = reader.read(&mut batch_buffer) {
         if bytes_read == 0 {
@@ -128,7 +128,7 @@ where
             .into_par_iter()
             .filter_map(|slot| {
                 let indx = slot.idx & idx_mask;
-                let taxid = chtm.get_from_page(indx, slot.value, kraken_db_type);
+                let taxid = chtm.get_from_page(indx, slot.value, page_index);
 
                 if taxid > 0 {
                     let kmer_id = slot.idx >> idx_bits;
@@ -201,21 +201,27 @@ fn process_chunk_file<P: AsRef<Path>>(
 
     let config = HashConfig::from_hash_header(&args.k2d_dir.join("hash_config.k2d"))?;
     let parition = hash_files.len();
-    let chtm = CHPage::from(
-        config,
-        &hash_files[page_index],
-        &hash_files[(page_index + 1) % parition],
-    )?;
+    let chtm = if args.kraken_db_type {
+        CHTable::from_pair(
+            config,
+            &hash_files[page_index],
+            &hash_files[(page_index + 1) % parition],
+        )?
+    } else {
+        CHTable::from(config, &hash_files[page_index])?
+    };
+
     // 计算持续时间
     let duration = start.elapsed();
     // 打印运行时间
     println!("load table took: {:?}", duration);
     process_batch(
         &mut reader,
+        &config,
         &chtm,
         args.chunk_dir.clone(),
         args.batch_size,
-        args.kraken_db_type,
+        page_index,
     )?;
 
     Ok(())

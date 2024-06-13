@@ -32,7 +32,7 @@ fn main() -> Result<()> {
         println!("taxonomy node count {:?}", taxo.node_count());
     }
 
-    let config = HashConfig::from(args.index_filename.clone())?;
+    let config = HashConfig::from_hash_header(args.index_filename.clone())?;
 
     println!("compact hash table {:?}", config);
 
