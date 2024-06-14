@@ -18,6 +18,7 @@ double_hashing = []
 exact_counting = []
 
 [dependencies]
+seqkmer = { version = "0.1.0", path = "../seqkmer" }
 clap = { version = "4.4.10", features = ["derive"] }
 seq_io = "0.3.2"
 hyperloglogplus = { version = "*", features = ["const-loop"] }

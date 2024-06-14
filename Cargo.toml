@@ -1,8 +1,8 @@
 [workspace]
 members = [
     "ncbi",
-    "kr2r"
-]
+    "kr2r",
+    "seqkmer"]
 
 resolver = "2"
 

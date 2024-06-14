@@ -21,6 +21,11 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
+use seqkmer::fastq::FastqReader;
+use seqkmer::parallel::read_parallel as s_parallel;
+use seqkmer::reader::Reader;
+use seqkmer::Meros as SMeros;
+
 #[derive(Parser, Debug, Clone)]
 #[clap(
     version,
@@ -137,6 +142,96 @@ fn process_record(
 
     let scan1 = MinimizerScanner::new(&seq1, meros);
     let (kmer_count1, mut rows) = process_seq(scan1, &hash_config, chtable, 0);
+    let kmer_count2 = if let Some(seq) = seq2 {
+        let scan2 = MinimizerScanner::new(&seq, meros);
+        let (kmer_count2, rows2) = process_seq(scan2, &hash_config, chtable, kmer_count1);
+        rows.extend_from_slice(&rows2);
+        seq_len_str.push_str(format!("|{}", seq.len()).as_str());
+        Some(kmer_count2)
+    } else {
+        None
+    };
+    let total_kmers: usize = (kmer_count1 + kmer_count2.unwrap_or(0)) as usize;
+    let (counts, cur_counts, hit_groups) = count_values(&rows, value_mask, kmer_count1);
+    let hit_string = add_hitlist_string(&rows, value_mask, kmer_count1, kmer_count2, taxonomy);
+    let mut call = resolve_tree(&counts, taxonomy, total_kmers, args.confidence_threshold);
+    if call > 0 && hit_groups < args.minimum_hit_groups {
+        call = 0;
+    };
+
+    cur_counts.iter().for_each(|entry| {
+        cur_taxon_counts
+            .entry(*entry.key())
+            .or_default()
+            .merge(entry.value())
+            .unwrap();
+    });
+
+    let ext_call = taxonomy.nodes[call as usize].external_id;
+    let clasify = if call > 0 {
+        classify_counter.fetch_add(1, Ordering::SeqCst);
+        cur_taxon_counts
+            .entry(call as u64)
+            .or_default()
+            .increment_read_count();
+
+        "C"
+    } else {
+        "U"
+    };
+    // 使用锁来同步写入
+    let output_line = format!(
+        "{}\t{}\t{}\t{}\t{}\n",
+        clasify, dna_id, ext_call, seq_len_str, hit_string
+    );
+    output_line
+}
+
+fn process_seq1(
+    miner: Vec<u64>,
+    hash_config: &HashConfig,
+    chtable: &CHTable,
+    offset: u32,
+) -> (u32, Vec<Row>) {
+    let chunk_size = hash_config.hash_capacity;
+    let value_bits = hash_config.value_bits;
+
+    let mut rows = Vec::new();
+    let mut kmer_count = 0;
+    for (sort, hash_key) in miner.into_iter().enumerate() {
+        let idx = hash_config.index(hash_key);
+        let partition_index = idx / chunk_size;
+        let index = idx % chunk_size;
+        let taxid = chtable.get_from_page(index, hash_key, partition_index + 1);
+        if taxid > 0 {
+            let compacted_key = hash_key.left(value_bits) as u32;
+            let high = u32::combined(compacted_key, taxid, value_bits);
+            let row = Row::new(high, 0, sort as u32 + 1 + offset);
+            rows.push(row);
+        }
+        kmer_count += 1;
+    }
+    (kmer_count, rows)
+}
+
+fn process_record1(
+    dna_id: String,
+    seq1: Vec<u64>,
+    seq2: Option<Vec<u8>>,
+    args: &Args,
+    taxonomy: &Taxonomy,
+    meros: Meros,
+    chtable: &CHTable,
+    hash_config: &HashConfig,
+    cur_taxon_counts: &TaxonCountersDash,
+    classify_counter: &AtomicUsize,
+) -> String {
+    let value_mask = hash_config.value_mask;
+    let mut seq_len_str = String::new();
+    let seq1_len = seq1.len();
+    seq_len_str.push_str(&seq1_len.to_string());
+
+    let (kmer_count1, mut rows) = process_seq1(seq1, &hash_config, chtable, 0);
     let kmer_count2 = if let Some(seq) = seq2 {
         let scan2 = MinimizerScanner::new(&seq, meros);
         let (kmer_count2, rows2) = process_seq(scan2, &hash_config, chtable, kmer_count1);
@@ -314,45 +409,72 @@ fn process_fastq_file(
     let sequence_count = AtomicUsize::new(0);
     let classify_counter = AtomicUsize::new(0);
 
-    let reader = seq::PairFastqReader::from_path(&file1, file2.as_ref())
-        .expect("Unable to create pair reader from paths");
-    read_parallel(
-        reader,
-        args.num_threads as u32,
-        args.num_threads as usize,
-        |record_set| {
-            let mut buffer = String::new();
+    let mut reader1 = FastqReader::from_path(&file1, 1, 0)?;
+    let _ = s_parallel(
+        &mut reader1,
+        13,
+        15,
+        None,
+        SMeros::default(),
+        |seq1, seq| {
+            let dna_id = trim_pair_info(&seq.id);
+            sequence_count.fetch_add(1, Ordering::SeqCst);
 
-            for records in record_set.into_iter() {
-                let dna_id = trim_pair_info(records.0.id().unwrap_or_default());
-                sequence_count.fetch_add(1, Ordering::SeqCst);
-                let seq1: Vec<u8> = records.0.seq_x(score);
-                let seq2 = records.1.map(|seq| seq.seq_x(score));
-                let output_line = process_record(
-                    dna_id,
-                    seq1,
-                    seq2,
-                    args,
-                    taxonomy,
-                    meros,
-                    chtable,
-                    &hash_config,
-                    &cur_taxon_counts,
-                    &classify_counter,
-                );
-
-                buffer.push_str(&output_line);
-            }
-            buffer
-        },
-        |record_sets| {
-            while let Some(Ok((_, buffer))) = record_sets.next() {
-                writer
-                    .write_all(buffer.as_bytes())
-                    .expect("write data error");
-            }
+            let seq2 = None;
+            let output_line = process_record1(
+                dna_id,
+                seq1,
+                seq2,
+                args,
+                taxonomy,
+                meros,
+                chtable,
+                &hash_config,
+                &cur_taxon_counts,
+                &classify_counter,
+            );
+            None
         },
     );
+    // let reader = seq::PairFastqReader::from_path(&file1, file2.as_ref())
+    //     .expect("Unable to create pair reader from paths");
+    // read_parallel(
+    //     reader,
+    //     args.num_threads as u32,
+    //     args.num_threads as usize,
+    //     |record_set| {
+    //         let mut buffer = String::new();
+
+    //         for records in record_set.into_iter() {
+    //             let dna_id = trim_pair_info(records.0.id().unwrap_or_default());
+    //             sequence_count.fetch_add(1, Ordering::SeqCst);
+    //             let seq1: Vec<u8> = records.0.seq_x(score);
+    //             let seq2 = records.1.map(|seq| seq.seq_x(score));
+    //             let output_line = process_record(
+    //                 dna_id,
+    //                 seq1,
+    //                 seq2,
+    //                 args,
+    //                 taxonomy,
+    //                 meros,
+    //                 chtable,
+    //                 &hash_config,
+    //                 &cur_taxon_counts,
+    //                 &classify_counter,
+    //             );
+
+    //             buffer.push_str(&output_line);
+    //         }
+    //         buffer
+    //     },
+    //     |record_sets| {
+    //         while let Some(Ok((_, buffer))) = record_sets.next() {
+    //             writer
+    //                 .write_all(buffer.as_bytes())
+    //                 .expect("write data error");
+    //         }
+    //     },
+    // );
 
     let mut sample_taxon_counts: HashMap<
         u64,
@@ -496,7 +618,7 @@ pub fn run(args: Args) -> Result<()> {
 
     let hash_config = HashConfig::from_hash_header(&args.k2d_dir.join("hash_config.k2d"))?;
 
-    println!("hash_config {:?}", hash_config);
+    println!("{:?}", hash_config);
     if hash_config.hash_capacity == 0 {
         panic!("`hash_capacity` can't be zero!");
     }

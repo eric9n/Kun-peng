@@ -186,7 +186,7 @@ pub struct HashConfig {
 // 为HashConfig手动实现Debug trait
 impl fmt::Debug for HashConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CompactHashTableConfig")
+        f.debug_struct("HashConfig")
             .field("value_mask", &self.value_mask)
             .field("value_bits", &self.value_bits)
             .field("capacity", &self.capacity)
