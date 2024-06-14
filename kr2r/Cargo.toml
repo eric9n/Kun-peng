@@ -2,6 +2,7 @@
 name = "kr2r"
 version = "0.5.0"
 edition = "2021"
+authors = ["eric9n@gmail.com"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
