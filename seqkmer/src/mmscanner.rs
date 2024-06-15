@@ -1,4 +1,5 @@
 // kraken 2 使用的是murmur_hash3 算法的 fmix64作为 hash
+use crate::seq::{BaseType, Marker};
 use crate::{
     canonical_representation, char_to_value, fmix64 as murmur_hash3, Meros, BITS_PER_CHAR,
 };
@@ -15,7 +16,7 @@ fn to_candidate_lmer(meros: &Meros, lmer: u64) -> u64 {
 
 #[derive(Debug)]
 struct MinimizerData {
-    pub pos: usize,
+    pos: usize,
     candidate_lmer: u64,
 }
 
@@ -134,14 +135,14 @@ impl Cursor {
 }
 
 pub struct MinimizerScanner<'a> {
-    seq: &'a [u8],
+    seq: &'a BaseType<Vec<u8>>,
     meros: Meros,
     cursor: Cursor,
     window: MinimizerWindow,
 }
 
 impl<'a> MinimizerScanner<'a> {
-    pub fn new(seq: &'a [u8], meros: Meros) -> Self {
+    pub fn new(seq: &'a BaseType<Vec<u8>>, meros: Meros) -> Self {
         MinimizerScanner {
             seq,
             meros,
@@ -156,27 +157,33 @@ impl<'a> MinimizerScanner<'a> {
         self.window.clear();
     }
 
-    pub fn iter(&mut self) -> Vec<u64> {
-        self.seq
+    fn iter_seq(&mut self, seq: &Vec<u8>) -> Marker {
+        let minimizer = seq
             .iter()
             .filter_map(|&ch| {
-                // if ch == b'\n' || ch == b'\r' {
-                //     None
-                // } else {
-                match char_to_value(ch) {
-                    Some(code) => self.cursor.next_lmer(code).and_then(|lmer| {
-                        let candidate_lmer: u64 = to_candidate_lmer(&self.meros, lmer);
-                        self.window
-                            .next(candidate_lmer)
-                            .map(|minimizer| murmur_hash3(minimizer ^ self.meros.toggle_mask))
-                    }),
-                    None => {
-                        self.clear();
-                        None
+                if ch == b'\n' || ch == b'\r' {
+                    None
+                } else {
+                    match char_to_value(ch) {
+                        Some(code) => self.cursor.next_lmer(code).and_then(|lmer| {
+                            let candidate_lmer: u64 = to_candidate_lmer(&self.meros, lmer);
+                            self.window
+                                .next(candidate_lmer)
+                                .map(|minimizer| murmur_hash3(minimizer ^ self.meros.toggle_mask))
+                        }),
+                        None => {
+                            self.clear();
+                            None
+                        }
                     }
                 }
-                // }
             })
-            .collect()
+            .collect();
+
+        Marker::new(seq.len(), minimizer)
+    }
+
+    pub fn iter(&mut self) -> BaseType<Marker> {
+        self.seq.apply(|seq| self.iter_seq(seq))
     }
 }

@@ -1,83 +1,86 @@
-use crate::mmscanner::MinimizerScanner;
-use crate::reader::Reader;
+use crate::reader::{Reader, SeqMer};
 use crate::seq::Sequence;
 use crate::Meros;
-use crossbeam_channel::bounded;
+use crossbeam_channel::{bounded, Receiver, RecvError};
 use scoped_threadpool::Pool;
-use std::fs::File;
-use std::io::Read;
-use std::io::{self, BufWriter, Result, Write};
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::io::Result;
 use std::sync::Arc;
 
-pub fn read_parallel<R, W>(
-    reader: &mut dyn Reader<R>,
+pub struct ParallelResult<P>
+where
+    P: Send,
+{
+    recv: Receiver<P>,
+}
+
+impl<P> ParallelResult<P>
+where
+    P: Send,
+{
+    #[inline]
+    pub fn next(&mut self) -> std::result::Result<P, RecvError> {
+        self.recv.recv()
+    }
+}
+
+pub fn read_parallel<W, O, F, Out>(
+    reader: &mut Box<dyn Reader>,
     n_threads: usize,
     buffer_len: usize,
-    output_file: Option<&PathBuf>,
     meros: Meros,
     work: W,
+    func: F,
 ) -> Result<()>
 where
-    R: Read + Send,
-    W: Send + Sync + Fn(Vec<u64>, Sequence) -> Option<String>,
+    O: Send,
+    Out: Send + Default,
+    W: Send + Sync + Fn(Vec<SeqMer>) -> Option<O>,
+    F: FnOnce(&mut ParallelResult<Option<O>>) -> Out + Send,
 {
+    assert!(n_threads > 2);
     assert!(n_threads <= buffer_len);
-    let (sender, receiver) = bounded::<Sequence>(buffer_len);
+    let (sender, receiver) = bounded::<Vec<Sequence>>(buffer_len);
+    let (done_send, done_recv) = bounded::<Option<O>>(buffer_len);
     let receiver = Arc::new(receiver); // 使用 Arc 来共享 receiver
-    let mut pool = Pool::new(10);
+    let done_send = Arc::new(done_send);
+    let mut pool = Pool::new(n_threads as u32);
 
-    let counter = Arc::new(AtomicUsize::new(0));
+    let mut parallel_result = ParallelResult { recv: done_recv };
 
-    let mut writer: Box<dyn Write + Send> = match output_file {
-        Some(file_name) => {
-            let file = File::create(file_name)?;
-            Box::new(BufWriter::new(file)) as Box<dyn Write + Send>
-        }
-        None => Box::new(io::stdout()) as Box<dyn Write + Send>,
-    };
-
-    let _ = pool.scoped(|pool_scope| -> Result<()> {
+    pool.scoped(|pool_scope| {
         // 生产者线程
         pool_scope.execute(move || {
-            while let Some(seq) = reader.next().unwrap() {
-                sender.send(seq).unwrap();
+            while let Ok(Some(seqs)) = reader.next() {
+                sender.send(seqs).expect("Failed to send sequences");
             }
         });
 
         // 消费者线程
-        for i in 0..n_threads {
+        for _ in 0..n_threads - 2 {
             let receiver = Arc::clone(&receiver);
-            let counter_clone = Arc::clone(&counter);
             let work = &work;
-
-            let mut temp_writer: Box<dyn Write + Send> = match output_file {
-                Some(file_name) => {
-                    let parent_dir = file_name.parent().unwrap_or_else(|| Path::new(""));
-                    let file_name = file_name.file_name().unwrap().to_str().unwrap();
-                    let filename = parent_dir.join(format!("{}.tmp.{}", file_name, i));
-                    let file = File::create(filename)?;
-                    Box::new(BufWriter::new(file)) as Box<dyn Write + Send>
-                }
-                None => Box::new(io::stdout()) as Box<dyn Write + Send>,
-            };
+            let done_send = Arc::clone(&done_send);
             pool_scope.execute(move || {
-                while let Ok(seq) = receiver.recv() {
-                    counter_clone.fetch_add(1, Ordering::Relaxed);
-                    let mut ms = MinimizerScanner::new(&seq.seq, meros);
-                    let res = ms.iter();
-                    if let Some(out) = work(res, seq) {
-                        temp_writer
-                            .write_all(out.as_bytes())
-                            .expect("write data error");
-                    }
+                while let Ok(seqs) = receiver.recv() {
+                    let seq_mers: Vec<SeqMer> = seqs
+                        .iter()
+                        .map(|seq| SeqMer::from_seq(seq, meros))
+                        .collect();
+
+                    let output = work(seq_mers);
+                    done_send.send(output).expect("Failed to send outputs");
                 }
             });
         }
+
+        // 引用计数减掉一个,这样都子线程结束时, done_send还能完全释放
+        drop(done_send);
+        pool_scope.execute(move || {
+            let _ = func(&mut parallel_result);
+        });
+
         pool_scope.join_all();
-        Ok(())
     });
-    println!("counter {:?}", counter.load(Ordering::Relaxed));
+
     Ok(())
 }

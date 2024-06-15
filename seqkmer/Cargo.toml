@@ -11,7 +11,6 @@ crossbeam-channel = "0.5"
 scoped_threadpool = "0.1.9"
 flate2 = "1.0"
 
-
 [features]
 default = ["dna"]
 dna = []

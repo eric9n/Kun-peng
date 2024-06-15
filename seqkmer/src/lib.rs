@@ -1,4 +1,5 @@
-pub mod fastq;
+mod fasta;
+mod fastq;
 mod feat;
 pub mod mmscanner;
 pub mod reader;
@@ -6,3 +7,5 @@ pub mod seq;
 pub use feat::constants::*;
 pub use feat::*;
 pub mod parallel;
+pub use fasta::*;
+pub use fastq::*;

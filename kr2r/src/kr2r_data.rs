@@ -9,6 +9,8 @@ use std::io::{Read, Result as IoResult, Write};
 use std::mem;
 use std::path::Path;
 
+use seqkmer::Meros as SMeros;
+
 pub fn parse_binary(src: &str) -> Result<u64, std::num::ParseIntError> {
     u64::from_str_radix(src, 2)
 }
@@ -173,6 +175,16 @@ impl IndexOptions {
 
     pub fn as_meros(&self) -> Meros {
         Meros::new(
+            self.k,
+            self.l,
+            u64_to_option(self.spaced_seed_mask),
+            u64_to_option(self.toggle_mask),
+            u64_to_option(self.minimum_acceptable_hash_value),
+        )
+    }
+
+    pub fn as_smeros(&self) -> SMeros {
+        SMeros::new(
             self.k,
             self.l,
             u64_to_option(self.spaced_seed_mask),
