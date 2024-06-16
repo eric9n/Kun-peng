@@ -1,10 +1,12 @@
 // 使用时需要引用模块路径
 use crate::utils::expand_spaced_seed_mask;
-use crate::{construct_seed_template, parse_binary, Meros, BITS_PER_CHAR};
-use crate::{
-    DEFAULT_KMER_LENGTH, DEFAULT_MINIMIZER_LENGTH, DEFAULT_MINIMIZER_SPACES, DEFAULT_TOGGLE_MASK,
-};
+use crate::{construct_seed_template, parse_binary};
 use clap::Parser;
+use seqkmer::Meros;
+use seqkmer::{
+    BITS_PER_CHAR, DEFAULT_KMER_LENGTH, DEFAULT_MINIMIZER_LENGTH, DEFAULT_MINIMIZER_SPACES,
+    DEFAULT_TOGGLE_MASK,
+};
 use std::path::PathBuf;
 
 pub const U32MAXPLUS: u64 = u32::MAX as u64;

@@ -6,9 +6,9 @@ pub enum SeqFormat {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BaseType<U> {
-    Single(U),
-    Pair((U, U)),
+pub enum BaseType<T> {
+    Single(T),
+    Pair((T, T)),
 }
 
 impl<T> BaseType<T> {
@@ -20,6 +20,33 @@ impl<T> BaseType<T> {
         match self {
             BaseType::Single(seq) => BaseType::Single(func(seq)),
             BaseType::Pair((seq1, seq2)) => BaseType::Pair((func(seq1), func(seq2))),
+        }
+    }
+
+    pub fn fold<U, F, V>(&self, init: &mut V, mut func: F) -> BaseType<U>
+    where
+        F: FnMut(&mut V, &T) -> U,
+    {
+        match self {
+            BaseType::Single(seq) => BaseType::Single(func(init, seq)),
+            BaseType::Pair((seq1, seq2)) => {
+                let res1 = func(init, seq1);
+                let res2 = func(init, seq2);
+                BaseType::Pair((res1, res2))
+            }
+        }
+    }
+
+    pub fn modify<F>(&mut self, mut func: F)
+    where
+        F: FnMut(&mut T),
+    {
+        match self {
+            BaseType::Single(ref mut seq) => func(seq),
+            BaseType::Pair((ref mut seq1, ref mut seq2)) => {
+                func(seq1);
+                func(seq2);
+            }
         }
     }
 }

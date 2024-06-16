@@ -194,7 +194,7 @@ impl Default for Meros {
             k_mer,
             l_mer,
             mask,
-            spaced_seed_mask: 4611686018212639539, // DEFAULT_SPACED_SEED_MASK
+            spaced_seed_mask: DEFAULT_SPACED_SEED_MASK,
             toggle_mask: DEFAULT_TOGGLE_MASK & mask,
             min_clear_hash_value: None,
         }

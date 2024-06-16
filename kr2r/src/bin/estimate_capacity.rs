@@ -1,11 +1,10 @@
 use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use kr2r::args::KLMTArgs;
-use kr2r::mmscanner::MinimizerScanner;
 use kr2r::utils::{find_library_fna_files, format_bytes, open_file};
 use kr2r::KBuildHasher;
-use seq_io::fasta::{Reader, Record};
-use seq_io::parallel::read_parallel;
+
+use seqkmer::{read_parallel, FastaReader};
 use serde_json;
 use std::collections::HashSet;
 use std::fs::File;
@@ -84,33 +83,39 @@ fn process_sequence(
     let mut hllp: HyperLogLogPlus<u64, _> =
         HyperLogLogPlus::new(16, KBuildHasher::default()).unwrap();
 
-    let reader = Reader::from_path(fna_file).unwrap();
+    let mut reader = FastaReader::from_path(fna_file, 1).unwrap();
     let range_n = args.n as u64;
     read_parallel(
-        reader,
-        args.threads as u32,
-        args.threads - 2 as usize,
+        &mut reader,
+        args.threads,
+        args.threads - 2,
+        meros,
         |record_set| {
             let mut minimizer_set = HashSet::new();
-            for record in record_set.into_iter() {
-                let seq = record.seq();
-                let kmer_iter = MinimizerScanner::new(&seq, meros)
-                    .into_iter()
-                    .filter(|hash_key| hash_key & RANGE_MASK < range_n)
-                    .collect::<HashSet<u64>>();
 
-                minimizer_set.extend(kmer_iter);
+            for record in record_set.into_iter() {
+                record
+                    .marker
+                    .fold(&mut minimizer_set, |minimizer_set, marker| {
+                        let kmer_iter = marker
+                            .minimizer
+                            .iter()
+                            .filter(|&hash_key| hash_key & RANGE_MASK < range_n);
+
+                        minimizer_set.extend(kmer_iter);
+                    });
             }
-            minimizer_set
+            Some(minimizer_set)
         },
         |record_sets| {
-            while let Some(Ok((_, m_set))) = record_sets.next() {
+            while let Some(Some(m_set)) = record_sets.next() {
                 for minimizer in m_set {
                     hllp.insert(&minimizer);
                 }
             }
         },
-    );
+    )
+    .expect("read parallel error");
 
     // 序列化 hllp 对象并将其写入文件
     let serialized_hllp = serde_json::to_string(&hllp).unwrap();

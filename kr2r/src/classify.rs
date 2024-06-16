@@ -1,3 +1,5 @@
+use seqkmer::{BaseType, HitGroup};
+
 use crate::compact_hash::{Compact, Row};
 use crate::readcounts::TaxonCountersDash;
 use crate::taxonomy::Taxonomy;
@@ -162,6 +164,91 @@ pub fn count_values(
 
         last_row = *row;
     }
+
+    (counts, cur_taxon_counts, hit_count)
+}
+
+fn gen_hit_string(hit: &HitGroup<Row>, taxonomy: &Taxonomy, value_mask: usize) -> String {
+    let mut result = Vec::new();
+    let mut last_pos = 0;
+    let count = hit.cap as u32;
+
+    for row in &hit.rows {
+        let adjusted_pos = row.kmer_id - hit.offset;
+
+        let value = row.value;
+        let key = value.right(value_mask);
+        let ext_code = taxonomy.nodes[key as usize].external_id;
+
+        if last_pos == 0 && adjusted_pos > 0 {
+            result.push((0, adjusted_pos)); // 在开始处添加0
+        } else if adjusted_pos - last_pos > 1 {
+            result.push((0, adjusted_pos - last_pos - 1)); // 在两个特定位置之间添加0
+        }
+        if let Some(last) = result.last_mut() {
+            if last.0 == ext_code {
+                last.1 += 1;
+                last_pos = adjusted_pos;
+                continue;
+            }
+        }
+
+        // 添加当前key的计数
+        result.push((ext_code, 1));
+        last_pos = adjusted_pos;
+    }
+
+    // 填充尾随0
+    if last_pos < count - 1 {
+        if last_pos == 0 {
+            result.push((0, count - last_pos));
+        } else {
+            result.push((0, count - last_pos - 1));
+        }
+    }
+
+    result
+        .iter()
+        .map(|i| format!("{}:{}", i.0, i.1))
+        .collect::<Vec<String>>()
+        .join(" ")
+}
+
+pub fn adjust_hitlist_string(
+    hits: &BaseType<HitGroup<Row>>,
+    value_mask: usize,
+    taxonomy: &Taxonomy,
+) -> String {
+    let hit_str = hits.apply(|hit| gen_hit_string(hit, taxonomy, value_mask));
+    match hit_str {
+        BaseType::Single(hit) => hit,
+        BaseType::Pair((hit1, hit2)) => format!("{} |:| {}", hit1, hit2),
+    }
+}
+
+pub fn count_rows(
+    hit: &BaseType<HitGroup<Row>>,
+    value_mask: usize,
+) -> (HashMap<u32, u64>, TaxonCountersDash, usize) {
+    let mut counts = HashMap::new();
+
+    let mut hit_count: usize = 0;
+
+    let cur_taxon_counts = TaxonCountersDash::new();
+
+    hit.apply(|group| {
+        for row in &group.rows {
+            let value = row.value;
+            let key = value.right(value_mask);
+            *counts.entry(key).or_insert(0) += 1;
+
+            cur_taxon_counts
+                .entry(key as u64)
+                .or_default()
+                .add_kmer(value as u64);
+            hit_count += 1;
+        }
+    });
 
     (counts, cur_taxon_counts, hit_count)
 }

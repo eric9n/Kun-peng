@@ -44,6 +44,12 @@ pub trait Reader: Send {
     fn next(&mut self) -> Result<Option<Vec<Sequence>>>;
 }
 
+impl Reader for Box<dyn Reader> {
+    fn next(&mut self) -> Result<Option<Vec<Sequence>>> {
+        (**self).next()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SeqMer {
     pub id: String,
@@ -64,14 +70,66 @@ impl SeqMer {
         }
     }
 
-    pub fn size_str(&self) -> BaseType<String> {
+    pub fn cap_str(&self) -> BaseType<String> {
         self.marker.apply(|marker| marker.cap.to_string())
+    }
+
+    pub fn total_size(&self) -> usize {
+        match &self.marker {
+            BaseType::Single(marker1) => marker1.size(),
+            BaseType::Pair((marker1, marker2)) => marker1.size() + marker2.size(),
+        }
+    }
+
+    pub fn fmt_cap(&self) -> String {
+        match &self.marker {
+            BaseType::Single(marker1) => marker1.cap.to_string(),
+            BaseType::Pair((marker1, marker2)) => format!("{}|{}", marker1.cap, marker2.cap),
+        }
     }
 
     pub fn fmt_size(&self) -> String {
         match &self.marker {
-            BaseType::Single(marker1) => marker1.cap.to_string(),
-            BaseType::Pair((marker1, marker2)) => format!("{}:{}", marker1.cap, marker2.cap),
+            BaseType::Single(marker1) => marker1.size().to_string(),
+            BaseType::Pair((marker1, marker2)) => format!("{}|{}", marker1.size(), marker2.size()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct HitGroup<T> {
+    /// minimizer capacity
+    pub cap: usize,
+    /// hit value vector
+    pub rows: Vec<T>,
+    /// pair offset
+    pub offset: u32,
+}
+
+impl<T> HitGroup<T> {
+    pub fn new(cap: usize, rows: Vec<T>, offset: u32) -> Self {
+        Self { cap, rows, offset }
+    }
+}
+
+impl<T> BaseType<HitGroup<T>> {
+    /// Synchronizes the offset of the second element of a `Pair` to the `cap` of the first element.
+    /// This alignment is only necessary when the `rows` property of the `HitGroup` is in an
+    /// increasing order. If `rows` is not increasing, aligning the offset based on `cap` may not
+    /// be appropriate or required.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut hit_group1 = HitGroup::new(10, vec![1, 2, 3], 0); // Increasing `rows`
+    /// let mut hit_group2 = HitGroup::new(20, vec![4, 5, 6], 0);
+    ///
+    /// let mut pair = BaseType::Pair((hit_group1, hit_group2));
+    /// pair.align_offset();
+    /// ```
+    pub fn align_offset(&mut self) {
+        if let BaseType::Pair((ref first, ref mut second)) = self {
+            second.offset = first.cap as u32;
         }
     }
 }

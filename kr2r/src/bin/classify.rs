@@ -1,5 +1,5 @@
 use clap::Parser;
-use kr2r::classify::{add_hitlist_string, count_values, resolve_tree, trim_pair_info};
+use kr2r::classify::{adjust_hitlist_string, count_rows, resolve_tree, trim_pair_info};
 use kr2r::compact_hash::{CHTable, Compact, HashConfig, Row};
 use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
 use kr2r::report::report_kraken_style;
@@ -8,7 +8,6 @@ use kr2r::utils::{
     create_sample_file, detect_file_format, find_and_sort_files, get_lastest_file_index, FileFormat,
 };
 use kr2r::IndexOptions;
-use seqkmer::seq::BaseType;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -17,10 +16,10 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
-use seqkmer::parallel::read_parallel;
-use seqkmer::reader::SeqMer;
-use seqkmer::Meros;
-use seqkmer::{reader::Reader, FastaReader, FastqPairReader, FastqReader};
+use seqkmer::{
+    read_parallel, BaseType, FastaReader, FastqPairReader, FastqReader, HitGroup, Marker, Meros,
+    Reader, SeqMer,
+};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(
@@ -92,17 +91,12 @@ pub struct Args {
     pub input_files: Vec<String>,
 }
 
-fn process_seq(
-    minimizer: &Vec<u64>,
-    hash_config: &HashConfig,
-    chtable: &CHTable,
-    offset: u32,
-) -> Vec<Row> {
+fn process_seq(marker: &Marker, hash_config: &HashConfig, chtable: &CHTable) -> HitGroup<Row> {
     let chunk_size = hash_config.hash_capacity;
     let value_bits = hash_config.value_bits;
 
     let mut rows = Vec::new();
-    for (sort, &hash_key) in minimizer.iter().enumerate() {
+    for (sort, &hash_key) in marker.minimizer.iter().enumerate() {
         let idx = hash_config.index(hash_key);
         let partition_index = idx / chunk_size;
         let index = idx % chunk_size;
@@ -110,11 +104,11 @@ fn process_seq(
         if taxid > 0 {
             let compacted_key = hash_key.left(value_bits) as u32;
             let high = u32::combined(compacted_key, taxid, value_bits);
-            let row = Row::new(high, 0, sort as u32 + 1 + offset);
+            let row = Row::new(high, 0, sort as u32 + 1);
             rows.push(row);
         }
     }
-    rows
+    HitGroup::new(marker.size(), rows, 0)
 }
 
 fn process_record(
@@ -129,30 +123,14 @@ fn process_record(
 ) -> String {
     let value_mask = hash_config.value_mask;
 
-    let seq_len_str = seq.fmt_size();
-    let (kmer_count1, kmer_count2, rows) = match &seq.marker {
-        BaseType::Single(marker) => (
-            marker.size(),
-            0,
-            process_seq(&marker.minimizer, &hash_config, chtable, 0),
-        ),
-        BaseType::Pair((marker1, marker2)) => {
-            let mut rows = process_seq(&marker1.minimizer, &hash_config, chtable, 0);
-            let seq_len1 = marker1.size();
-            let rows2 = process_seq(&marker2.minimizer, &hash_config, chtable, seq_len1 as u32);
-            rows.extend_from_slice(&rows2);
-            (seq_len1, marker2.size(), rows)
-        }
-    };
-    let total_kmers = kmer_count1 + kmer_count2;
-    let (counts, cur_counts, hit_groups) = count_values(&rows, value_mask, kmer_count1 as u32);
-    let hit_string = add_hitlist_string(
-        &rows,
-        value_mask,
-        kmer_count1 as u32,
-        Some(kmer_count2 as u32),
-        taxonomy,
-    );
+    let seq_len_str = seq.fmt_cap();
+    let hits: BaseType<HitGroup<Row>> = seq
+        .marker
+        .apply(|marker| process_seq(&marker, &hash_config, chtable));
+
+    let total_kmers = seq.total_size();
+    let (counts, cur_counts, hit_groups) = count_rows(&hits, value_mask);
+    let hit_string = adjust_hitlist_string(&hits, value_mask, taxonomy);
     let mut call = resolve_tree(&counts, taxonomy, total_kmers, args.confidence_threshold);
     if call > 0 && hit_groups < args.minimum_hit_groups {
         call = 0;
@@ -186,16 +164,19 @@ fn process_record(
     output_line
 }
 
-fn process_fastx_file(
+fn process_fastx_file<R>(
     args: &Args,
     meros: Meros,
     hash_config: HashConfig,
     file_index: usize,
-    reader: &mut Box<dyn Reader>,
+    reader: &mut R,
     chtable: &CHTable,
     taxonomy: &Taxonomy,
     total_taxon_counts: &mut TaxonCounters,
-) -> io::Result<(usize, usize)> {
+) -> io::Result<(usize, usize)>
+where
+    R: Reader,
+{
     let mut writer: Box<dyn Write + Send> = match &args.kraken_output_dir {
         Some(ref file_path) => {
             let filename = file_path.join(format!("output_{}.txt", file_index));
@@ -212,8 +193,8 @@ fn process_fastx_file(
 
     let _ = read_parallel(
         reader,
-        13,
-        15,
+        args.num_threads as usize - 2,
+        args.num_threads as usize,
         meros,
         |seqs| {
             let mut buffer = String::new();
@@ -238,7 +219,7 @@ fn process_fastx_file(
             Some(buffer)
         },
         |dataset| {
-            while let Ok(Some(res)) = dataset.next() {
+            while let Some(Some(res)) = dataset.next() {
                 writer
                     .write_all(res.as_bytes())
                     .expect("Failed to write date to file");
@@ -392,7 +373,7 @@ pub fn run(args: Args) -> Result<()> {
     }
     println!("start...");
     let start = Instant::now();
-    let meros = idx_opts.as_smeros();
+    let meros = idx_opts.as_meros();
     let hash_files = find_and_sort_files(&args.k2d_dir, "hash", ".k2d")?;
     let chtable = CHTable::from_hash_files(hash_config, hash_files)?;
 

@@ -1,7 +1,7 @@
 use crate::reader::{Reader, SeqMer};
 use crate::seq::Sequence;
 use crate::Meros;
-use crossbeam_channel::{bounded, Receiver, RecvError};
+use crossbeam_channel::{bounded, Receiver};
 use scoped_threadpool::Pool;
 use std::io::Result;
 use std::sync::Arc;
@@ -18,13 +18,13 @@ where
     P: Send,
 {
     #[inline]
-    pub fn next(&mut self) -> std::result::Result<P, RecvError> {
-        self.recv.recv()
+    pub fn next(&mut self) -> Option<P> {
+        self.recv.recv().ok()
     }
 }
 
-pub fn read_parallel<W, O, F, Out>(
-    reader: &mut Box<dyn Reader>,
+pub fn read_parallel<R, W, O, F, Out>(
+    reader: &mut R,
     n_threads: usize,
     buffer_len: usize,
     meros: Meros,
@@ -32,6 +32,7 @@ pub fn read_parallel<W, O, F, Out>(
     func: F,
 ) -> Result<()>
 where
+    R: Reader,
     O: Send,
     Out: Send + Default,
     W: Send + Sync + Fn(Vec<SeqMer>) -> Option<O>,
