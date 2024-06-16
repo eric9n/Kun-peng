@@ -1,12 +1,10 @@
 use clap::Parser;
-use kr2r::classify::{adjust_hitlist_string, count_rows, resolve_tree, trim_pair_info};
+use kr2r::classify::{process_hitgroup, trim_pair_info};
 use kr2r::compact_hash::{CHTable, Compact, HashConfig, Row};
 use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
 use kr2r::report::report_kraken_style;
 use kr2r::taxonomy::Taxonomy;
-use kr2r::utils::{
-    create_sample_file, detect_file_format, find_and_sort_files, get_lastest_file_index, FileFormat,
-};
+use kr2r::utils::{create_sample_file, find_and_sort_files, get_lastest_file_index};
 use kr2r::IndexOptions;
 use std::collections::HashMap;
 use std::fs::File;
@@ -16,10 +14,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
-use seqkmer::{
-    read_parallel, BaseType, FastaReader, FastqPairReader, FastqReader, HitGroup, Marker, Meros,
-    Reader, SeqMer,
-};
+use seqkmer::{create_reader, read_parallel, BaseType, HitGroup, Marker, Meros, Reader, SeqMer};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(
@@ -121,47 +116,27 @@ fn process_record(
     cur_taxon_counts: &TaxonCountersDash,
     classify_counter: &AtomicUsize,
 ) -> String {
-    let value_mask = hash_config.value_mask;
-
     let seq_len_str = seq.fmt_cap();
     let hits: BaseType<HitGroup<Row>> = seq
         .marker
         .apply(|marker| process_seq(&marker, &hash_config, chtable));
 
     let total_kmers = seq.total_size();
-    let (counts, cur_counts, hit_groups) = count_rows(&hits, value_mask);
-    let hit_string = adjust_hitlist_string(&hits, value_mask, taxonomy);
-    let mut call = resolve_tree(&counts, taxonomy, total_kmers, args.confidence_threshold);
-    if call > 0 && hit_groups < args.minimum_hit_groups {
-        call = 0;
-    };
 
-    cur_counts.iter().for_each(|entry| {
-        cur_taxon_counts
-            .entry(*entry.key())
-            .or_default()
-            .merge(entry.value())
-            .unwrap();
-    });
-
-    let ext_call = taxonomy.nodes[call as usize].external_id;
-    let clasify = if call > 0 {
-        classify_counter.fetch_add(1, Ordering::SeqCst);
-        cur_taxon_counts
-            .entry(call as u64)
-            .or_default()
-            .increment_read_count();
-
-        "C"
-    } else {
-        "U"
-    };
-    // 使用锁来同步写入
-    let output_line = format!(
-        "{}\t{}\t{}\t{}\t{}\n",
-        clasify, dna_id, ext_call, seq_len_str, hit_string
+    let hit_data = process_hitgroup(
+        &hits,
+        hash_config,
+        taxonomy,
+        cur_taxon_counts,
+        classify_counter,
+        total_kmers,
+        args.confidence_threshold,
+        args.minimum_hit_groups,
     );
-    output_line
+    format!(
+        "{}\t{}\t{}\t{}\t{}\n",
+        hit_data.0, dna_id, hit_data.1, seq_len_str, hit_data.2
+    )
 }
 
 fn process_fastx_file<R>(
@@ -293,22 +268,8 @@ fn process_files(
             writeln!(file_writer, "{}\t{}", file_index, file_pair.join(","))?;
             file_writer.flush().unwrap();
 
-            let mut files_iter = file_pair.iter();
-            let file1 = files_iter.next().cloned().unwrap();
-            let file2 = files_iter.next().cloned();
             let score = args.minimum_quality_score;
-
-            let mut reader: Box<dyn Reader> = match detect_file_format(&file_pair[0])? {
-                FileFormat::Fastq => {
-                    if let Some(file2) = file2 {
-                        Box::new(FastqPairReader::from_path(file1, file2, file_index, score)?)
-                    } else {
-                        Box::new(FastqReader::from_path(file1, file_index, score)?)
-                    }
-                }
-                FileFormat::Fasta => Box::new(FastaReader::from_path(file1, file_index)?),
-            };
-
+            let mut reader: Box<dyn Reader> = create_reader(file_pair, file_index, score)?;
             let (thread_sequences, thread_unclassified) = process_fastx_file(
                 &args,
                 meros,

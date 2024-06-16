@@ -1,9 +1,10 @@
 use seqkmer::{BaseType, HitGroup};
 
-use crate::compact_hash::{Compact, Row};
+use crate::compact_hash::{Compact, HashConfig, Row};
 use crate::readcounts::TaxonCountersDash;
 use crate::taxonomy::Taxonomy;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn generate_hit_string(
     count: u32,
@@ -214,7 +215,7 @@ fn gen_hit_string(hit: &HitGroup<Row>, taxonomy: &Taxonomy, value_mask: usize) -
         .join(" ")
 }
 
-pub fn adjust_hitlist_string(
+fn adjust_hitlist_string(
     hits: &BaseType<HitGroup<Row>>,
     value_mask: usize,
     taxonomy: &Taxonomy,
@@ -226,15 +227,16 @@ pub fn adjust_hitlist_string(
     }
 }
 
-pub fn count_rows(
+fn count_rows(
     hit: &BaseType<HitGroup<Row>>,
+    cur_taxon_counts: &TaxonCountersDash,
     value_mask: usize,
-) -> (HashMap<u32, u64>, TaxonCountersDash, usize) {
+) -> (HashMap<u32, u64>, usize) {
     let mut counts = HashMap::new();
 
     let mut hit_count: usize = 0;
 
-    let cur_taxon_counts = TaxonCountersDash::new();
+    // let cur_taxon_counts = TaxonCountersDash::new();
 
     hit.apply(|group| {
         for row in &group.rows {
@@ -250,5 +252,40 @@ pub fn count_rows(
         }
     });
 
-    (counts, cur_taxon_counts, hit_count)
+    (counts, hit_count)
+}
+
+pub fn process_hitgroup(
+    hits: &BaseType<HitGroup<Row>>,
+    hash_config: &HashConfig,
+    taxonomy: &Taxonomy,
+    cur_taxon_counts: &TaxonCountersDash,
+    classify_counter: &AtomicUsize,
+    total_kmers: usize,
+    confidence_threshold: f64,
+    minimum_hit_groups: usize,
+) -> (String, u64, String) {
+    let value_mask = hash_config.value_mask;
+    let (counts, hit_groups) = count_rows(&hits, cur_taxon_counts, value_mask);
+    let mut call = resolve_tree(&counts, taxonomy, total_kmers, confidence_threshold);
+    if call > 0 && hit_groups < minimum_hit_groups {
+        call = 0;
+    };
+
+    let ext_call = taxonomy.nodes[call as usize].external_id;
+    let clasify = if call > 0 {
+        classify_counter.fetch_add(1, Ordering::SeqCst);
+        cur_taxon_counts
+            .entry(call as u64)
+            .or_default()
+            .increment_read_count();
+
+        "C"
+    } else {
+        "U"
+    };
+
+    let hit_string = adjust_hitlist_string(&hits, value_mask, taxonomy);
+
+    (clasify.to_owned(), ext_call, hit_string)
 }

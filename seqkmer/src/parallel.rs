@@ -1,6 +1,8 @@
-use crate::reader::{Reader, SeqMer};
+use crate::fasta::FastaReader;
+use crate::fastq::{FastqPairReader, FastqReader};
+use crate::reader::{detect_file_format, Reader, SeqMer};
 use crate::seq::Sequence;
-use crate::Meros;
+use crate::{Meros, SeqFormat};
 use crossbeam_channel::{bounded, Receiver};
 use scoped_threadpool::Pool;
 use std::io::Result;
@@ -20,6 +22,30 @@ where
     #[inline]
     pub fn next(&mut self) -> Option<P> {
         self.recv.recv().ok()
+    }
+}
+
+pub fn create_reader(
+    file_pair: &[String],
+    file_index: usize,
+    score: i32,
+) -> Result<Box<dyn Reader>> {
+    let mut files_iter = file_pair.iter();
+    let file1 = files_iter.next().cloned().unwrap();
+    let file2 = files_iter.next().cloned();
+    match detect_file_format(&file_pair[0])? {
+        SeqFormat::Fastq => {
+            if let Some(file2) = file2 {
+                Ok(Box::new(FastqPairReader::from_path(
+                    file1, file2, file_index, score,
+                )?))
+            } else {
+                Ok(Box::new(FastqReader::from_path(file1, file_index, score)?))
+            }
+        }
+        SeqFormat::Fasta => Ok(Box::new(FastaReader::from_path(file1, file_index)?)),
+
+        _ => unreachable!(),
     }
 }
 

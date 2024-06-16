@@ -1,8 +1,8 @@
-use crate::seq::{BaseType, Marker, Sequence};
+use crate::seq::{BaseType, Marker, SeqFormat, Sequence};
 use crate::{mmscanner::MinimizerScanner, Meros};
 use flate2::read::GzDecoder;
 use std::fs::File;
-use std::io::{self, Read, Result, Seek};
+use std::io::{self, BufRead, BufReader, Read, Result, Seek};
 use std::path::Path;
 
 pub fn dyn_reader<P: AsRef<Path>>(path: P) -> Result<Box<dyn Read + Send>> {
@@ -30,6 +30,44 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File> {
             e
         }
     })
+}
+
+pub fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<SeqFormat> {
+    let mut file = open_file(path)?;
+    let read1: Box<dyn io::Read + Send> = if is_gzipped(&mut file)? {
+        Box::new(GzDecoder::new(file))
+    } else {
+        Box::new(file)
+    };
+
+    let reader = BufReader::new(read1);
+    let mut lines = reader.lines();
+
+    if let Some(first_line) = lines.next() {
+        let line = first_line?;
+
+        if line.starts_with('>') {
+            return Ok(SeqFormat::Fasta);
+        } else if line.starts_with('@') {
+            let _ = lines.next();
+            if let Some(third_line) = lines.next() {
+                let line: String = third_line?;
+                if line.starts_with('+') {
+                    return Ok(SeqFormat::Fastq);
+                }
+            }
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Unrecognized fasta(fastq) file format",
+            ));
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "Unrecognized fasta(fastq) file format",
+    ))
 }
 
 pub fn trim_end(buffer: &mut Vec<u8>) {

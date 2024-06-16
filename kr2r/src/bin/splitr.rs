@@ -1,11 +1,11 @@
 use clap::Parser;
 use kr2r::compact_hash::{HashConfig, Slot};
 use kr2r::utils::{
-    create_partition_files, create_partition_writers, create_sample_file, detect_file_format,
-    get_file_limit, get_lastest_file_index, FileFormat,
+    create_partition_files, create_partition_writers, create_sample_file, get_file_limit,
+    get_lastest_file_index,
 };
 use kr2r::IndexOptions;
-use seqkmer::{read_parallel, FastaReader, FastqPairReader, FastqReader, Marker, Meros, Reader};
+use seqkmer::{create_reader, read_parallel, Marker, Meros, Reader};
 use std::fs;
 use std::io::{BufWriter, Write};
 use std::io::{Error, ErrorKind, Result};
@@ -212,22 +212,8 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig) -> Result<()> {
             let mut sample_writer =
                 create_sample_file(args.chunk_dir.join(format!("sample_id_{}.map", file_index)));
 
-            let mut files_iter = file_pair.iter();
-            let file1 = files_iter.next().cloned().unwrap();
-            let file2 = files_iter.next().cloned();
             let score = args.minimum_quality_score;
-
-            let mut reader: Box<dyn Reader> = match detect_file_format(&file_pair[0])? {
-                FileFormat::Fastq => {
-                    if let Some(file2) = file2 {
-                        Box::new(FastqPairReader::from_path(file1, file2, file_index, score)?)
-                    } else {
-                        Box::new(FastqReader::from_path(file1, file_index, score)?)
-                    }
-                }
-                FileFormat::Fasta => Box::new(FastaReader::from_path(file1, file_index)?),
-            };
-
+            let mut reader: Box<dyn Reader> = create_reader(file_pair, file_index, score)?;
             process_fastx_file(
                 &args,
                 meros,
