@@ -258,7 +258,6 @@ pub fn process_hitgroup(
     let (hit_groups, hit_string) =
         stat_hits(hits, cur_taxon_counts, &mut counts, value_mask, taxonomy);
 
-    // let (counts, hit_groups) = count_rows(&hits, cur_taxon_counts, value_mask);
     let mut call = resolve_tree(&counts, taxonomy, total_kmers, confidence_threshold);
     if call > 0 && hit_groups < minimum_hit_groups {
         call = 0;
