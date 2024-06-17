@@ -1,8 +1,7 @@
-use seqkmer::{BaseType, HitGroup};
-
 use crate::compact_hash::{Compact, HashConfig, Row};
 use crate::readcounts::TaxonCountersDash;
 use crate::taxonomy::Taxonomy;
+use seqkmer::{BaseType, HitGroup};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -169,77 +168,23 @@ pub fn count_values(
     (counts, cur_taxon_counts, hit_count)
 }
 
-fn gen_hit_string(hit: &HitGroup<Row>, taxonomy: &Taxonomy, value_mask: usize) -> String {
-    let mut result = Vec::new();
-    let mut last_pos = 0;
-    let count = hit.cap as u32;
-
-    for row in &hit.rows {
-        let adjusted_pos = row.kmer_id - hit.offset;
-
-        let value = row.value;
-        let key = value.right(value_mask);
-        let ext_code = taxonomy.nodes[key as usize].external_id;
-
-        if last_pos == 0 && adjusted_pos > 0 {
-            result.push((0, adjusted_pos)); // 在开始处添加0
-        } else if adjusted_pos - last_pos > 1 {
-            result.push((0, adjusted_pos - last_pos - 1)); // 在两个特定位置之间添加0
-        }
-        if let Some(last) = result.last_mut() {
-            if last.0 == ext_code {
-                last.1 += 1;
-                last_pos = adjusted_pos;
-                continue;
-            }
-        }
-
-        // 添加当前key的计数
-        result.push((ext_code, 1));
-        last_pos = adjusted_pos;
-    }
-
-    // 填充尾随0
-    if last_pos < count - 1 {
-        if last_pos == 0 {
-            result.push((0, count - last_pos));
-        } else {
-            result.push((0, count - last_pos - 1));
-        }
-    }
-
-    result
-        .iter()
-        .map(|i| format!("{}:{}", i.0, i.1))
-        .collect::<Vec<String>>()
-        .join(" ")
-}
-
-fn adjust_hitlist_string(
+fn stat_hits(
     hits: &BaseType<HitGroup<Row>>,
+    cur_taxon_counts: &TaxonCountersDash,
+    counts: &mut HashMap<u32, u64>,
     value_mask: usize,
     taxonomy: &Taxonomy,
-) -> String {
-    let hit_str = hits.apply(|hit| gen_hit_string(hit, taxonomy, value_mask));
-    match hit_str {
-        BaseType::Single(hit) => hit,
-        BaseType::Pair((hit1, hit2)) => format!("{} |:| {}", hit1, hit2),
-    }
-}
-
-fn count_rows(
-    hit: &BaseType<HitGroup<Row>>,
-    cur_taxon_counts: &TaxonCountersDash,
-    value_mask: usize,
-) -> (HashMap<u32, u64>, usize) {
-    let mut counts = HashMap::new();
-
+) -> (usize, String) {
+    // let mut counts = HashMap::new();
     let mut hit_count: usize = 0;
 
-    // let cur_taxon_counts = TaxonCountersDash::new();
+    let hit_str = hits.apply(|group| {
+        let mut last_pos = 0;
+        let count = group.cap as u32;
+        let mut result = Vec::new();
 
-    hit.apply(|group| {
         for row in &group.rows {
+            // 统计计数
             let value = row.value;
             let key = value.right(value_mask);
             *counts.entry(key).or_insert(0) += 1;
@@ -249,10 +194,52 @@ fn count_rows(
                 .or_default()
                 .add_kmer(value as u64);
             hit_count += 1;
+
+            let adjusted_pos = row.kmer_id - group.offset;
+
+            let value = row.value;
+            let key = value.right(value_mask);
+            let ext_code = taxonomy.nodes[key as usize].external_id;
+
+            if last_pos == 0 && adjusted_pos > 0 {
+                result.push((0, adjusted_pos)); // 在开始处添加0
+            } else if adjusted_pos - last_pos > 1 {
+                result.push((0, adjusted_pos - last_pos - 1)); // 在两个特定位置之间添加0
+            }
+            if let Some(last) = result.last_mut() {
+                if last.0 == ext_code {
+                    last.1 += 1;
+                    last_pos = adjusted_pos;
+                    continue;
+                }
+            }
+
+            // 添加当前key的计数
+            result.push((ext_code, 1));
+            last_pos = adjusted_pos;
         }
+
+        // 填充尾随0
+        if last_pos < count - 1 {
+            if last_pos == 0 {
+                result.push((0, count - last_pos));
+            } else {
+                result.push((0, count - last_pos - 1));
+            }
+        }
+
+        result
+            .iter()
+            .map(|i| format!("{}:{}", i.0, i.1))
+            .collect::<Vec<String>>()
+            .join(" ")
     });
 
-    (counts, hit_count)
+    let hit_string = match hit_str {
+        BaseType::Single(hit) => hit,
+        BaseType::Pair((hit1, hit2)) => format!("{} |:| {}", hit1, hit2),
+    };
+    (hit_count, hit_string)
 }
 
 pub fn process_hitgroup(
@@ -266,7 +253,12 @@ pub fn process_hitgroup(
     minimum_hit_groups: usize,
 ) -> (String, u64, String) {
     let value_mask = hash_config.value_mask;
-    let (counts, hit_groups) = count_rows(&hits, cur_taxon_counts, value_mask);
+
+    let mut counts = HashMap::new();
+    let (hit_groups, hit_string) =
+        stat_hits(hits, cur_taxon_counts, &mut counts, value_mask, taxonomy);
+
+    // let (counts, hit_groups) = count_rows(&hits, cur_taxon_counts, value_mask);
     let mut call = resolve_tree(&counts, taxonomy, total_kmers, confidence_threshold);
     if call > 0 && hit_groups < minimum_hit_groups {
         call = 0;
@@ -284,8 +276,6 @@ pub fn process_hitgroup(
     } else {
         "U"
     };
-
-    let hit_string = adjust_hitlist_string(&hits, value_mask, taxonomy);
 
     (clasify.to_owned(), ext_call, hit_string)
 }

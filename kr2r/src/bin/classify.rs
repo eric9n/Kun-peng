@@ -6,6 +6,7 @@ use kr2r::report::report_kraken_style;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::utils::{create_sample_file, find_and_sort_files, get_lastest_file_index};
 use kr2r::IndexOptions;
+use seqkmer::{create_reader, read_parallel, BaseType, HitGroup, Marker, Meros, Reader, SeqMer};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -13,8 +14,6 @@ use std::io::{Error, ErrorKind, Result};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
-
-use seqkmer::{create_reader, read_parallel, BaseType, HitGroup, Marker, Meros, Reader, SeqMer};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(
