@@ -59,17 +59,6 @@ fn generate_hit_string(
         .join(" ")
 }
 
-pub fn trim_pair_info(id: &str) -> String {
-    let sz = id.len();
-    if sz <= 2 {
-        return id.to_string();
-    }
-    if id.ends_with("/1") || id.ends_with("/2") {
-        return id[0..sz - 2].to_string();
-    }
-    id.to_string()
-}
-
 // &HashMap<u32, u64>,
 pub fn resolve_tree(
     hit_counts: &HashMap<u32, u64>,
@@ -169,7 +158,7 @@ pub fn count_values(
 }
 
 fn stat_hits(
-    hits: &BaseType<HitGroup<Row>>,
+    hits: &BaseType<(), HitGroup<Row>>,
     cur_taxon_counts: &TaxonCountersDash,
     counts: &mut HashMap<u32, u64>,
     value_mask: usize,
@@ -178,9 +167,9 @@ fn stat_hits(
     // let mut counts = HashMap::new();
     let mut hit_count: usize = 0;
 
-    let hit_str = hits.apply(|group| {
+    let hit_str = hits.apply(|_, group| {
         let mut last_pos = 0;
-        let count = group.cap as u32;
+        let count = group.marker_size as u32;
         let mut result = Vec::new();
 
         for row in &group.rows {
@@ -236,14 +225,14 @@ fn stat_hits(
     });
 
     let hit_string = match hit_str {
-        BaseType::Single(hit) => hit,
-        BaseType::Pair((hit1, hit2)) => format!("{} |:| {}", hit1, hit2),
+        BaseType::Single(_, hit) => hit,
+        BaseType::Pair(_, hit1, hit2) => format!("{} |:| {}", hit1, hit2),
     };
     (hit_count, hit_string)
 }
 
 pub fn process_hitgroup(
-    hits: &BaseType<HitGroup<Row>>,
+    hits: &BaseType<(), HitGroup<Row>>,
     hash_config: &HashConfig,
     taxonomy: &Taxonomy,
     cur_taxon_counts: &TaxonCountersDash,

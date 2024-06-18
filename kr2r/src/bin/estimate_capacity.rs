@@ -89,21 +89,19 @@ fn process_sequence(
         &mut reader,
         args.threads,
         args.threads - 2,
-        meros,
+        &meros,
         |record_set| {
             let mut minimizer_set = HashSet::new();
 
-            for record in record_set.into_iter() {
-                record
-                    .marker
-                    .fold(&mut minimizer_set, |minimizer_set, marker| {
-                        let kmer_iter = marker
-                            .minimizer
-                            .iter()
-                            .filter(|&hash_key| hash_key & RANGE_MASK < range_n);
+            for record in record_set {
+                record.fold(&mut minimizer_set, |minimizer_set, _, m_iter| {
+                    let kmer_iter: HashSet<u64> = m_iter
+                        .filter(|(_, hash_key)| *hash_key & RANGE_MASK < range_n)
+                        .map(|(_, hash_key)| hash_key)
+                        .collect();
 
-                        minimizer_set.extend(kmer_iter);
-                    });
+                    minimizer_set.extend(kmer_iter);
+                });
             }
             Some(minimizer_set)
         },

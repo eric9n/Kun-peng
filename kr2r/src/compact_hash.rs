@@ -256,6 +256,10 @@ impl HashConfig {
         hash_key as usize % self.capacity
     }
 
+    pub fn compact(&self, hash_key: u64) -> (usize, u32) {
+        (self.index(hash_key), hash_key.left(self.value_bits) as u32)
+    }
+
     pub fn slot(&self, hash_key: u64, taxid: u32) -> Slot<u32> {
         let idx = self.index(hash_key);
         Slot::<u32>::new(idx, u32::hash_value(hash_key, self.value_bits, taxid))
@@ -370,11 +374,11 @@ impl Page {
     pub fn find_index(
         &self,
         index: usize,
-        value: u64,
+        compacted_key: u32,
         value_bits: usize,
         value_mask: usize,
     ) -> u32 {
-        let compacted_key = value.left(value_bits) as u32;
+        // let compacted_key = value.left(value_bits) as u32;
         let mut idx = index;
         if idx > self.size {
             return u32::default();
@@ -464,9 +468,14 @@ impl CHTable {
         Ok(chtm)
     }
 
-    pub fn get_from_page(&self, indx: usize, value: u64, page_index: usize) -> u32 {
+    pub fn get_from_page(&self, indx: usize, compacted: u32, page_index: usize) -> u32 {
         if let Some(page) = self.pages.get(page_index) {
-            page.find_index(indx, value, self.config.value_bits, self.config.value_mask)
+            page.find_index(
+                indx,
+                compacted,
+                self.config.value_bits,
+                self.config.value_mask,
+            )
         } else {
             0
         }

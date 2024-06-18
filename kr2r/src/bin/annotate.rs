@@ -128,7 +128,8 @@ where
             .into_par_iter()
             .filter_map(|slot| {
                 let indx = slot.idx & idx_mask;
-                let taxid = chtm.get_from_page(indx, slot.value, page_index);
+                let compacted = slot.value.left(value_bits) as u32;
+                let taxid = chtm.get_from_page(indx, compacted, page_index);
 
                 if taxid > 0 {
                     let kmer_id = slot.idx >> idx_bits;

@@ -1,7 +1,8 @@
 use crate::fasta::FastaReader;
 use crate::fastq::{FastqPairReader, FastqReader};
-use crate::reader::{detect_file_format, Reader, SeqMer};
-use crate::seq::Sequence;
+use crate::mmscanner::{scan_sequence, MinimizerIterator};
+use crate::reader::{detect_file_format, Reader};
+use crate::seq::{BaseType, SeqHeader};
 use crate::{Meros, SeqFormat};
 use crossbeam_channel::{bounded, Receiver};
 use scoped_threadpool::Pool;
@@ -53,7 +54,7 @@ pub fn read_parallel<R, W, O, F, Out>(
     reader: &mut R,
     n_threads: usize,
     buffer_len: usize,
-    meros: Meros,
+    meros: &Meros,
     work: W,
     func: F,
 ) -> Result<()>
@@ -61,12 +62,12 @@ where
     R: Reader,
     O: Send,
     Out: Send + Default,
-    W: Send + Sync + Fn(Vec<SeqMer>) -> Option<O>,
+    W: Send + Sync + Fn(&mut Vec<BaseType<SeqHeader, MinimizerIterator>>) -> Option<O>,
     F: FnOnce(&mut ParallelResult<Option<O>>) -> Out + Send,
 {
     assert!(n_threads > 2);
     assert!(n_threads <= buffer_len);
-    let (sender, receiver) = bounded::<Vec<Sequence>>(buffer_len);
+    let (sender, receiver) = bounded::<Vec<BaseType<SeqHeader, Vec<u8>>>>(buffer_len);
     let (done_send, done_recv) = bounded::<Option<O>>(buffer_len);
     let receiver = Arc::new(receiver); // 使用 Arc 来共享 receiver
     let done_send = Arc::new(done_send);
@@ -88,13 +89,12 @@ where
             let work = &work;
             let done_send = Arc::clone(&done_send);
             pool_scope.execute(move || {
-                while let Ok(seqs) = receiver.recv() {
-                    let seq_mers: Vec<SeqMer> = seqs
-                        .iter()
-                        .map(|seq| SeqMer::from_seq(seq, meros))
+                while let Ok(mut seqs) = receiver.recv() {
+                    let mut markers: Vec<BaseType<SeqHeader, MinimizerIterator<'_>>> = seqs
+                        .iter_mut()
+                        .map(|seq| scan_sequence(seq, &meros))
                         .collect();
-
-                    let output = work(seq_mers);
+                    let output = work(&mut markers);
                     done_send.send(output).expect("Failed to send outputs");
                 }
             });

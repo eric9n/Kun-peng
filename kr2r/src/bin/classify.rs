@@ -1,12 +1,14 @@
 use clap::Parser;
-use kr2r::classify::{process_hitgroup, trim_pair_info};
+use kr2r::classify::process_hitgroup;
 use kr2r::compact_hash::{CHTable, Compact, HashConfig, Row};
 use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
 use kr2r::report::report_kraken_style;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::utils::{create_sample_file, find_and_sort_files, get_lastest_file_index};
 use kr2r::IndexOptions;
-use seqkmer::{create_reader, read_parallel, BaseType, HitGroup, Marker, Meros, Reader, SeqMer};
+use seqkmer::{
+    create_reader, read_parallel, BaseType, HitGroup, Meros, MinimizerIterator, Reader, SeqHeader,
+};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -37,7 +39,7 @@ pub struct Args {
     #[clap(short = 'S', long = "single-file-pairs", action)]
     pub single_file_pairs: bool,
 
-    /// Minimum quality score for FASTQ data, default is 0.
+    /// Minimum quality score for FASTQ data.
     #[clap(
         short = 'Q',
         long = "minimum-quality-score",
@@ -46,7 +48,7 @@ pub struct Args {
     )]
     pub minimum_quality_score: i32,
 
-    /// Confidence score threshold, default is 0.0.
+    /// Confidence score threshold.
     #[clap(
         short = 'T',
         long = "confidence-threshold",
@@ -72,7 +74,7 @@ pub struct Args {
     )]
     pub minimum_hit_groups: usize,
 
-    /// The number of threads to use, default is 10.
+    /// The number of threads to use.
     #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = 16)]
     pub num_threads: i32,
 
@@ -85,29 +87,34 @@ pub struct Args {
     pub input_files: Vec<String>,
 }
 
-fn process_seq(marker: &Marker, hash_config: &HashConfig, chtable: &CHTable) -> HitGroup<Row> {
+fn process_seq(
+    m_iter: &mut MinimizerIterator,
+    hash_config: &HashConfig,
+    chtable: &CHTable,
+) -> HitGroup<Row> {
     let chunk_size = hash_config.hash_capacity;
     let value_bits = hash_config.value_bits;
-
     let mut rows = Vec::new();
-    for (sort, &hash_key) in marker.minimizer.iter().enumerate() {
-        let idx = hash_config.index(hash_key);
+
+    let data: Vec<(usize, u64)> = m_iter.collect();
+    for (sort, hash_key) in data {
+        let (idx, compacted) = hash_config.compact(hash_key);
         let partition_index = idx / chunk_size;
         let index = idx % chunk_size;
-        let taxid = chtable.get_from_page(index, hash_key, partition_index + 1);
+
+        let taxid = chtable.get_from_page(index, compacted, partition_index + 1);
         if taxid > 0 {
-            let compacted_key = hash_key.left(value_bits) as u32;
-            let high = u32::combined(compacted_key, taxid, value_bits);
+            let high = u32::combined(compacted, taxid, value_bits);
             let row = Row::new(high, 0, sort as u32 + 1);
             rows.push(row);
         }
     }
-    HitGroup::new(marker.size(), rows, 0)
+
+    HitGroup::new(m_iter.size, rows, 0)
 }
 
 fn process_record(
-    dna_id: String,
-    seq: &SeqMer,
+    marker: &mut BaseType<SeqHeader, MinimizerIterator>,
     args: &Args,
     taxonomy: &Taxonomy,
     chtable: &CHTable,
@@ -115,12 +122,10 @@ fn process_record(
     cur_taxon_counts: &TaxonCountersDash,
     classify_counter: &AtomicUsize,
 ) -> String {
-    let seq_len_str = seq.fmt_cap();
-    let hits: BaseType<HitGroup<Row>> = seq
-        .marker
-        .apply(|marker| process_seq(&marker, &hash_config, chtable));
-
-    let total_kmers = seq.total_size();
+    let id = marker.get_s().clone().id;
+    let hits = marker.apply_mut(|_, m_iter| process_seq(m_iter, &hash_config, chtable));
+    let total_kmers = hits.total_marker_size();
+    let seq_len_str = marker.fmt_seq_size();
 
     let hit_data = process_hitgroup(
         &hits,
@@ -134,7 +139,7 @@ fn process_record(
     );
     format!(
         "{}\t{}\t{}\t{}\t{}\n",
-        hit_data.0, dna_id, hit_data.1, seq_len_str, hit_data.2
+        hit_data.0, id, hit_data.1, seq_len_str, hit_data.2
     )
 }
 
@@ -162,23 +167,20 @@ where
 
     let cur_taxon_counts = TaxonCountersDash::new();
 
-    let sequence_count = AtomicUsize::new(0);
+    let seq_counter = AtomicUsize::new(0);
     let classify_counter = AtomicUsize::new(0);
 
     let _ = read_parallel(
         reader,
         args.num_threads as usize - 2,
         args.num_threads as usize,
-        meros,
+        &meros,
         |seqs| {
             let mut buffer = String::new();
-            for seq in seqs {
-                let dna_id = trim_pair_info(&seq.id);
-                sequence_count.fetch_add(1, Ordering::SeqCst);
-
+            for record in seqs {
+                seq_counter.fetch_add(1, Ordering::SeqCst);
                 let output_line = process_record(
-                    dna_id,
-                    &seq,
+                    record,
                     args,
                     taxonomy,
                     chtable,
@@ -186,7 +188,6 @@ where
                     &cur_taxon_counts,
                     &classify_counter,
                 );
-
                 buffer.push_str(&output_line);
             }
 
@@ -218,7 +219,7 @@ where
             .unwrap();
     });
 
-    let thread_sequences = sequence_count.load(Ordering::SeqCst);
+    let thread_sequences = seq_counter.load(Ordering::SeqCst);
     let thread_classified = classify_counter.load(Ordering::SeqCst);
     if let Some(output) = &args.kraken_output_dir {
         let filename = output.join(format!("output_{}.kreport2", file_index));

@@ -1,5 +1,5 @@
-use crate::reader::{dyn_reader, trim_end, Reader, BUFSIZE};
-use crate::seq::{BaseType, SeqFormat, Sequence};
+use crate::reader::{dyn_reader, trim_end, Reader, SeqVecType, BUFSIZE};
+use crate::seq::{BaseType, SeqFormat, SeqHeader};
 use std::io::{BufRead, BufReader, Read, Result};
 use std::path::Path;
 
@@ -65,7 +65,7 @@ fn check_sequence_length(seq: &Vec<u8>) -> bool {
 }
 
 impl<R: Read + Send> Reader for FastaReader<R> {
-    fn next(&mut self) -> Result<Option<Vec<Sequence>>> {
+    fn next(&mut self) -> Result<Option<SeqVecType>> {
         if self.read_next()?.is_none() {
             return Ok(None);
         }
@@ -94,13 +94,13 @@ impl<R: Read + Send> Reader for FastaReader<R> {
         };
         self.reads_index += 1;
 
-        let sequence = Sequence {
+        let seq_header = SeqHeader {
             file_index: self.file_index,
             reads_index: self.reads_index,
-            id: seq_id.to_owned(),
-            seq: BaseType::Single(self.seq.to_owned()),
             format: SeqFormat::Fasta,
+            id: seq_id.to_owned(),
         };
-        Ok(Some(vec![sequence]))
+        let seq = BaseType::Single(seq_header, self.seq.to_owned());
+        Ok(Some(vec![seq]))
     }
 }

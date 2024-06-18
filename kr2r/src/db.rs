@@ -7,9 +7,7 @@ use seqkmer::Meros;
 use crate::utils::open_file;
 use byteorder::{LittleEndian, WriteBytesExt};
 use rayon::prelude::*;
-// use seq_io::fasta::{Reader, Record};
-// use seq_io::parallel::read_parallel;
-use seqkmer::{read_parallel as s_parallel, FastaReader};
+use seqkmer::{read_parallel, FastaReader};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Result as IOResult, Write};
@@ -258,30 +256,48 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
     let value_bits = hash_config.value_bits;
     let cell_size = std::mem::size_of::<Slot<u32>>();
 
-    s_parallel(
+    read_parallel(
         &mut reader,
         threads as usize,
         queue_len,
-        meros,
+        &meros,
         |seqs| {
             let mut k2_cell_list = Vec::new();
 
-            for record in seqs.iter() {
-                if let Some(ext_taxid) = id_to_taxon_map.get(&record.id) {
-                    let taxid = taxonomy.get_internal_id(*ext_taxid);
-                    record
-                        .marker
-                        .fold(&mut k2_cell_list, |k2_cell_list, marker| {
-                            for &hash_key in marker.minimizer.iter() {
+            for record in seqs {
+                record.fold(&mut k2_cell_list, |k2_cell_list, header, m_iter| {
+                    if let Some(ext_taxid) = id_to_taxon_map.get(&header.id) {
+                        let taxid = taxonomy.get_internal_id(*ext_taxid);
+                        let k2_cell: Vec<(usize, Slot<u32>)> = m_iter
+                            .map(|(_, hash_key)| {
                                 let index: usize = hash_config.index(hash_key);
                                 let idx = index % chunk_size;
                                 let partition_index = index / chunk_size;
                                 let cell =
                                     Slot::new(idx, u32::hash_value(hash_key, value_bits, taxid));
-                                k2_cell_list.push((partition_index, cell));
-                            }
-                        });
-                }
+                                (partition_index, cell)
+                            })
+                            .collect();
+
+                        k2_cell_list.extend_from_slice(&k2_cell);
+                    }
+                });
+
+                // if let Some(ext_taxid) = id_to_taxon_map.get(&record.id) {
+                //     let taxid = taxonomy.get_internal_id(*ext_taxid);
+                //     record
+                //         .marker
+                //         .fold(&mut k2_cell_list, |k2_cell_list, marker| {
+                //             for &hash_key in marker.minimizer.iter() {
+                //                 let index: usize = hash_config.index(hash_key);
+                //                 let idx = index % chunk_size;
+                //                 let partition_index = index / chunk_size;
+                //                 let cell =
+                //                     Slot::new(idx, u32::hash_value(hash_key, value_bits, taxid));
+                //                 k2_cell_list.push((partition_index, cell));
+                //             }
+                //         });
+                // }
             }
             Some(k2_cell_list)
         },

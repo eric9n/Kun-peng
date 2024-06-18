@@ -1,5 +1,4 @@
-use crate::seq::{BaseType, Marker, SeqFormat, Sequence};
-use crate::{mmscanner::MinimizerScanner, Meros};
+use crate::seq::{BaseType, SeqFormat, SeqHeader};
 use flate2::read::GzDecoder;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Result, Seek};
@@ -20,6 +19,17 @@ pub fn is_gzipped(file: &mut File) -> Result<bool> {
     file.read_exact(&mut buffer)?;
     file.rewind()?; // 重置文件指针到开头
     Ok(buffer == [0x1F, 0x8B])
+}
+
+pub fn trim_pair_info(id: &str) -> String {
+    let sz = id.len();
+    if sz <= 2 {
+        return id.to_string();
+    }
+    if id.ends_with("/1") || id.ends_with("/2") {
+        return id[0..sz - 2].to_string();
+    }
+    id.to_string()
 }
 
 pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File> {
@@ -78,66 +88,22 @@ pub fn trim_end(buffer: &mut Vec<u8>) {
 
 pub const BUFSIZE: usize = 16 * 1024 * 1024;
 
+pub type SeqVecType = Vec<BaseType<SeqHeader, Vec<u8>>>;
+
 pub trait Reader: Send {
-    fn next(&mut self) -> Result<Option<Vec<Sequence>>>;
+    fn next(&mut self) -> Result<Option<SeqVecType>>;
 }
 
 impl Reader for Box<dyn Reader> {
-    fn next(&mut self) -> Result<Option<Vec<Sequence>>> {
+    fn next(&mut self) -> Result<Option<SeqVecType>> {
         (**self).next()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SeqMer {
-    pub id: String,
-    pub file_index: usize,
-    pub reads_index: usize,
-    pub marker: BaseType<Marker>,
-}
-
-impl SeqMer {
-    pub fn from_seq(seq: &Sequence, meros: Meros) -> Self {
-        let mut ms = MinimizerScanner::new(&seq.seq, meros);
-        let marker = ms.iter();
-        Self {
-            marker,
-            id: seq.id.clone(),
-            file_index: seq.file_index,
-            reads_index: seq.reads_index,
-        }
-    }
-
-    pub fn cap_str(&self) -> BaseType<String> {
-        self.marker.apply(|marker| marker.cap.to_string())
-    }
-
-    pub fn total_size(&self) -> usize {
-        match &self.marker {
-            BaseType::Single(marker1) => marker1.size(),
-            BaseType::Pair((marker1, marker2)) => marker1.size() + marker2.size(),
-        }
-    }
-
-    pub fn fmt_cap(&self) -> String {
-        match &self.marker {
-            BaseType::Single(marker1) => marker1.cap.to_string(),
-            BaseType::Pair((marker1, marker2)) => format!("{}|{}", marker1.cap, marker2.cap),
-        }
-    }
-
-    pub fn fmt_size(&self) -> String {
-        match &self.marker {
-            BaseType::Single(marker1) => marker1.size().to_string(),
-            BaseType::Pair((marker1, marker2)) => format!("{}|{}", marker1.size(), marker2.size()),
-        }
     }
 }
 
 #[derive(Debug)]
 pub struct HitGroup<T> {
-    /// minimizer capacity
-    pub cap: usize,
+    /// minimizer data size
+    pub marker_size: usize,
     /// hit value vector
     pub rows: Vec<T>,
     /// pair offset
@@ -145,12 +111,16 @@ pub struct HitGroup<T> {
 }
 
 impl<T> HitGroup<T> {
-    pub fn new(cap: usize, rows: Vec<T>, offset: u32) -> Self {
-        Self { cap, rows, offset }
+    pub fn new(marker_size: usize, rows: Vec<T>, offset: u32) -> Self {
+        Self {
+            marker_size,
+            rows,
+            offset,
+        }
     }
 }
 
-impl<T> BaseType<HitGroup<T>> {
+impl<S, T> BaseType<S, HitGroup<T>> {
     /// Synchronizes the offset of the second element of a `Pair` to the `cap` of the first element.
     /// This alignment is only necessary when the `rows` property of the `HitGroup` is in an
     /// increasing order. If `rows` is not increasing, aligning the offset based on `cap` may not
@@ -166,8 +136,28 @@ impl<T> BaseType<HitGroup<T>> {
     /// pair.align_offset();
     /// ```
     pub fn align_offset(&mut self) {
-        if let BaseType::Pair((ref first, ref mut second)) = self {
-            second.offset = first.cap as u32;
+        if let BaseType::Pair(_, ref first, ref mut second) = self {
+            second.offset = first.marker_size as u32;
         }
     }
+
+    pub fn total_marker_size(&self) -> usize {
+        match &self {
+            BaseType::Single(_, hit) => hit.marker_size,
+            BaseType::Pair(_, hit1, hit2) => hit1.marker_size + hit2.marker_size,
+        }
+    }
+
+    // pub fn seq_size_str(&self) -> BaseType<(), String> {
+    //     self.apply(|_, hit| hit.seq_size.to_string())
+    // }
+
+    // pub fn fmt_seq_size(&self) -> String {
+    //     match &self {
+    //         BaseType::Single(_, hit) => hit.seq_size.to_string(),
+    //         BaseType::Pair(_, hit1, hit2) => {
+    //             format!("{}|{}", hit1.seq_size, hit2.seq_size)
+    //         }
+    //     }
+    // }
 }

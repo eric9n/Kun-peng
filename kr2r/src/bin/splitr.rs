@@ -5,7 +5,7 @@ use kr2r::utils::{
     get_lastest_file_index,
 };
 use kr2r::IndexOptions;
-use seqkmer::{create_reader, read_parallel, Marker, Meros, Reader};
+use seqkmer::{create_reader, read_parallel, Meros, MinimizerIterator, Reader};
 use std::fs;
 use std::io::{BufWriter, Write};
 use std::io::{Error, ErrorKind, Result};
@@ -96,14 +96,14 @@ fn init_chunk_writers(
 /// 处理record
 fn process_record(
     k2_slot_list: &mut Vec<(usize, Slot<u64>)>,
-    marker: &Marker,
+    marker: &mut MinimizerIterator,
     hash_config: &HashConfig,
     chunk_size: usize,
     seq_id: u64,
     idx_bits: usize,
 ) {
     let offset = k2_slot_list.len();
-    for (sort, &hash_key) in marker.minimizer.iter().enumerate() {
+    for (sort, hash_key) in marker {
         let mut slot = hash_config.slot_u64(hash_key, seq_id);
         let seq_sort = sort + offset;
         let partition_index = slot.idx / chunk_size;
@@ -150,24 +150,32 @@ where
         reader,
         args.num_threads as usize - 2,
         args.num_threads as usize,
-        meros,
+        &meros,
         |seqs| {
             let mut buffer = String::new();
             let mut k2_slot_list = Vec::new();
-            for seq in &seqs {
-                let dna_id = seq.id.to_owned();
-                let index = seq.reads_index;
-                let seq_id = (file_index << 32 | index) as u64;
+            for seq in seqs {
                 let mut init: Vec<(usize, Slot<u64>)> = Vec::new();
-                seq.marker.fold(&mut init, |init, marker| {
-                    process_record(init, marker, &hash_config, chunk_size, seq_id, idx_bits)
+                let header = seq.get_s();
+                let index = header.reads_index;
+                let dna_id = header.id.clone();
+                seq.fold(&mut init, |init, _, mut m_iter| {
+                    let seq_id = (file_index << 32 | index) as u64;
+                    process_record(
+                        init,
+                        &mut m_iter,
+                        &hash_config,
+                        chunk_size,
+                        seq_id,
+                        idx_bits,
+                    );
                 });
-                k2_slot_list.extend(init);
+                k2_slot_list.extend_from_slice(&init);
 
-                let seq_cap_str = seq.fmt_cap();
-                let seq_size_str = seq.fmt_size();
+                let size_str = seq.fmt_size();
+                let seq_size_str = seq.fmt_seq_size();
                 buffer.push_str(
-                    format!("{}\t{}\t{}\t{}\n", index, dna_id, seq_cap_str, seq_size_str).as_str(),
+                    format!("{}\t{}\t{}\t{}\n", index, dna_id, seq_size_str, size_str).as_str(),
                 );
             }
             Some((buffer, k2_slot_list))

@@ -1,12 +1,13 @@
 use clap::Parser;
 use dashmap::{DashMap, DashSet};
-use kr2r::classify::{add_hitlist_string, count_values, resolve_tree, trim_pair_info};
+use kr2r::classify::{add_hitlist_string, count_values, resolve_tree};
 use kr2r::compact_hash::{HashConfig, Row};
 use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
 use kr2r::report::report_kraken_style;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::utils::{find_and_sort_files, open_file};
 use rayon::prelude::*;
+use seqkmer::trim_pair_info;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Result, Write};

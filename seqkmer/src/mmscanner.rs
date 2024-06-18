@@ -1,5 +1,5 @@
 // kraken 2 使用的是murmur_hash3 算法的 fmix64作为 hash
-use crate::seq::{BaseType, Marker};
+use crate::seq::{BaseType, SeqHeader};
 use crate::{
     canonical_representation, char_to_value, fmix64 as murmur_hash3, Meros, BITS_PER_CHAR,
 };
@@ -15,7 +15,7 @@ fn to_candidate_lmer(meros: &Meros, lmer: u64) -> u64 {
 }
 
 #[derive(Debug)]
-struct MinimizerData {
+pub struct MinimizerData {
     pos: usize,
     candidate_lmer: u64,
 }
@@ -98,7 +98,8 @@ impl MinimizerWindow {
     }
 }
 
-struct Cursor {
+#[derive(Clone, Copy)]
+pub struct Cursor {
     pos: usize,
     capacity: usize,
     value: u64,
@@ -134,56 +135,128 @@ impl Cursor {
     }
 }
 
-pub struct MinimizerScanner<'a> {
-    seq: &'a BaseType<Vec<u8>>,
-    meros: Meros,
+pub struct MinimizerIterator<'a> {
     cursor: Cursor,
     window: MinimizerWindow,
+    seq: &'a [u8],
+    meros: &'a Meros,
+    pos: usize,
+    end: usize,
+    pub size: usize,
 }
 
-impl<'a> MinimizerScanner<'a> {
-    pub fn new(seq: &'a BaseType<Vec<u8>>, meros: Meros) -> Self {
-        MinimizerScanner {
+impl<'a> MinimizerIterator<'a> {
+    pub fn new(seq: &'a [u8], cursor: Cursor, window: MinimizerWindow, meros: &'a Meros) -> Self {
+        MinimizerIterator {
+            cursor,
+            window,
             seq,
             meros,
-            cursor: Cursor::new(meros.l_mer, meros.mask),
-            window: MinimizerWindow::new(meros.window_size()),
+            pos: 0,
+            size: 0,
+            end: seq.len(),
         }
     }
 
-    #[inline]
-    fn clear(&mut self) {
+    fn clear_state(&mut self) {
         self.cursor.clear();
         self.window.clear();
     }
 
-    fn iter_seq(&mut self, seq: &Vec<u8>) -> Marker {
-        let minimizer = seq
-            .iter()
-            .filter_map(|&ch| {
-                if ch == b'\n' || ch == b'\r' {
-                    None
-                } else {
-                    match char_to_value(ch) {
-                        Some(code) => self.cursor.next_lmer(code).and_then(|lmer| {
-                            let candidate_lmer: u64 = to_candidate_lmer(&self.meros, lmer);
-                            self.window
-                                .next(candidate_lmer)
-                                .map(|minimizer| murmur_hash3(minimizer ^ self.meros.toggle_mask))
-                        }),
-                        None => {
-                            self.clear();
-                            None
-                        }
-                    }
-                }
-            })
-            .collect();
+    pub fn seq_size(&self) -> usize {
+        self.end
+    }
+}
 
-        Marker::new(seq.len(), minimizer)
+impl<'a> Iterator for MinimizerIterator<'a> {
+    type Item = (usize, u64);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // self.sequence
+        //     .iter()
+        //     .filter_map(|&ch| {
+        //         if ch == b'\n' || ch == b'\r' {
+        //             None
+        //         } else {
+        //             match char_to_value(ch) {
+        //                 Some(code) => self.cursor.next_lmer(code).and_then(|lmer| {
+        //                     let candidate_lmer: u64 = to_candidate_lmer(&self.meros, lmer);
+        //                     self.window
+        //                         .next(candidate_lmer)
+        //                         .map(|minimizer| murmur_hash3(minimizer ^ self.meros.toggle_mask))
+        //                 }),
+        //                 None => {
+        //                     self.clear_state();
+        //                     None
+        //                 }
+        //             }
+        //         }
+        //     })
+        //     .next()
+        while self.pos < self.end {
+            let ch = self.seq[self.pos];
+            self.pos += 1;
+            if ch == b'\n' || ch == b'\r' {
+                continue;
+            } else {
+                let data = match char_to_value(ch) {
+                    Some(code) => self.cursor.next_lmer(code).and_then(|lmer| {
+                        let candidate_lmer = to_candidate_lmer(&self.meros, lmer);
+                        self.window
+                            .next(candidate_lmer)
+                            .map(|minimizer| murmur_hash3(minimizer ^ self.meros.toggle_mask))
+                    }),
+                    None => {
+                        self.clear_state();
+                        None
+                    }
+                };
+                if data.is_some() {
+                    self.size += 1;
+                    return Some((self.size, data.unwrap()));
+                }
+            }
+        }
+        None
+    }
+}
+
+impl<'a> BaseType<SeqHeader, MinimizerIterator<'a>> {
+    pub fn seq_size_str(&self) -> BaseType<(), String> {
+        self.apply(|_, m_iter| m_iter.seq_size().to_string())
     }
 
-    pub fn iter(&mut self) -> BaseType<Marker> {
-        self.seq.apply(|seq| self.iter_seq(seq))
+    pub fn fmt_seq_size(&self) -> String {
+        match &self {
+            BaseType::Single(_, m_iter) => m_iter.seq_size().to_string(),
+            BaseType::Pair(_, m_iter1, m_iter2) => {
+                format!("{}|{}", m_iter1.seq_size(), m_iter2.seq_size())
+            }
+        }
+    }
+
+    pub fn fmt_size(&self) -> String {
+        match &self {
+            BaseType::Single(_, m_iter) => m_iter.size.to_string(),
+            BaseType::Pair(_, m_iter1, m_iter2) => {
+                format!("{}|{}", m_iter1.size, m_iter2.size)
+            }
+        }
+    }
+}
+pub fn scan_sequence<'a>(
+    sequence: &'a BaseType<SeqHeader, Vec<u8>>,
+    meros: &'a Meros,
+) -> BaseType<SeqHeader, MinimizerIterator<'a>> {
+    let func = |seq: &'a Vec<u8>| {
+        let cursor = Cursor::new(meros.l_mer, meros.mask);
+        let window = MinimizerWindow::new(meros.window_size());
+        MinimizerIterator::new(&seq, cursor, window, meros)
+    };
+    match sequence {
+        BaseType::Single(header, seq) => BaseType::Single(header.clone(), func(seq)),
+        BaseType::Pair(header, seq1, seq2) => {
+            BaseType::Pair(header.clone(), func(seq1), func(seq2))
+        }
     }
 }
