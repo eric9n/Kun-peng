@@ -6,9 +6,7 @@ use kr2r::report::report_kraken_style;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::utils::{create_sample_file, find_and_sort_files, get_lastest_file_index};
 use kr2r::IndexOptions;
-use seqkmer::{
-    create_reader, read_parallel, BaseType, HitGroup, Meros, MinimizerIterator, Reader, SeqHeader,
-};
+use seqkmer::{create_reader, read_parallel, Base, HitGroup, Meros, MinimizerIterator, Reader};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -114,7 +112,7 @@ fn process_seq(
 }
 
 fn process_record(
-    marker: &mut BaseType<SeqHeader, MinimizerIterator>,
+    marker: &mut Base<MinimizerIterator>,
     args: &Args,
     taxonomy: &Taxonomy,
     chtable: &CHTable,
@@ -122,8 +120,10 @@ fn process_record(
     cur_taxon_counts: &TaxonCountersDash,
     classify_counter: &AtomicUsize,
 ) -> String {
-    let id = marker.get_s().clone().id;
-    let hits = marker.apply_mut(|_, m_iter| process_seq(m_iter, &hash_config, chtable));
+    let id = &marker.header.id;
+    let hits = marker
+        .body
+        .apply_mut(|m_iter| process_seq(m_iter, &hash_config, chtable));
     let total_kmers = hits.total_marker_size();
     let seq_len_str = marker.fmt_seq_size();
 

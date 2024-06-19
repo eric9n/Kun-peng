@@ -1,7 +1,7 @@
 use crate::compact_hash::{Compact, HashConfig, Row};
 use crate::readcounts::TaxonCountersDash;
 use crate::taxonomy::Taxonomy;
-use seqkmer::{BaseType, HitGroup};
+use seqkmer::{HitGroup, OptionPair};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -158,7 +158,7 @@ pub fn count_values(
 }
 
 fn stat_hits(
-    hits: &BaseType<(), HitGroup<Row>>,
+    hits: &OptionPair<HitGroup<Row>>,
     cur_taxon_counts: &TaxonCountersDash,
     counts: &mut HashMap<u32, u64>,
     value_mask: usize,
@@ -167,22 +167,26 @@ fn stat_hits(
     // let mut counts = HashMap::new();
     let mut hit_count: usize = 0;
 
-    let hit_str = hits.apply(|_, group| {
+    let hit_str = hits.apply(|group| {
         let mut last_pos = 0;
         let count = group.marker_size as u32;
         let mut result = Vec::new();
 
+        let mut last_row: Row = Row::new(0, 0, 0);
         for row in &group.rows {
             // 统计计数
             let value = row.value;
             let key = value.right(value_mask);
             *counts.entry(key).or_insert(0) += 1;
 
-            cur_taxon_counts
-                .entry(key as u64)
-                .or_default()
-                .add_kmer(value as u64);
-            hit_count += 1;
+            if !(last_row.value == value && row.kmer_id - last_row.kmer_id == 1) {
+                cur_taxon_counts
+                    .entry(key as u64)
+                    .or_default()
+                    .add_kmer(value as u64);
+                hit_count += 1;
+            }
+            last_row = *row;
 
             let adjusted_pos = row.kmer_id - group.offset;
 
@@ -224,15 +228,12 @@ fn stat_hits(
             .join(" ")
     });
 
-    let hit_string = match hit_str {
-        BaseType::Single(_, hit) => hit,
-        BaseType::Pair(_, hit1, hit2) => format!("{} |:| {}", hit1, hit2),
-    };
+    let hit_string = hit_str.reduce_str(" |:| ", |str| str.to_owned());
     (hit_count, hit_string)
 }
 
 pub fn process_hitgroup(
-    hits: &BaseType<(), HitGroup<Row>>,
+    hits: &OptionPair<HitGroup<Row>>,
     hash_config: &HashConfig,
     taxonomy: &Taxonomy,
     cur_taxon_counts: &TaxonCountersDash,

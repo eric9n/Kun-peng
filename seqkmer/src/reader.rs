@@ -1,4 +1,5 @@
-use crate::seq::{BaseType, SeqFormat, SeqHeader};
+use crate::seq::{Base, SeqFormat};
+use crate::utils::OptionPair;
 use flate2::read::GzDecoder;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Result, Seek};
@@ -88,14 +89,14 @@ pub(crate) fn trim_end(buffer: &mut Vec<u8>) {
 
 pub const BUFSIZE: usize = 16 * 1024 * 1024;
 
-pub type SeqVecType = Vec<BaseType<SeqHeader, Vec<u8>>>;
+// pub type SeqVecType = Vec<Base>;
 
 pub trait Reader: Send {
-    fn next(&mut self) -> Result<Option<SeqVecType>>;
+    fn next(&mut self) -> Result<Option<Vec<Base<Vec<u8>>>>>;
 }
 
 impl Reader for Box<dyn Reader> {
-    fn next(&mut self) -> Result<Option<SeqVecType>> {
+    fn next(&mut self) -> Result<Option<Vec<Base<Vec<u8>>>>> {
         (**self).next()
     }
 }
@@ -120,7 +121,7 @@ impl<T> HitGroup<T> {
     }
 }
 
-impl<S, T> BaseType<S, HitGroup<T>> {
+impl<T> OptionPair<HitGroup<T>> {
     /// Synchronizes the offset of the second element of a `Pair` to the `cap` of the first element.
     /// This alignment is only necessary when the `rows` property of the `HitGroup` is in an
     /// increasing order. If `rows` is not increasing, aligning the offset based on `cap` may not
@@ -132,19 +133,16 @@ impl<S, T> BaseType<S, HitGroup<T>> {
     /// let mut hit_group1 = HitGroup::new(10, vec![1, 2, 3], 0); // Increasing `rows`
     /// let mut hit_group2 = HitGroup::new(20, vec![4, 5, 6], 0);
     ///
-    /// let mut pair = BaseType::Pair((hit_group1, hit_group2));
+    /// let mut pair = OptionPair::Pair((hit_group1, hit_group2));
     /// pair.align_offset();
     /// ```
     pub fn align_offset(&mut self) {
-        if let BaseType::Pair(_, ref first, ref mut second) = self {
+        if let OptionPair::Pair(ref first, ref mut second) = self {
             second.offset = first.marker_size as u32;
         }
     }
 
     pub fn total_marker_size(&self) -> usize {
-        match &self {
-            BaseType::Single(_, hit) => hit.marker_size,
-            BaseType::Pair(_, hit1, hit2) => hit1.marker_size + hit2.marker_size,
-        }
+        self.reduce(0, |acc, hit| acc + hit.marker_size)
     }
 }

@@ -1,9 +1,7 @@
-use crate::reader::{dyn_reader, trim_end, trim_pair_info, Reader, SeqVecType, BUFSIZE};
-use crate::seq::{BaseType, SeqFormat, SeqHeader};
+use crate::reader::{dyn_reader, trim_end, trim_pair_info, Reader, BUFSIZE};
+use crate::seq::{Base, SeqFormat, SeqHeader};
 use std::io::{BufRead, BufReader, Read, Result};
 use std::path::Path;
-
-type SeqType = BaseType<SeqHeader, Vec<u8>>;
 
 struct QReader<R: Read + Send> {
     reader: BufReader<R>,
@@ -139,7 +137,7 @@ where
         }
     }
 
-    pub fn read_next_entry(&mut self) -> Result<Option<SeqType>> {
+    pub fn read_next_entry(&mut self) -> Result<Option<Base<Vec<u8>>>> {
         let entry = self.inner.read_next_entry()?;
         if entry.is_none() {
             return Ok(None);
@@ -167,11 +165,11 @@ where
             id: seq_id.to_owned(),
         };
 
-        let seq = BaseType::Single(seq_header, seq);
+        let seq = Base::new(seq_header, OptionPair::Single(seq));
         Ok(Some(seq))
     }
 
-    pub fn read_next(&mut self) -> Result<Option<SeqType>> {
+    pub fn read_next(&mut self) -> Result<Option<Base<Vec<u8>>>> {
         if self.inner.read_next()?.is_none() {
             return Ok(None);
         }
@@ -196,7 +194,7 @@ where
             id: seq_id.to_owned(),
         };
 
-        let seq = BaseType::Single(seq_header, self.inner.seq.to_owned());
+        let seq = Base::new(seq_header, OptionPair::Single(self.inner.seq.to_owned()));
         Ok(Some(seq))
     }
 }
@@ -217,8 +215,8 @@ impl<R> Reader for FastqReader<R>
 where
     R: Read + Send,
 {
-    fn next(&mut self) -> Result<Option<SeqVecType>> {
-        let seqs: SeqVecType = (0..self.batch_size)
+    fn next(&mut self) -> Result<Option<Vec<Base<Vec<u8>>>>> {
+        let seqs: Vec<Base<Vec<u8>>> = (0..self.batch_size)
             .filter_map(|_| self.read_next_entry().transpose()) // 将 Result<Option<_>, _> 转换为 Option<Result<_, _>>
             .collect::<Result<Vec<_>>>()?;
 
@@ -262,7 +260,7 @@ where
         }
     }
 
-    pub fn read_next(&mut self) -> Result<Option<SeqType>> {
+    pub fn read_next(&mut self) -> Result<Option<Base<Vec<u8>>>> {
         if self.inner1.read_next()?.is_none() {
             return Ok(None);
         }
@@ -291,10 +289,9 @@ where
             id: trim_pair_info(seq_id),
         };
 
-        let sequence = BaseType::Pair(
+        let sequence = Base::new(
             seq_header,
-            self.inner1.seq.to_owned(),
-            self.inner2.seq.to_owned(),
+            OptionPair::Pair(self.inner1.seq.to_owned(), self.inner2.seq.to_owned()),
         );
         Ok(Some(sequence))
     }
@@ -318,8 +315,8 @@ impl<R> Reader for FastqPairReader<R>
 where
     R: Read + Send,
 {
-    fn next(&mut self) -> Result<Option<SeqVecType>> {
-        let seqs: SeqVecType = (0..self.batch_size)
+    fn next(&mut self) -> Result<Option<Vec<Base<Vec<u8>>>>> {
+        let seqs: Vec<Base<Vec<u8>>> = (0..self.batch_size)
             .filter_map(|_| self.read_next().transpose()) // 将 Result<Option<_>, _> 转换为 Option<Result<_, _>>
             .collect::<Result<Vec<_>>>()?;
 
@@ -327,7 +324,7 @@ where
     }
 }
 
-use crate::seq::OptionPair;
+use crate::utils::OptionPair;
 
 pub struct FastxPairReader<R: Read + Send> {
     inner: OptionPair<QReader<R>>,
@@ -390,7 +387,7 @@ where
         }
     }
 
-    pub fn read_next(&mut self) -> Result<Option<SeqType>> {
+    pub fn read_next(&mut self) -> Result<Option<Base<Vec<u8>>>> {
         match &mut self.inner {
             OptionPair::Single(reader) => {
                 if reader.read_next()?.is_none() {
@@ -401,7 +398,10 @@ where
 
                 let seq_header =
                     Self::create_seq_header(&reader, self.file_index, self.reads_index);
-                Ok(Some(BaseType::Single(seq_header, reader.seq.to_owned())))
+                Ok(Some(Base::new(
+                    seq_header,
+                    OptionPair::Single(reader.seq.to_owned()),
+                )))
             }
             OptionPair::Pair(reader1, reader2) => {
                 if reader1.read_next()?.is_none() {
@@ -415,10 +415,9 @@ where
                 let seq_header =
                     Self::create_seq_header(&reader1, self.file_index, self.reads_index);
 
-                Ok(Some(BaseType::Pair(
+                Ok(Some(Base::new(
                     seq_header,
-                    reader1.seq.to_owned(),
-                    reader2.seq.to_owned(),
+                    OptionPair::Pair(reader1.seq.to_owned(), reader2.seq.to_owned()),
                 )))
             }
         }
@@ -441,8 +440,8 @@ impl<R> Reader for FastxPairReader<R>
 where
     R: Read + Send,
 {
-    fn next(&mut self) -> Result<Option<SeqVecType>> {
-        let seqs: SeqVecType = (0..self.batch_size)
+    fn next(&mut self) -> Result<Option<Vec<Base<Vec<u8>>>>> {
+        let seqs: Vec<Base<Vec<u8>>> = (0..self.batch_size)
             .filter_map(|_| self.read_next().transpose()) // 将 Result<Option<_>, _> 转换为 Option<Result<_, _>>
             .collect::<Result<Vec<_>>>()?;
 

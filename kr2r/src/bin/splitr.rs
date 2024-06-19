@@ -156,10 +156,10 @@ where
             let mut k2_slot_list = Vec::new();
             for seq in seqs {
                 let mut init: Vec<(usize, Slot<u64>)> = Vec::new();
-                let header = seq.get_s();
+                let header = &seq.header;
                 let index = header.reads_index;
                 let dna_id = header.id.clone();
-                seq.fold(&mut init, |init, _, mut m_iter| {
+                seq.body.fold(&mut init, |init, mut m_iter| {
                     let seq_id = (file_index << 32 | index) as u64;
                     process_record(
                         init,

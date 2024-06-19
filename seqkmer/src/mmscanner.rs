@@ -1,5 +1,6 @@
 // kraken 2 使用的是murmur_hash3 算法的 fmix64作为 hash
-use crate::seq::{BaseType, SeqHeader};
+use crate::seq::Base;
+use crate::utils::OptionPair;
 use crate::{
     canonical_representation, char_to_value, fmix64 as murmur_hash3, Meros, BITS_PER_CHAR,
 };
@@ -221,42 +222,38 @@ impl<'a> Iterator for MinimizerIterator<'a> {
     }
 }
 
-impl<'a> BaseType<SeqHeader, MinimizerIterator<'a>> {
-    pub fn seq_size_str(&self) -> BaseType<(), String> {
-        self.apply(|_, m_iter| m_iter.seq_size().to_string())
+impl<'a> Base<MinimizerIterator<'a>> {
+    pub fn seq_size_str(&self) -> OptionPair<String> {
+        self.body.apply(|m_iter| m_iter.seq_size().to_string())
     }
 
     pub fn fmt_seq_size(&self) -> String {
-        match &self {
-            BaseType::Single(_, m_iter) => m_iter.seq_size().to_string(),
-            BaseType::Pair(_, m_iter1, m_iter2) => {
-                format!("{}|{}", m_iter1.seq_size(), m_iter2.seq_size())
-            }
-        }
+        self.body
+            .reduce_str("|", |m_iter| m_iter.seq_size().to_string())
     }
 
     pub fn fmt_size(&self) -> String {
-        match &self {
-            BaseType::Single(_, m_iter) => m_iter.size.to_string(),
-            BaseType::Pair(_, m_iter1, m_iter2) => {
-                format!("{}|{}", m_iter1.size, m_iter2.size)
-            }
-        }
+        self.body.reduce_str("|", |m_iter| m_iter.size.to_string())
     }
 }
+
 pub fn scan_sequence<'a>(
-    sequence: &'a BaseType<SeqHeader, Vec<u8>>,
+    sequence: &'a Base<Vec<u8>>,
     meros: &'a Meros,
-) -> BaseType<SeqHeader, MinimizerIterator<'a>> {
+) -> Base<MinimizerIterator<'a>> {
     let func = |seq: &'a Vec<u8>| {
         let cursor = Cursor::new(meros.l_mer, meros.mask);
         let window = MinimizerWindow::new(meros.window_size());
-        MinimizerIterator::new(&seq, cursor, window, meros)
+        MinimizerIterator::new(seq, cursor, window, meros)
     };
-    match sequence {
-        BaseType::Single(header, seq) => BaseType::Single(header.clone(), func(seq)),
-        BaseType::Pair(header, seq1, seq2) => {
-            BaseType::Pair(header.clone(), func(seq1), func(seq2))
+
+    match &sequence.body {
+        OptionPair::Pair(seq1, seq2) => Base::new(
+            sequence.header.clone(),
+            OptionPair::Pair(func(&seq1), func(&seq2)),
+        ),
+        OptionPair::Single(seq1) => {
+            Base::new(sequence.header.clone(), OptionPair::Single(func(&seq1)))
         }
     }
 }

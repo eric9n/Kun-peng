@@ -2,7 +2,7 @@ use crate::fasta::FastaReader;
 use crate::fastq::{FastqPairReader, FastqReader};
 use crate::mmscanner::{scan_sequence, MinimizerIterator};
 use crate::reader::{detect_file_format, Reader};
-use crate::seq::{BaseType, SeqHeader};
+use crate::seq::Base;
 use crate::{Meros, SeqFormat};
 use crossbeam_channel::{bounded, Receiver};
 use scoped_threadpool::Pool;
@@ -60,12 +60,12 @@ where
     R: Reader,
     O: Send,
     Out: Send + Default,
-    W: Send + Sync + Fn(&mut Vec<BaseType<SeqHeader, MinimizerIterator>>) -> Option<O>,
+    W: Send + Sync + Fn(&mut Vec<Base<MinimizerIterator>>) -> Option<O>,
     F: FnOnce(&mut ParallelResult<Option<O>>) -> Out + Send,
 {
     assert!(n_threads > 2);
     assert!(n_threads <= buffer_len);
-    let (sender, receiver) = bounded::<Vec<BaseType<SeqHeader, Vec<u8>>>>(buffer_len);
+    let (sender, receiver) = bounded::<Vec<Base<Vec<u8>>>>(buffer_len);
     let (done_send, done_recv) = bounded::<Option<O>>(buffer_len);
     let receiver = Arc::new(receiver); // 使用 Arc 来共享 receiver
     let done_send = Arc::new(done_send);
@@ -88,7 +88,7 @@ where
             let done_send = Arc::clone(&done_send);
             pool_scope.execute(move || {
                 while let Ok(mut seqs) = receiver.recv() {
-                    let mut markers: Vec<BaseType<SeqHeader, MinimizerIterator<'_>>> = seqs
+                    let mut markers: Vec<Base<MinimizerIterator<'_>>> = seqs
                         .iter_mut()
                         .map(|seq| scan_sequence(seq, &meros))
                         .collect();

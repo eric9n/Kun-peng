@@ -94,14 +94,16 @@ fn process_sequence(
             let mut minimizer_set = HashSet::new();
 
             for record in record_set {
-                record.fold(&mut minimizer_set, |minimizer_set, _, m_iter| {
-                    let kmer_iter: HashSet<u64> = m_iter
-                        .filter(|(_, hash_key)| *hash_key & RANGE_MASK < range_n)
-                        .map(|(_, hash_key)| hash_key)
-                        .collect();
+                record
+                    .body
+                    .fold(&mut minimizer_set, |minimizer_set, m_iter| {
+                        let kmer_iter: HashSet<u64> = m_iter
+                            .filter(|(_, hash_key)| *hash_key & RANGE_MASK < range_n)
+                            .map(|(_, hash_key)| hash_key)
+                            .collect();
 
-                    minimizer_set.extend(kmer_iter);
-                });
+                        minimizer_set.extend(kmer_iter);
+                    });
             }
             Some(minimizer_set)
         },

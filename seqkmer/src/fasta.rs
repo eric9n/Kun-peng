@@ -1,5 +1,6 @@
-use crate::reader::{dyn_reader, trim_end, Reader, SeqVecType, BUFSIZE};
-use crate::seq::{self, BaseType, SeqFormat, SeqHeader};
+use crate::reader::{dyn_reader, trim_end, Reader, BUFSIZE};
+use crate::seq::{Base, SeqFormat, SeqHeader};
+use crate::utils::OptionPair;
 use std::io::{BufRead, BufReader, Read, Result};
 use std::path::Path;
 
@@ -36,16 +37,20 @@ where
 
     pub fn read_next_entry(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
         // 读取fastq文件header部分
-        let mut header = Vec::new();
-        if self.reader.read_until(b'\n', &mut header)? == 0 {
+        self.header.clear();
+        if self.reader.read_until(b'\n', &mut self.header)? == 0 {
             return Ok(None);
         }
+        let mut header = Vec::with_capacity(self.header.len());
+        header.extend_from_slice(&self.header);
         // 读取fasta文件seq部分
-        let mut seq = Vec::new();
-        if self.reader.read_until(b'>', &mut seq)? == 0 {
+        self.seq.clear();
+        if self.reader.read_until(b'>', &mut self.seq)? == 0 {
             return Ok(None);
         }
         trim_end(&mut self.seq);
+        let mut seq = Vec::with_capacity(self.seq.len());
+        seq.extend_from_slice(&self.seq);
         Ok(Some((header, seq)))
     }
 
@@ -80,7 +85,7 @@ fn check_sequence_length(seq: &Vec<u8>) -> bool {
 }
 
 impl<R: Read + Send> Reader for FastaReader<R> {
-    fn next(&mut self) -> Result<Option<SeqVecType>> {
+    fn next(&mut self) -> Result<Option<Vec<Base<Vec<u8>>>>> {
         // if self.read_next()?.is_none() {
         //     return Ok(None);
         // }
@@ -120,7 +125,6 @@ impl<R: Read + Send> Reader for FastaReader<R> {
             format: SeqFormat::Fasta,
             id: seq_id.to_owned(),
         };
-        let seq = BaseType::Single(seq_header, seq);
-        Ok(Some(vec![seq]))
+        Ok(Some(vec![Base::new(seq_header, OptionPair::Single(seq))]))
     }
 }

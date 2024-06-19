@@ -15,3 +15,4 @@ pub use mmscanner::MinimizerIterator;
 pub use parallel::*;
 pub use reader::*;
 pub use seq::*;
+pub use utils::OptionPair;

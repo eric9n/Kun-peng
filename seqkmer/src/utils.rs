@@ -1,41 +1,101 @@
-// #[derive(Debug, Clone)]
-// pub enum OptionPair<S, T> {
-//     Single(S, T),
-//     Pair(S, T, T),
-// }
+#[derive(Debug, Clone)]
+pub enum OptionPair<T> {
+    Single(T),
+    Pair(T, T),
+}
 
-// impl<S, T> OptionPair<S, T> {
-//     // 它接受一个泛型闭包 F，并返回一个新的 OptionPair<U>
-//     pub fn map<U, E, F>(self, mut f: F) -> Result<OptionPair<S, U>, E>
-//     where
-//         F: FnMut(S, T) -> Result<U, E>,
-//     {
-//         match self {
-//             OptionPair::Single(s, t) => f(s, t).map(|u| OptionPair::Single(s.clone(), u)),
-//             OptionPair::Pair(s, t1, t2) => {
-//                 let u1 = f(s, t1)?;
-//                 let u2 = f(s, t2)?;
-//                 Ok(OptionPair::Pair(s, u1, u2))
-//             }
-//         }
-//     }
-// }
+impl<T> OptionPair<T> {
+    // 它接受一个泛型闭包 F，并返回一个新的 OptionPair<U>
+    pub fn map<U, E, F>(&self, mut f: F) -> Result<OptionPair<U>, E>
+    where
+        F: FnMut(&T) -> Result<U, E>,
+    {
+        match self {
+            OptionPair::Single(t) => f(t).map(OptionPair::Single),
+            OptionPair::Pair(t1, t2) => {
+                let u1 = f(t1)?;
+                let u2 = f(t2)?;
+                Ok(OptionPair::Pair(u1, u2))
+            }
+        }
+    }
 
-// impl<S, T: Clone> OptionPair<S, T> {
-//     pub fn from_slice(s: S, slice: &[T]) -> OptionPair<S, T> {
-//         match slice {
-//             [a, b] => OptionPair::Pair(s, a.clone(), b.clone()),
-//             [a] => OptionPair::Single(s, a.clone()),
-//             _ => unreachable!(),
-//         }
-//     }
-// }
+    pub fn reduce<U, F>(&self, init: U, mut f: F) -> U
+    where
+        F: FnMut(U, &T) -> U,
+    {
+        match self {
+            OptionPair::Single(t) => f(init, t),
+            OptionPair::Pair(t1, t2) => {
+                let result = f(init, t1);
+                f(result, t2)
+            }
+        }
+    }
 
-// impl<S, T> From<(S, T, Option<T>)> for OptionPair<S, T> {
-//     fn from(tuple: (S, T, Option<T>)) -> Self {
-//         match tuple {
-//             (s, a, Some(b)) => OptionPair::Pair(s, a, b),
-//             (s, a, None) => OptionPair::Single(s, a),
-//         }
-//     }
-// }
+    pub fn fold<U, F, V>(&mut self, init: &mut V, mut func: F) -> OptionPair<U>
+    where
+        F: FnMut(&mut V, &mut T) -> U,
+    {
+        match self {
+            OptionPair::Single(seq) => OptionPair::Single(func(init, seq)),
+            OptionPair::Pair(ref mut seq1, ref mut seq2) => {
+                let res1 = func(init, seq1);
+                let res2 = func(init, seq2);
+                OptionPair::Pair(res1, res2)
+            }
+        }
+    }
+
+    pub fn reduce_str<F>(&self, sep: &str, mut f: F) -> String
+    where
+        F: FnMut(&T) -> String,
+    {
+        self.reduce(String::new(), |acc, t| {
+            if acc.is_empty() {
+                f(t)
+            } else {
+                format!("{}{}{}", acc, sep, f(t))
+            }
+        })
+    }
+
+    pub fn apply<U, F>(&self, mut f: F) -> OptionPair<U>
+    where
+        F: FnMut(&T) -> U,
+    {
+        match self {
+            OptionPair::Single(t) => OptionPair::Single(f(t)),
+            OptionPair::Pair(t1, t2) => OptionPair::Pair(f(t1), f(t2)),
+        }
+    }
+
+    pub fn apply_mut<U, F>(&mut self, mut f: F) -> OptionPair<U>
+    where
+        F: FnMut(&mut T) -> U,
+    {
+        match self {
+            OptionPair::Single(t) => OptionPair::Single(f(t)),
+            OptionPair::Pair(t1, t2) => OptionPair::Pair(f(t1), f(t2)),
+        }
+    }
+}
+
+impl<T: Clone> OptionPair<T> {
+    pub fn from_slice(slice: &[T]) -> OptionPair<T> {
+        match slice {
+            [a, b] => OptionPair::Pair(a.clone(), b.clone()),
+            [a] => OptionPair::Single(a.clone()),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<T> From<(T, Option<T>)> for OptionPair<T> {
+    fn from(tuple: (T, Option<T>)) -> Self {
+        match tuple {
+            (a, Some(b)) => OptionPair::Pair(a, b),
+            (a, None) => OptionPair::Single(a),
+        }
+    }
+}
