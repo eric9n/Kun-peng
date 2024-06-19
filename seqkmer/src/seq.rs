@@ -2,7 +2,6 @@
 pub enum SeqFormat {
     Fasta,
     Fastq,
-    PairFastq,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11,6 +10,48 @@ pub struct SeqHeader {
     pub file_index: usize,
     pub reads_index: usize,
     pub format: SeqFormat,
+}
+
+#[derive(Debug, Clone)]
+pub enum OptionPair<T> {
+    Single(T),
+    Pair(T, T),
+}
+
+impl<T> OptionPair<T> {
+    // 它接受一个泛型闭包 F，并返回一个新的 OptionPair<U>
+    pub fn map<U, E, F>(self, mut f: F) -> Result<OptionPair<U>, E>
+    where
+        F: FnMut(T) -> Result<U, E>,
+    {
+        match self {
+            OptionPair::Single(t) => f(t).map(OptionPair::Single),
+            OptionPair::Pair(t1, t2) => {
+                let u1 = f(t1)?;
+                let u2 = f(t2)?;
+                Ok(OptionPair::Pair(u1, u2))
+            }
+        }
+    }
+}
+
+impl<T: Clone> OptionPair<T> {
+    pub fn from_slice(slice: &[T]) -> OptionPair<T> {
+        match slice {
+            [a, b] => OptionPair::Pair(a.clone(), b.clone()),
+            [a] => OptionPair::Single(a.clone()),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<T> From<(T, Option<T>)> for OptionPair<T> {
+    fn from(tuple: (T, Option<T>)) -> Self {
+        match tuple {
+            (a, Some(b)) => OptionPair::Pair(a, b),
+            (a, None) => OptionPair::Single(a),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

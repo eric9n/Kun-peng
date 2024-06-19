@@ -5,6 +5,7 @@ mod mmscanner;
 mod parallel;
 mod reader;
 mod seq;
+mod utils;
 
 pub use fasta::*;
 pub use fastq::*;

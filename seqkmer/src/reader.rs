@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Result, Seek};
 use std::path::Path;
 
-pub fn dyn_reader<P: AsRef<Path>>(path: P) -> Result<Box<dyn Read + Send>> {
+pub(crate) fn dyn_reader<P: AsRef<Path>>(path: P) -> Result<Box<dyn Read + Send>> {
     let mut file = open_file(path)?;
     if is_gzipped(&mut file)? {
         let decoder = GzDecoder::new(file);
@@ -14,7 +14,7 @@ pub fn dyn_reader<P: AsRef<Path>>(path: P) -> Result<Box<dyn Read + Send>> {
     }
 }
 
-pub fn is_gzipped(file: &mut File) -> Result<bool> {
+pub(crate) fn is_gzipped(file: &mut File) -> Result<bool> {
     let mut buffer = [0; 2];
     file.read_exact(&mut buffer)?;
     file.rewind()?; // 重置文件指针到开头
@@ -42,7 +42,7 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File> {
     })
 }
 
-pub fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<SeqFormat> {
+pub(crate) fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<SeqFormat> {
     let mut file = open_file(path)?;
     let read1: Box<dyn io::Read + Send> = if is_gzipped(&mut file)? {
         Box::new(GzDecoder::new(file))
@@ -80,7 +80,7 @@ pub fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<SeqFormat> {
     ))
 }
 
-pub fn trim_end(buffer: &mut Vec<u8>) {
+pub(crate) fn trim_end(buffer: &mut Vec<u8>) {
     while let Some(&b'\n' | &b'\r' | &b'>' | &b'@') = buffer.last() {
         buffer.pop();
     }
@@ -147,17 +147,4 @@ impl<S, T> BaseType<S, HitGroup<T>> {
             BaseType::Pair(_, hit1, hit2) => hit1.marker_size + hit2.marker_size,
         }
     }
-
-    // pub fn seq_size_str(&self) -> BaseType<(), String> {
-    //     self.apply(|_, hit| hit.seq_size.to_string())
-    // }
-
-    // pub fn fmt_seq_size(&self) -> String {
-    //     match &self {
-    //         BaseType::Single(_, hit) => hit.seq_size.to_string(),
-    //         BaseType::Pair(_, hit1, hit2) => {
-    //             format!("{}|{}", hit1.seq_size, hit2.seq_size)
-    //         }
-    //     }
-    // }
 }

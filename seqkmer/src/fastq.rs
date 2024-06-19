@@ -257,3 +257,126 @@ where
         Ok(Some(seqs).filter(|v| !v.is_empty()))
     }
 }
+
+use crate::seq::OptionPair;
+
+pub struct FastxPairReader<R: Read + Send> {
+    inner: OptionPair<QReader<R>>,
+    file_index: usize,
+    reads_index: usize,
+    // 批量读取
+    batch_size: usize,
+}
+
+impl<R> FastxPairReader<R>
+where
+    R: Read + Send,
+{
+    pub fn new(readers: OptionPair<R>, file_index: usize, quality_score: i32) -> Self {
+        Self::with_capacity(readers, file_index, BUFSIZE, quality_score, 30)
+    }
+
+    pub fn with_capacity<'a>(
+        readers: OptionPair<R>,
+        file_index: usize,
+        capacity: usize,
+        quality_score: i32,
+        batch_size: usize,
+    ) -> Self {
+        assert!(capacity >= 3);
+        let inner = match readers {
+            OptionPair::Single(reader) => {
+                OptionPair::Single(QReader::with_capacity(reader, capacity, quality_score))
+            }
+            OptionPair::Pair(reader1, reader2) => OptionPair::Pair(
+                QReader::with_capacity(reader1, capacity, quality_score),
+                QReader::with_capacity(reader2, capacity, quality_score),
+            ),
+        };
+        Self {
+            inner,
+            file_index,
+            reads_index: 0,
+            batch_size,
+        }
+    }
+
+    fn create_seq_header(reader: &QReader<R>, file_index: usize, reads_index: usize) -> SeqHeader {
+        let seq_id = unsafe {
+            let s = std::str::from_utf8_unchecked(&reader.header[1..]);
+            let first_space_index = s
+                .as_bytes()
+                .iter()
+                .position(|&c| c == b' ')
+                .unwrap_or(s.len());
+
+            // 直接从原始切片创建第一个单词的切片
+            &s[..first_space_index]
+        };
+        SeqHeader {
+            file_index,
+            reads_index,
+            format: SeqFormat::Fastq,
+            id: trim_pair_info(seq_id),
+        }
+    }
+
+    pub fn read_next(&mut self) -> Result<Option<SeqType>> {
+        match &mut self.inner {
+            OptionPair::Single(reader) => {
+                if reader.read_next()?.is_none() {
+                    return Ok(None);
+                }
+
+                self.reads_index += 1;
+
+                let seq_header =
+                    Self::create_seq_header(&reader, self.file_index, self.reads_index);
+                Ok(Some(BaseType::Single(seq_header, reader.seq.to_owned())))
+            }
+            OptionPair::Pair(reader1, reader2) => {
+                if reader1.read_next()?.is_none() {
+                    return Ok(None);
+                }
+                if reader2.read_next()?.is_none() {
+                    return Ok(None);
+                }
+
+                self.reads_index += 1;
+                let seq_header =
+                    Self::create_seq_header(&reader1, self.file_index, self.reads_index);
+
+                Ok(Some(BaseType::Pair(
+                    seq_header,
+                    reader1.seq.to_owned(),
+                    reader2.seq.to_owned(),
+                )))
+            }
+        }
+    }
+}
+
+impl FastxPairReader<Box<dyn Read + Send>> {
+    #[inline]
+    pub fn from_path<P: AsRef<Path>>(
+        paths: OptionPair<P>,
+        file_index: usize,
+        quality_score: i32,
+    ) -> Result<Self> {
+        let readers = paths.map(|path| dyn_reader(path))?;
+        Ok(Self::new(readers, file_index, quality_score))
+    }
+}
+
+impl<R> Reader for FastxPairReader<R>
+where
+    R: Read + Send,
+{
+    fn next(&mut self) -> Result<Option<SeqVecType>> {
+        let seqs: SeqVecType = (0..self.batch_size)
+            .filter_map(|_| self.read_next().transpose()) // 将 Result<Option<_>, _> 转换为 Option<Result<_, _>>
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(Some(seqs).filter(|v| !v.is_empty()))
+    }
+}
