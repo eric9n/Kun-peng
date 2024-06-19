@@ -31,6 +31,43 @@ where
         }
     }
 
+    pub fn read_next_entry(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
+        // 读取fastq文件header部分
+        let mut header: Vec<u8> = Vec::new();
+        if self.reader.read_until(b'\n', &mut header)? == 0 {
+            return Ok(None);
+        }
+        // 读取fastq文件seq部分
+        let mut seq = Vec::new();
+        if self.reader.read_until(b'\n', &mut seq)? == 0 {
+            return Ok(None);
+        }
+        trim_end(&mut seq);
+
+        // 读取fastq文件+部分
+        self.plus.clear();
+        if self.reader.read_until(b'\n', &mut self.plus)? == 0 {
+            return Ok(None);
+        }
+
+        // 读取fastq文件quals部分
+        self.quals.clear();
+        if self.reader.read_until(b'\n', &mut self.quals)? == 0 {
+            return Ok(None);
+        }
+        trim_end(&mut self.quals);
+
+        if self.quality_score > 0 {
+            for (base, &qscore) in self.seq.iter_mut().zip(self.quals.iter()) {
+                if (qscore as i32 - '!' as i32) < self.quality_score {
+                    *base = b'x';
+                }
+            }
+        }
+
+        Ok(Some((header, seq)))
+    }
+
     pub fn read_next(&mut self) -> Result<Option<()>> {
         // 读取fastq文件header部分
         self.header.clear();
@@ -102,6 +139,38 @@ where
         }
     }
 
+    pub fn read_next_entry(&mut self) -> Result<Option<SeqType>> {
+        let entry = self.inner.read_next_entry()?;
+        if entry.is_none() {
+            return Ok(None);
+        }
+
+        let (header, seq) = entry.unwrap();
+
+        let seq_id = unsafe {
+            let s = std::str::from_utf8_unchecked(&header[1..]);
+            let first_space_index = s
+                .as_bytes()
+                .iter()
+                .position(|&c| c == b' ')
+                .unwrap_or(s.len());
+
+            // 直接从原始切片创建第一个单词的切片
+            &s[..first_space_index]
+        };
+        self.reads_index += 1;
+
+        let seq_header = SeqHeader {
+            file_index: self.file_index,
+            reads_index: self.reads_index,
+            format: SeqFormat::Fasta,
+            id: seq_id.to_owned(),
+        };
+
+        let seq = BaseType::Single(seq_header, seq);
+        Ok(Some(seq))
+    }
+
     pub fn read_next(&mut self) -> Result<Option<SeqType>> {
         if self.inner.read_next()?.is_none() {
             return Ok(None);
@@ -150,7 +219,7 @@ where
 {
     fn next(&mut self) -> Result<Option<SeqVecType>> {
         let seqs: SeqVecType = (0..self.batch_size)
-            .filter_map(|_| self.read_next().transpose()) // 将 Result<Option<_>, _> 转换为 Option<Result<_, _>>
+            .filter_map(|_| self.read_next_entry().transpose()) // 将 Result<Option<_>, _> 转换为 Option<Result<_, _>>
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Some(seqs).filter(|v| !v.is_empty()))

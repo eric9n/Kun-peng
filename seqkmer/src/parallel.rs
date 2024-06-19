@@ -45,8 +45,6 @@ pub fn create_reader(
             }
         }
         SeqFormat::Fasta => Ok(Box::new(FastaReader::from_path(file1, file_index)?)),
-
-        _ => unreachable!(),
     }
 }
 

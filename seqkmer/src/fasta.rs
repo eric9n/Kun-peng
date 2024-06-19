@@ -1,5 +1,5 @@
 use crate::reader::{dyn_reader, trim_end, Reader, SeqVecType, BUFSIZE};
-use crate::seq::{BaseType, SeqFormat, SeqHeader};
+use crate::seq::{self, BaseType, SeqFormat, SeqHeader};
 use std::io::{BufRead, BufReader, Read, Result};
 use std::path::Path;
 
@@ -34,6 +34,21 @@ where
         }
     }
 
+    pub fn read_next_entry(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
+        // 读取fastq文件header部分
+        let mut header = Vec::new();
+        if self.reader.read_until(b'\n', &mut header)? == 0 {
+            return Ok(None);
+        }
+        // 读取fasta文件seq部分
+        let mut seq = Vec::new();
+        if self.reader.read_until(b'>', &mut seq)? == 0 {
+            return Ok(None);
+        }
+        trim_end(&mut self.seq);
+        Ok(Some((header, seq)))
+    }
+
     pub fn read_next(&mut self) -> Result<Option<()>> {
         // 读取fastq文件header部分
         self.header.clear();
@@ -66,20 +81,25 @@ fn check_sequence_length(seq: &Vec<u8>) -> bool {
 
 impl<R: Read + Send> Reader for FastaReader<R> {
     fn next(&mut self) -> Result<Option<SeqVecType>> {
-        if self.read_next()?.is_none() {
+        // if self.read_next()?.is_none() {
+        //     return Ok(None);
+        // }
+
+        let entry = self.read_next_entry()?;
+        if entry.is_none() {
             return Ok(None);
         }
-
-        if check_sequence_length(&self.seq) {
+        let (header, seq) = entry.unwrap();
+        if check_sequence_length(&seq) {
             eprintln!("Sequence length exceeds 2^32, which is not handled.");
             return Ok(None);
         }
 
         let seq_id = unsafe {
-            let slice = if self.header.starts_with(b">") {
-                &self.header[1..]
+            let slice = if header.starts_with(b">") {
+                &header[1..]
             } else {
-                &self.header[..]
+                &header[..]
             };
 
             let s = std::str::from_utf8_unchecked(slice);
@@ -100,7 +120,7 @@ impl<R: Read + Send> Reader for FastaReader<R> {
             format: SeqFormat::Fasta,
             id: seq_id.to_owned(),
         };
-        let seq = BaseType::Single(seq_header, self.seq.to_owned());
+        let seq = BaseType::Single(seq_header, seq);
         Ok(Some(vec![seq]))
     }
 }
