@@ -1,13 +1,14 @@
 use clap::Parser;
 use dashmap::{DashMap, DashSet};
-use kr2r::classify::{add_hitlist_string, count_values, resolve_tree};
+use kr2r::classify::process_hitgroup;
 use kr2r::compact_hash::{HashConfig, Row};
 use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
 use kr2r::report::report_kraken_style;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::utils::{find_and_sort_files, open_file};
+use kr2r::HitGroup;
 use rayon::prelude::*;
-use seqkmer::trim_pair_info;
+use seqkmer::{trim_pair_info, OptionPair};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Result, Write};
@@ -20,7 +21,7 @@ const BATCH_SIZE: usize = 8 * 1024 * 1024;
 
 pub fn read_id_to_seq_map<P: AsRef<Path>>(
     filename: P,
-) -> Result<DashMap<u32, (String, String, u32, Option<u32>)>> {
+) -> Result<DashMap<u32, (String, String, usize, Option<usize>)>> {
     let file = open_file(filename)?;
     let reader = BufReader::new(file);
     let id_map = DashMap::new();
@@ -35,9 +36,9 @@ pub fn read_id_to_seq_map<P: AsRef<Path>>(
                 let seq_id = parts[1].to_string();
                 let seq_size = parts[2].to_string();
                 let count_parts: Vec<&str> = parts[3].split('|').collect();
-                let kmer_count1 = count_parts[0].parse::<u32>().unwrap();
+                let kmer_count1 = count_parts[0].parse::<usize>().unwrap();
                 let kmer_count2 = if count_parts.len() > 1 {
-                    count_parts[1].parse::<u32>().map_or(None, |i| Some(i))
+                    count_parts[1].parse::<usize>().map_or(None, |i| Some(i))
                 } else {
                     None
                 };
@@ -106,7 +107,7 @@ fn process_batch<P: AsRef<Path>>(
     sample_file: P,
     args: &Args,
     taxonomy: &Taxonomy,
-    id_map: &DashMap<u32, (String, String, u32, Option<u32>)>,
+    id_map: &DashMap<u32, (String, String, usize, Option<usize>)>,
     writer: &Mutex<Box<dyn Write + Send>>,
     value_mask: usize,
 ) -> Result<(TaxonCountersDash, usize, DashSet<u32>)> {
@@ -148,39 +149,50 @@ fn process_batch<P: AsRef<Path>>(
     hit_counts.into_par_iter().for_each(|(k, mut rows)| {
         if let Some(item) = id_map.get(&k) {
             rows.sort_unstable();
-            let total_kmers: usize = item.2 as usize + item.3.unwrap_or(0) as usize;
             let dna_id = trim_pair_info(&item.0);
-            let (counts, cur_counts, hit_groups) = count_values(&rows, value_mask, item.2);
-            let hit_string = add_hitlist_string(&rows, value_mask, item.2, item.3, taxonomy);
-            let mut call = resolve_tree(&counts, taxonomy, total_kmers, confidence_threshold);
-            if call > 0 && hit_groups < minimum_hit_groups {
-                call = 0;
-            };
+            let range = OptionPair::from(((0, item.2), item.3.map(|size| (item.2, size + item.2))));
+            let hits = HitGroup::new(rows, range);
 
-            cur_counts.iter().for_each(|entry| {
+            let hit_data = process_hitgroup(
+                &hits,
+                taxonomy,
+                &classify_counter,
+                hits.required_score(confidence_threshold),
+                minimum_hit_groups,
+                value_mask,
+            );
+            // let (counts, cur_counts, hit_groups) = count_values(&rows, value_mask, item.2);
+            // let hit_string = add_hitlist_string(&rows, value_mask, item.2, item.3, taxonomy);
+            // let require_score = (confidence_threshold * total_kmers as f64).ceil() as u64;
+            // let mut call = resolve_tree(&counts, taxonomy, require_score);
+            // if call > 0 && hit_groups < minimum_hit_groups {
+            //     call = 0;
+            // };
+
+            hit_data.3.iter().for_each(|(key, value)| {
                 cur_taxon_counts
-                    .entry(*entry.key())
+                    .entry(*key)
                     .or_default()
-                    .merge(entry.value())
+                    .merge(value)
                     .unwrap();
             });
 
-            let ext_call = taxonomy.nodes[call as usize].external_id;
-            let clasify = if call > 0 {
-                classify_counter.fetch_add(1, Ordering::SeqCst);
-                cur_taxon_counts
-                    .entry(call as u64)
-                    .or_default()
-                    .increment_read_count();
+            // let ext_call = taxonomy.nodes[call as usize].external_id;
+            // let clasify = if call > 0 {
+            //     classify_counter.fetch_add(1, Ordering::SeqCst);
+            //     cur_taxon_counts
+            //         .entry(call as u64)
+            //         .or_default()
+            //         .increment_read_count();
 
-                "C"
-            } else {
-                "U"
-            };
+            //     "C"
+            // } else {
+            //     "U"
+            // };
             // 使用锁来同步写入
             let output_line = format!(
                 "{}\t{}\t{}\t{}\t{}\n",
-                clasify, dna_id, ext_call, item.1, hit_string
+                hit_data.0, dna_id, hit_data.1, item.1, hit_data.2
             );
             let mut file = writer.lock().unwrap();
             file.write_all(output_line.as_bytes()).unwrap();
@@ -241,8 +253,13 @@ pub fn run(args: Args) -> Result<()> {
                 .filter(|item| !hit_seq_set.contains(item.key()))
                 .for_each(|item| {
                     let dna_id = trim_pair_info(&item.0);
-                    let hit_string = add_hitlist_string(&vec![], value_mask, item.2, item.3, &taxo);
-                    let output_line = format!("U\t{}\t0\t{}\t{}\n", dna_id, item.1, hit_string);
+                    let output_line = format!(
+                        "U\t{}\t0\t{}\t{}\n",
+                        dna_id,
+                        item.1,
+                        if item.3.is_none() { "" } else { " |:| " }
+                    );
+
                     let mut file = writer.lock().unwrap();
                     file.write_all(output_line.as_bytes()).unwrap();
                 });

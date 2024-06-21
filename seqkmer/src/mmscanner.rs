@@ -235,6 +235,34 @@ impl<'a> Base<MinimizerIterator<'a>> {
     pub fn fmt_size(&self) -> String {
         self.body.reduce_str("|", |m_iter| m_iter.size.to_string())
     }
+
+    pub fn fold<F, T>(&mut self, mut f: F) -> Vec<T>
+    where
+        F: FnMut(&mut Vec<T>, &mut MinimizerIterator<'a>, usize) -> usize,
+        T: Clone,
+    {
+        let mut init = Vec::new();
+        match &mut self.body {
+            OptionPair::Single(m_iter) => {
+                f(&mut init, m_iter, 0);
+            }
+            OptionPair::Pair(m_iter1, m_iter2) => {
+                let offset = f(&mut init, m_iter1, 0);
+                f(&mut init, m_iter2, offset);
+            }
+        }
+        init
+    }
+
+    pub fn range(&self) -> OptionPair<(usize, usize)> {
+        match &self.body {
+            OptionPair::Single(m_iter) => OptionPair::Single((0, m_iter.size)),
+            OptionPair::Pair(m_iter1, m_iter2) => {
+                let size1 = m_iter1.size;
+                OptionPair::Pair((0, size1), (size1, m_iter2.size + size1))
+            }
+        }
+    }
 }
 
 pub fn scan_sequence<'a>(

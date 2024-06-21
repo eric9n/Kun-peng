@@ -5,8 +5,8 @@ use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
 use kr2r::report::report_kraken_style;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::utils::{create_sample_file, find_and_sort_files, get_lastest_file_index};
-use kr2r::IndexOptions;
-use seqkmer::{create_reader, read_parallel, Base, HitGroup, Meros, MinimizerIterator, Reader};
+use kr2r::{HitGroup, IndexOptions};
+use seqkmer::{read_parallel, Base, FastxReader, Meros, MinimizerIterator, OptionPair, Reader};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -86,14 +86,14 @@ pub struct Args {
 }
 
 fn process_seq(
+    rows: &mut Vec<Row>,
     m_iter: &mut MinimizerIterator,
     hash_config: &HashConfig,
     chtable: &CHTable,
-) -> HitGroup<Row> {
+    offset: usize,
+) -> usize {
     let chunk_size = hash_config.hash_capacity;
     let value_bits = hash_config.value_bits;
-    let mut rows = Vec::new();
-
     let data: Vec<(usize, u64)> = m_iter.collect();
     for (sort, hash_key) in data {
         let (idx, compacted) = hash_config.compact(hash_key);
@@ -103,12 +103,11 @@ fn process_seq(
         let taxid = chtable.get_from_page(index, compacted, partition_index + 1);
         if taxid > 0 {
             let high = u32::combined(compacted, taxid, value_bits);
-            let row = Row::new(high, 0, sort as u32 + 1);
+            let row = Row::new(high, 0, sort as u32 + 1 + offset as u32);
             rows.push(row);
         }
     }
-
-    HitGroup::new(m_iter.size, rows, 0)
+    m_iter.size + offset
 }
 
 fn process_record(
@@ -120,23 +119,31 @@ fn process_record(
     cur_taxon_counts: &TaxonCountersDash,
     classify_counter: &AtomicUsize,
 ) -> String {
-    let id = &marker.header.id;
-    let hits = marker
-        .body
-        .apply_mut(|m_iter| process_seq(m_iter, &hash_config, chtable));
-    let total_kmers = hits.total_marker_size();
+    let id = &marker.header.id.clone();
+    let rows: Vec<Row> = marker
+        .fold(|rows, m_iter, offset| process_seq(rows, m_iter, &hash_config, chtable, offset));
+
+    let hits = HitGroup::new(rows, marker.range());
+
     let seq_len_str = marker.fmt_seq_size();
 
+    let required_score = hits.required_score(args.confidence_threshold);
     let hit_data = process_hitgroup(
         &hits,
-        hash_config,
         taxonomy,
-        cur_taxon_counts,
         classify_counter,
-        total_kmers,
-        args.confidence_threshold,
+        required_score,
         args.minimum_hit_groups,
+        hash_config.value_mask,
     );
+
+    hit_data.3.iter().for_each(|(key, value)| {
+        cur_taxon_counts
+            .entry(*key)
+            .or_default()
+            .merge(value)
+            .unwrap();
+    });
     format!(
         "{}\t{}\t{}\t{}\t{}\n",
         hit_data.0, id, hit_data.1, seq_len_str, hit_data.2
@@ -269,7 +276,9 @@ fn process_files(
             file_writer.flush().unwrap();
 
             let score = args.minimum_quality_score;
-            let mut reader: Box<dyn Reader> = create_reader(file_pair, file_index, score)?;
+            let paths = OptionPair::from_slice(file_pair);
+            let mut reader = FastxReader::from_paths(paths, file_index, score)?;
+            // let mut reader = create_reader(file_pair, file_index, score)?;
             let (thread_sequences, thread_unclassified) = process_fastx_file(
                 &args,
                 meros,

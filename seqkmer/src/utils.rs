@@ -5,6 +5,13 @@ pub enum OptionPair<T> {
 }
 
 impl<T> OptionPair<T> {
+    pub fn single(&self) -> Option<&T> {
+        match self {
+            OptionPair::Single(value) => Some(value),
+            _ => None,
+        }
+    }
+
     // 它接受一个泛型闭包 F，并返回一个新的 OptionPair<U>
     pub fn map<U, E, F>(&self, mut f: F) -> Result<OptionPair<U>, E>
     where
@@ -20,6 +27,18 @@ impl<T> OptionPair<T> {
         }
     }
 
+    // pub fn concat<U, V, F>(&self, init: &mut U, mut f: F) -> V
+    // where
+    //     F: FnMut(&mut U, &T) -> V,
+    // {
+    //     match self {
+    //         OptionPair::Single(t) => f(init, t),
+    //         OptionPair::Pair(t1, t2) => {
+    //             f(init, t1);
+    //             f(init, t2)
+    //         }
+    //     }
+    // }
     pub fn reduce<U, F>(&self, init: U, mut f: F) -> U
     where
         F: FnMut(U, &T) -> U,
@@ -29,20 +48,6 @@ impl<T> OptionPair<T> {
             OptionPair::Pair(t1, t2) => {
                 let result = f(init, t1);
                 f(result, t2)
-            }
-        }
-    }
-
-    pub fn fold<U, F, V>(&mut self, init: &mut V, mut func: F) -> OptionPair<U>
-    where
-        F: FnMut(&mut V, &mut T) -> U,
-    {
-        match self {
-            OptionPair::Single(seq) => OptionPair::Single(func(init, seq)),
-            OptionPair::Pair(ref mut seq1, ref mut seq2) => {
-                let res1 = func(init, seq1);
-                let res2 = func(init, seq2);
-                OptionPair::Pair(res1, res2)
             }
         }
     }

@@ -266,7 +266,7 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
 
             for record in seqs {
                 let header = &record.header;
-                record.body.fold(&mut k2_cell_list, |k2_cell_list, m_iter| {
+                record.body.apply_mut(|m_iter| {
                     if let Some(ext_taxid) = id_to_taxon_map.get(&header.id) {
                         let taxid = taxonomy.get_internal_id(*ext_taxid);
                         let k2_cell: Vec<(usize, Slot<u32>)> = m_iter

@@ -1,6 +1,8 @@
+use crate::compact_hash::Row;
 use crate::utils::open_file;
 // use crate::{Meros, CURRENT_REVCOM_VERSION};
 use seqkmer::Meros;
+use seqkmer::OptionPair;
 use seqkmer::CURRENT_REVCOM_VERSION;
 use std::fs::File;
 use std::io::{Read, Result as IoResult, Write};
@@ -28,6 +30,26 @@ pub fn construct_seed_template(minimizer_len: usize, minimizer_spaces: usize) ->
 /// 判断u64的值是否为0，并将其转换为Option<u64>类型
 pub fn u64_to_option(value: u64) -> Option<u64> {
     Option::from(value).filter(|&x| x != 0)
+}
+
+pub struct HitGroup {
+    pub rows: Vec<Row>,
+    /// example: (0..10], 左开右闭
+    pub range: OptionPair<(usize, usize)>,
+}
+
+impl HitGroup {
+    pub fn new(rows: Vec<Row>, range: OptionPair<(usize, usize)>) -> Self {
+        Self { rows, range }
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.range.reduce(0, |acc, range| acc + range.1 - range.0)
+    }
+
+    pub fn required_score(&self, confidence_threshold: f64) -> u64 {
+        (confidence_threshold * self.capacity() as f64).ceil() as u64
+    }
 }
 
 /// 顺序不能错

@@ -1,5 +1,6 @@
 mod fasta;
 mod fastq;
+mod fastx;
 mod feat;
 mod mmscanner;
 mod parallel;
@@ -9,6 +10,7 @@ mod utils;
 
 pub use fasta::*;
 pub use fastq::*;
+pub use fastx::*;
 pub use feat::constants::*;
 pub use feat::*;
 pub use mmscanner::MinimizerIterator;

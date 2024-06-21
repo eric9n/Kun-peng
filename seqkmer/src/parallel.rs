@@ -1,9 +1,7 @@
-use crate::fasta::FastaReader;
-use crate::fastq::{FastqPairReader, FastqReader};
 use crate::mmscanner::{scan_sequence, MinimizerIterator};
-use crate::reader::{detect_file_format, Reader};
-use crate::seq::Base;
-use crate::{Meros, SeqFormat};
+use crate::reader::Reader;
+use crate::seq::{Base, SeqFormat};
+use crate::{detect_file_format, FastaReader, FastqReader, Meros};
 use crossbeam_channel::{bounded, Receiver};
 use scoped_threadpool::Pool;
 use std::io::Result;
@@ -30,21 +28,13 @@ pub fn create_reader(
     file_pair: &[String],
     file_index: usize,
     score: i32,
-) -> Result<Box<dyn Reader>> {
-    let mut files_iter = file_pair.iter();
-    let file1 = files_iter.next().cloned().unwrap();
-    let file2 = files_iter.next().cloned();
+) -> Result<Box<dyn Reader + Send>> {
+    // let mut files_iter = file_pair.iter();
+    let paths = crate::OptionPair::from_slice(file_pair);
+
     match detect_file_format(&file_pair[0])? {
-        SeqFormat::Fastq => {
-            if let Some(file2) = file2 {
-                Ok(Box::new(FastqPairReader::from_path(
-                    file1, file2, file_index, score,
-                )?))
-            } else {
-                Ok(Box::new(FastqReader::from_path(file1, file_index, score)?))
-            }
-        }
-        SeqFormat::Fasta => Ok(Box::new(FastaReader::from_path(file1, file_index)?)),
+        SeqFormat::Fastq => Ok(Box::new(FastqReader::from_path(paths, file_index, score)?)),
+        SeqFormat::Fasta => Ok(Box::new(FastaReader::from_path(&file_pair[0], file_index)?)),
     }
 }
 

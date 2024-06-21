@@ -44,13 +44,8 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File> {
 }
 
 pub(crate) fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<SeqFormat> {
-    let mut file = open_file(path)?;
-    let read1: Box<dyn io::Read + Send> = if is_gzipped(&mut file)? {
-        Box::new(GzDecoder::new(file))
-    } else {
-        Box::new(file)
-    };
-
+    // let mut file = open_file(path)?;
+    let read1: Box<dyn io::Read + Send> = dyn_reader(path)?;
     let reader = BufReader::new(read1);
     let mut lines = reader.lines();
 
@@ -89,60 +84,119 @@ pub(crate) fn trim_end(buffer: &mut Vec<u8>) {
 
 pub const BUFSIZE: usize = 16 * 1024 * 1024;
 
-// pub type SeqVecType = Vec<Base>;
-
 pub trait Reader: Send {
     fn next(&mut self) -> Result<Option<Vec<Base<Vec<u8>>>>>;
 }
 
-impl Reader for Box<dyn Reader> {
+impl Reader for Box<dyn Reader + Send> {
     fn next(&mut self) -> Result<Option<Vec<Base<Vec<u8>>>>> {
         (**self).next()
     }
 }
 
 #[derive(Debug)]
-pub struct HitGroup<T> {
-    /// minimizer data size
-    pub marker_size: usize,
-    /// hit value vector
-    pub rows: Vec<T>,
-    /// pair offset
-    pub offset: u32,
+pub struct PosData {
+    /// 外部 taxonomy id
+    pub ext_code: u64,
+    /// 连续命中次数
+    pub count: usize,
 }
 
-impl<T> HitGroup<T> {
-    pub fn new(marker_size: usize, rows: Vec<T>, offset: u32) -> Self {
+impl PosData {
+    pub fn new(ext_code: u64, count: usize) -> Self {
+        Self { ext_code, count }
+    }
+}
+
+impl fmt::Display for PosData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.ext_code, self.count)
+    }
+}
+
+use std::fmt;
+
+#[derive(Debug)]
+pub struct SpaceDist {
+    pub value: Vec<PosData>,
+    /// example: (0, 10], 左开右闭
+    pub range: (usize, usize),
+    pos: usize,
+}
+
+impl SpaceDist {
+    pub fn new(range: (usize, usize)) -> Self {
         Self {
-            marker_size,
-            rows,
-            offset,
+            value: Vec::new(),
+            range,
+            pos: range.0,
+        }
+    }
+
+    fn fill_with_zeros(&mut self, gap: usize) {
+        if gap > 0 {
+            self.value.push(PosData::new(0, gap));
+        }
+    }
+
+    pub fn add(&mut self, ext_code: u64, pos: usize) {
+        if pos <= self.pos || pos > self.range.1 {
+            return; // 早期返回，不做任何处理
+        }
+        let gap = pos - self.pos - 1;
+
+        if gap > 0 {
+            self.fill_with_zeros(gap);
+        }
+
+        if let Some(last) = self.value.last_mut() {
+            if last.ext_code == ext_code {
+                last.count += 1;
+            } else {
+                self.value.push(PosData::new(ext_code, 1));
+            }
+        } else {
+            self.value.push(PosData::new(ext_code, 1));
+        }
+        self.pos = pos;
+    }
+
+    /// Fills the end of the distribution with zeros if there is remaining space.
+    pub fn fill_tail_with_zeros(&mut self) {
+        if self.pos < self.range.1 {
+            self.fill_with_zeros(self.range.1 - self.pos);
+            self.pos = self.range.1;
         }
     }
 }
 
-impl<T> OptionPair<HitGroup<T>> {
-    /// Synchronizes the offset of the second element of a `Pair` to the `cap` of the first element.
-    /// This alignment is only necessary when the `rows` property of the `HitGroup` is in an
-    /// increasing order. If `rows` is not increasing, aligning the offset based on `cap` may not
-    /// be appropriate or required.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let mut hit_group1 = HitGroup::new(10, vec![1, 2, 3], 0); // Increasing `rows`
-    /// let mut hit_group2 = HitGroup::new(20, vec![4, 5, 6], 0);
-    ///
-    /// let mut pair = OptionPair::Pair((hit_group1, hit_group2));
-    /// pair.align_offset();
-    /// ```
-    pub fn align_offset(&mut self) {
-        if let OptionPair::Pair(ref first, ref mut second) = self {
-            second.offset = first.marker_size as u32;
+impl fmt::Display for SpaceDist {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, data) in self.value.iter().enumerate() {
+            if i > 0 {
+                write!(f, " ")?;
+            }
+            write!(f, "{}", data)?;
+        }
+        write!(f, "")
+    }
+}
+
+impl OptionPair<SpaceDist> {
+    pub fn add(&mut self, ext_code: u64, pos: usize) {
+        match self {
+            OptionPair::Single(sd) => sd.add(ext_code, pos),
+            OptionPair::Pair(sd1, sd2) => {
+                if pos > sd1.range.1 {
+                    sd2.add(ext_code, pos)
+                } else {
+                    sd1.add(ext_code, pos)
+                }
+            }
         }
     }
 
-    pub fn total_marker_size(&self) -> usize {
-        self.reduce(0, |acc, hit| acc + hit.marker_size)
+    pub fn fill_tail_with_zeros(&mut self) {
+        self.apply_mut(|sd| sd.fill_tail_with_zeros());
     }
 }

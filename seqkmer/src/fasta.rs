@@ -4,6 +4,7 @@ use crate::utils::OptionPair;
 use std::io::{BufRead, BufReader, Read, Result};
 use std::path::Path;
 
+const SEQ_LIMIT: u64 = u64::pow(2, 32);
 /// FastaReader
 pub struct FastaReader<R>
 where
@@ -14,6 +15,9 @@ where
     reads_index: usize,
     header: Vec<u8>,
     seq: Vec<u8>,
+
+    // 批量读取
+    batch_size: usize,
 }
 
 impl<R> FastaReader<R>
@@ -21,10 +25,10 @@ where
     R: Read + Send,
 {
     pub fn new(reader: R, file_index: usize) -> Self {
-        Self::with_capacity(reader, file_index, BUFSIZE)
+        Self::with_capacity(reader, file_index, BUFSIZE, 30)
     }
 
-    pub fn with_capacity(reader: R, file_index: usize, capacity: usize) -> Self {
+    pub fn with_capacity(reader: R, file_index: usize, capacity: usize, batch_size: usize) -> Self {
         assert!(capacity >= 3);
         Self {
             reader: BufReader::with_capacity(capacity, reader),
@@ -32,26 +36,29 @@ where
             reads_index: 0,
             header: Vec::new(),
             seq: Vec::new(),
+            batch_size,
         }
     }
 
-    pub fn read_next_entry(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
-        // 读取fastq文件header部分
+    pub fn read_next_entry<'a>(&'a mut self) -> Result<Option<(&'a Vec<u8>, &'a Vec<u8>)>> {
+        // 清空header和seq缓冲区
         self.header.clear();
+        self.seq.clear();
+
+        // 读取header部分
         if self.reader.read_until(b'\n', &mut self.header)? == 0 {
             return Ok(None);
         }
-        let mut header = Vec::with_capacity(self.header.len());
-        header.extend_from_slice(&self.header);
-        // 读取fasta文件seq部分
-        self.seq.clear();
+        trim_end(&mut self.header);
+
+        // 读取seq部分
         if self.reader.read_until(b'>', &mut self.seq)? == 0 {
             return Ok(None);
         }
         trim_end(&mut self.seq);
-        let mut seq = Vec::with_capacity(self.seq.len());
-        seq.extend_from_slice(&self.seq);
-        Ok(Some((header, seq)))
+
+        // 返回header和seq的引用
+        Ok(Some((&self.header, &self.seq)))
     }
 
     pub fn read_next(&mut self) -> Result<Option<()>> {
@@ -68,43 +75,24 @@ where
         trim_end(&mut self.seq);
         Ok(Some(()))
     }
-}
 
-impl FastaReader<Box<dyn Read + Send>> {
-    #[inline]
-    pub fn from_path<P: AsRef<Path>>(path: P, file_index: usize) -> Result<Self> {
-        let reader = dyn_reader(path)?;
-        Ok(Self::new(reader, file_index))
-    }
-}
-
-fn check_sequence_length(seq: &Vec<u8>) -> bool {
-    let limit = u64::pow(2, 32);
-    // 检查seq的长度是否大于2的32次方
-    (seq.len() as u64) > limit
-}
-
-impl<R: Read + Send> Reader for FastaReader<R> {
-    fn next(&mut self) -> Result<Option<Vec<Base<Vec<u8>>>>> {
-        // if self.read_next()?.is_none() {
-        //     return Ok(None);
-        // }
-
-        let entry = self.read_next_entry()?;
-        if entry.is_none() {
+    pub fn _next(&mut self) -> Result<Option<(usize, Base<Vec<u8>>)>> {
+        if self.read_next()?.is_none() {
             return Ok(None);
         }
-        let (header, seq) = entry.unwrap();
-        if check_sequence_length(&seq) {
+
+        let seq_len = self.seq.len();
+        // 检查seq的长度是否大于2的32次方
+        if seq_len as u64 > SEQ_LIMIT {
             eprintln!("Sequence length exceeds 2^32, which is not handled.");
             return Ok(None);
         }
 
         let seq_id = unsafe {
-            let slice = if header.starts_with(b">") {
-                &header[1..]
+            let slice = if self.header.starts_with(b">") {
+                &self.header[1..]
             } else {
-                &header[..]
+                &self.header[..]
             };
 
             let s = std::str::from_utf8_unchecked(slice);
@@ -125,6 +113,39 @@ impl<R: Read + Send> Reader for FastaReader<R> {
             format: SeqFormat::Fasta,
             id: seq_id.to_owned(),
         };
-        Ok(Some(vec![Base::new(seq_header, OptionPair::Single(seq))]))
+        Ok(Some((
+            seq_len,
+            Base::new(seq_header, OptionPair::Single(self.seq.to_owned())),
+        )))
+    }
+}
+
+impl FastaReader<Box<dyn Read + Send>> {
+    #[inline]
+    pub fn from_path<P: AsRef<Path>>(path: P, file_index: usize) -> Result<Self> {
+        let reader = dyn_reader(path)?;
+        Ok(Self::new(reader, file_index))
+    }
+}
+
+impl<R: Read + Send> Reader for FastaReader<R> {
+    fn next(&mut self) -> Result<Option<Vec<Base<Vec<u8>>>>> {
+        let mut seqs = Vec::new();
+        let mut total_bytes = 0;
+        let max_bytes = 10 * 1024 * 1024;
+
+        for _ in 0..self.batch_size {
+            if let Some((seq_len, seq)) = self._next()? {
+                seqs.push(seq);
+                total_bytes += seq_len;
+                if total_bytes > max_bytes {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        Ok(if seqs.is_empty() { None } else { Some(seqs) })
     }
 }

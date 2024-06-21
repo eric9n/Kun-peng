@@ -5,7 +5,7 @@ use kr2r::utils::{
     get_lastest_file_index,
 };
 use kr2r::IndexOptions;
-use seqkmer::{create_reader, read_parallel, Meros, MinimizerIterator, Reader};
+use seqkmer::{read_parallel, FastxReader, Meros, MinimizerIterator, OptionPair, Reader};
 use std::fs;
 use std::io::{BufWriter, Write};
 use std::io::{Error, ErrorKind, Result};
@@ -159,11 +159,12 @@ where
                 let header = &seq.header;
                 let index = header.reads_index;
                 let dna_id = header.id.clone();
-                seq.body.fold(&mut init, |init, mut m_iter| {
-                    let seq_id = (file_index << 32 | index) as u64;
+                let seq_id = (file_index << 32 | index) as u64;
+
+                seq.body.apply_mut(|m_iter| {
                     process_record(
-                        init,
-                        &mut m_iter,
+                        &mut init,
+                        m_iter,
                         &hash_config,
                         chunk_size,
                         seq_id,
@@ -221,7 +222,8 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig) -> Result<()> {
                 create_sample_file(args.chunk_dir.join(format!("sample_id_{}.map", file_index)));
 
             let score = args.minimum_quality_score;
-            let mut reader: Box<dyn Reader> = create_reader(file_pair, file_index, score)?;
+            let paths = OptionPair::from_slice(file_pair);
+            let mut reader = FastxReader::from_paths(paths, file_index, score)?;
             process_fastx_file(
                 &args,
                 meros,
