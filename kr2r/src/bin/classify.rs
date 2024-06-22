@@ -73,8 +73,8 @@ pub struct Args {
     pub minimum_hit_groups: usize,
 
     /// The number of threads to use.
-    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = 16)]
-    pub num_threads: i32,
+    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
+    pub num_threads: usize,
 
     /// File path for outputting normal Kraken output.
     #[clap(long = "output-dir", value_parser)]
@@ -179,7 +179,7 @@ where
 
     let _ = read_parallel(
         reader,
-        args.num_threads as usize,
+        args.num_threads,
         &meros,
         |seqs| {
             let mut buffer = String::new();

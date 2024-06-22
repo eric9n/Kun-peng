@@ -157,14 +157,14 @@ pub async fn run_taxo(taxo_dir: &PathBuf) -> Result<()> {
     log::info!("download taxonomy...");
     let files = [
         "taxdump.tar.gz",
-        "accession2taxid/nucl_gb.accession2taxid.gz",
-        "accession2taxid/nucl_wgs.accession2taxid.gz",
+        // "accession2taxid/nucl_gb.accession2taxid.gz",
+        // "accession2taxid/nucl_wgs.accession2taxid.gz",
     ];
     for url_path in files.iter() {
         let ncbi_file = NcbiFile::new_taxo(taxo_dir, &url_path).await;
         let result = ncbi_file.run().await;
         if result.is_ok() && url_path.to_string() == "taxdump.tar.gz" {
-            let _ = ncbi_file.decompress(taxo_dir).await;
+            ncbi_file.decompress(taxo_dir).await?;
         }
     }
     log::info!("download taxonomy finished...");

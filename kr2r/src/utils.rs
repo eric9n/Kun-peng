@@ -69,13 +69,23 @@ pub fn expand_spaced_seed_mask(spaced_seed_mask: u64, bit_expansion_factor: u64)
     new_mask
 }
 
-pub fn find_library_fna_files<P: AsRef<Path>>(path: P) -> Vec<String> {
+pub fn find_files<P: AsRef<Path>>(path: P, prefix: &str, suffix: &str) -> Vec<PathBuf> {
     WalkDir::new(path)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().file_name() == Some("library.fna".as_ref()))
-        .map(|e| e.path().to_string_lossy().into_owned())
+        .filter(|e| {
+            e.path()
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.starts_with(prefix) && name.ends_with(suffix))
+                .unwrap_or(false)
+        })
+        .map(|e| e.path().to_path_buf())
         .collect()
+}
+
+pub fn find_library_fna_files<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
+    find_files(path, "library", ".fna")
 }
 
 pub fn summary_prelim_map_files<P: AsRef<Path>>(data_dir: P) -> Result<PathBuf> {

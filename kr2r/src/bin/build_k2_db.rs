@@ -1,6 +1,6 @@
 // 使用时需要引用模块路径
 use clap::Parser;
-use kr2r::args::{parse_size, Build, Taxo};
+use kr2r::args::{parse_size, Build};
 use kr2r::compact_hash::HashConfig;
 use kr2r::db::{
     convert_fna_to_k2_format, generate_taxonomy, get_bits_for_taxid, process_k2file,
@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author, version, about="build database", long_about = None)]
+#[clap(author, version, about="build `k2d` files", long_about = None)]
 pub struct Args {
     /// database hash chunk directory and other files
     #[clap(long)]
@@ -31,19 +31,15 @@ pub struct Args {
     /// 包含原始配置
     #[clap(flatten)]
     pub build: Build,
-
-    #[clap(flatten)]
-    pub taxo: Taxo,
+    // #[arg(short = 'm')]
+    // pub id_to_taxon_map_filename: Option<PathBuf>,
 }
 
 pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::error::Error>> {
     let file_num_limit = get_file_limit();
     let meros = args.build.klmt.as_meros();
 
-    let id_to_taxon_map_filename = args
-        .taxo
-        .id_to_taxon_map_filename
-        .unwrap_or(args.build.database.join("seqid2taxid.map"));
+    let id_to_taxon_map_filename = args.build.database.join("seqid2taxid.map");
 
     let id_to_taxon_map = read_id_to_taxon_map(&id_to_taxon_map_filename)?;
 
@@ -52,10 +48,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
 
     let taxonomy_filename = k2d_dir.join("taxo.k2d");
 
-    let ncbi_taxonomy_directory = args
-        .taxo
-        .ncbi_taxonomy_directory
-        .unwrap_or(args.build.database.join("taxonomy"));
+    let ncbi_taxonomy_directory = &args.build.database;
 
     let taxonomy = generate_taxonomy(
         &ncbi_taxonomy_directory,
@@ -85,7 +78,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     let chunk_files = create_partition_files(partition, &k2d_dir, "chunk");
     let mut writers = create_partition_writers(&chunk_files);
 
-    let fna_files = find_library_fna_files(args.build.database);
+    let fna_files = find_library_fna_files(&args.build.database);
 
     for fna_file in &fna_files {
         println!("convert fna file {:?}", fna_file);
@@ -97,7 +90,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
             hash_config,
             &mut writers,
             chunk_size,
-            args.build.threads as u32,
+            args.build.threads,
         );
     }
 

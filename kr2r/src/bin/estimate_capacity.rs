@@ -48,8 +48,8 @@ pub struct Args {
 const RANGE_SECTIONS: u64 = 1024;
 const RANGE_MASK: u64 = RANGE_SECTIONS - 1;
 
-fn build_output_path(input_path: &str, extension: &str) -> String {
-    let path = Path::new(input_path);
+fn build_output_path<P: AsRef<Path>>(input_path: &P, extension: &str) -> String {
+    let path = input_path.as_ref();
     let parent_dir = path.parent().unwrap_or_else(|| Path::new(""));
     let stem = path.file_stem().unwrap_or_else(|| path.as_os_str());
 
@@ -59,8 +59,8 @@ fn build_output_path(input_path: &str, extension: &str) -> String {
     output_path.to_str().unwrap().to_owned()
 }
 
-fn process_sequence(
-    fna_file: &str,
+fn process_sequence<P: AsRef<Path>>(
+    fna_file: &P,
     // hllp: &mut HyperLogLogPlus<u64, KBuildHasher>,
     args: Args,
 ) -> HyperLogLogPlus<u64, KBuildHasher> {
@@ -142,7 +142,7 @@ pub fn run(args: Args) -> usize {
 
     let source: PathBuf = args.database.clone();
     let fna_files = if source.is_file() {
-        vec![source.to_string_lossy().to_string()]
+        vec![source.clone()]
     } else {
         find_library_fna_files(args.database)
     };

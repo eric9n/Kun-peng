@@ -37,7 +37,7 @@ pub struct Args {
     #[clap(short = 'S', long = "single-file-pairs", action)]
     pub single_file_pairs: bool,
 
-    /// Minimum quality score for FASTQ data, default is 0.
+    /// Minimum quality score for FASTQ data.
     #[clap(
         short = 'Q',
         long = "minimum-quality-score",
@@ -46,9 +46,9 @@ pub struct Args {
     )]
     pub minimum_quality_score: i32,
 
-    /// The number of threads to use, default is 10.
-    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = 10)]
-    pub num_threads: i32,
+    /// The number of threads to use.
+    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
+    pub num_threads: usize,
 
     /// chunk directory
     #[clap(long)]

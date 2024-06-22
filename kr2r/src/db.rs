@@ -249,7 +249,7 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
     hash_config: HashConfig,
     writers: &mut Vec<BufWriter<File>>,
     chunk_size: usize,
-    threads: u32,
+    threads: usize,
 ) {
     let mut reader = FastaReader::from_path(fna_file, 1).unwrap();
     let value_bits = hash_config.value_bits;
@@ -257,7 +257,7 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
 
     read_parallel(
         &mut reader,
-        threads as usize,
+        threads,
         &meros,
         |seqs| {
             let mut k2_cell_list = Vec::new();

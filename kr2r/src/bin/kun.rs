@@ -4,31 +4,37 @@ mod build_k2_db;
 mod classify;
 mod estimate_capacity;
 mod hashshard;
+mod merge_fna;
 mod resolve;
-mod seqid2taxid;
+// mod seqid2taxid;
 mod splitr;
 
 use kr2r::args::ClassifyArgs;
-use kr2r::args::{parse_size, Build, Taxo};
+use kr2r::args::{parse_size, Build};
 use kr2r::utils::find_and_sort_files;
 // use std::io::Result;
 use std::path::PathBuf;
 use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author, version, about="build database", long_about = None)]
+#[clap(author, version, about="build `k2d` files", long_about = None)]
 struct BuildArgs {
     /// database hash chunk directory and other files
     #[clap(long)]
     pub k2d_dir: Option<PathBuf>,
 
+    /// Directory to store downloaded files
+    #[arg(short, long, default_value = "lib")]
+    pub download_dir: PathBuf,
+
     // chunk_dir: PathBuf,
     #[clap(flatten)]
     pub build: Build,
 
-    #[clap(flatten)]
-    taxo: Taxo,
-
+    // #[arg(short = 'm')]
+    // pub id_to_taxon_map_filename: Option<PathBuf>,
+    // #[clap(flatten)]
+    // taxo: Taxo,
     /// estimate capacity from cache if exists
     #[arg(long, default_value_t = true)]
     cache: bool,
@@ -110,17 +116,25 @@ impl From<BuildArgs> for build_k2_db::Args {
         Self {
             build: item.build,
             k2d_dir: item.k2d_dir,
-            taxo: item.taxo,
             hash_capacity: parse_size("1G").unwrap(),
         }
     }
 }
 
-impl From<BuildArgs> for seqid2taxid::Args {
+// impl From<BuildArgs> for seqid2taxid::Args {
+//     fn from(item: BuildArgs) -> Self {
+//         Self {
+//             database: item.build.database,
+//             id_to_taxon_map_filename: item.taxo.id_to_taxon_map_filename,
+//         }
+//     }
+// }
+
+impl From<BuildArgs> for merge_fna::Args {
     fn from(item: BuildArgs) -> Self {
         Self {
+            download_dir: item.download_dir,
             database: item.build.database,
-            id_to_taxon_map_filename: item.taxo.id_to_taxon_map_filename,
         }
     }
 }
@@ -128,7 +142,7 @@ impl From<BuildArgs> for seqid2taxid::Args {
 #[derive(Subcommand, Debug)]
 enum Commands {
     Estimate(estimate_capacity::Args),
-    Seqid2taxid(seqid2taxid::Args),
+    // Seqid2taxid(seqid2taxid::Args),
     Build(BuildArgs),
     Hashshard(hashshard::Args),
     Splitr(splitr::Args),
@@ -136,21 +150,25 @@ enum Commands {
     Resolve(resolve::Args),
     Classify(ClassifyArgs),
     Direct(classify::Args),
+    MergeFna(merge_fna::Args),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     match args.cmd {
+        Commands::MergeFna(cmd_args) => {
+            merge_fna::run(cmd_args)?;
+        }
         Commands::Estimate(cmd_args) => {
             estimate_capacity::run(cmd_args);
         }
-        Commands::Seqid2taxid(cmd_args) => {
-            seqid2taxid::run(cmd_args)?;
-        }
+        // Commands::Seqid2taxid(cmd_args) => {
+        //     seqid2taxid::run(cmd_args)?;
+        // }
         Commands::Build(cmd_args) => {
-            let seq_args = seqid2taxid::Args::from(cmd_args.clone());
-            seqid2taxid::run(seq_args)?;
+            let fna_args = merge_fna::Args::from(cmd_args.clone());
+            merge_fna::run(fna_args)?;
             let ec_args = estimate_capacity::Args::from(cmd_args.clone());
             let required_capacity = estimate_capacity::run(ec_args);
 

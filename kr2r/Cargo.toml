@@ -28,6 +28,7 @@ libc = "0.2"
 regex = "1.5.4"
 flate2 = "1.0"
 dashmap = { version = "5.5.3", features = ["rayon"] }
+num_cpus = "1.13.1"
 
 [dev-dependencies]
 criterion = "0.5.1"

@@ -101,7 +101,9 @@ impl NcbiFile {
             NcbiFile::Summary(_) => {}
             NcbiFile::Genomic(_, _) => {}
             NcbiFile::Taxonomy(dt1, _) => {
-                let _ = decompress_and_extract_tar_gz(&dt1.file, &data_dir).await;
+                let taxo_files: Vec<String> =
+                    vec!["names.dmp".to_string(), "nodes.dmp".to_string()];
+                decompress_and_extract_tar_gz(&dt1.file, &data_dir, taxo_files).await?;
             }
         }
         Ok(())
