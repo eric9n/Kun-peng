@@ -24,7 +24,7 @@ struct BuildArgs {
     pub k2d_dir: Option<PathBuf>,
 
     /// Directory to store downloaded files
-    #[arg(short, long, default_value = "lib")]
+    #[arg(short, long, required = true)]
     pub download_dir: PathBuf,
 
     // chunk_dir: PathBuf,

@@ -48,7 +48,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
 
     let taxonomy_filename = k2d_dir.join("taxo.k2d");
 
-    let ncbi_taxonomy_directory = &args.build.database;
+    let ncbi_taxonomy_directory = &args.build.database.join("taxonomy");
 
     let taxonomy = generate_taxonomy(
         &ncbi_taxonomy_directory,

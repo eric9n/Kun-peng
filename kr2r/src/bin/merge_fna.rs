@@ -1,12 +1,12 @@
 use clap::Parser;
 
+use flate2::read::GzDecoder;
 use kr2r::utils::{find_files, open_file};
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Result, Write};
 use std::path::PathBuf;
-
-use flate2::read::GzDecoder;
+use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]
 #[clap(version, about = "A tool for processing genomic files")]
@@ -170,6 +170,9 @@ fn merge_fna(assembly_files: &Vec<PathBuf>, database: &PathBuf) -> Result<()> {
 }
 
 pub fn run(args: Args) -> Result<()> {
+    // 开始计时
+    let start = Instant::now();
+    println!("merge fna start...");
     let download_dir = args.download_dir;
     let database = &args.database;
 
@@ -207,6 +210,9 @@ pub fn run(args: Args) -> Result<()> {
 
     merge_fna(&assembly_files, &args.database)?;
 
+    // 计算持续时间
+    let duration = start.elapsed();
+    println!("merge fna took: {:?}", duration);
     Ok(())
 }
 
