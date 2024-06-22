@@ -252,14 +252,12 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
     threads: u32,
 ) {
     let mut reader = FastaReader::from_path(fna_file, 1).unwrap();
-    let queue_len = (threads - 2) as usize;
     let value_bits = hash_config.value_bits;
     let cell_size = std::mem::size_of::<Slot<u32>>();
 
     read_parallel(
         &mut reader,
         threads as usize,
-        queue_len,
         &meros,
         |seqs| {
             let mut k2_cell_list = Vec::new();

@@ -88,7 +88,6 @@ fn process_sequence(
     read_parallel(
         &mut reader,
         args.threads,
-        args.threads - 2,
         &meros,
         |record_set| {
             let mut minimizer_set = HashSet::new();
@@ -151,6 +150,8 @@ pub fn run(args: Args) -> usize {
     if fna_files.is_empty() {
         panic!("Error: No library.fna files found in the specified directory. Please ensure that the directory contains at least one library.fna file and try again.");
     }
+
+    println!("estimate start... ");
 
     for fna_file in fna_files {
         let args_clone = Args {

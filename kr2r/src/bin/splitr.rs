@@ -148,7 +148,6 @@ where
 
     read_parallel(
         reader,
-        args.num_threads as usize - 2,
         args.num_threads as usize,
         &meros,
         |seqs| {
@@ -268,7 +267,7 @@ pub fn run(args: Args) -> Result<()> {
     if hash_config.hash_capacity == 0 {
         panic!("`hash_capacity` can't be zero!");
     }
-    println!("start...");
+    println!("splitr start...");
     let file_num_limit = get_file_limit();
     if hash_config.partition >= file_num_limit {
         panic!("Exceeds File Number Limit");

@@ -179,7 +179,6 @@ where
 
     let _ = read_parallel(
         reader,
-        args.num_threads as usize - 2,
         args.num_threads as usize,
         &meros,
         |seqs| {
@@ -341,7 +340,7 @@ pub fn run(args: Args) -> Result<()> {
     if hash_config.hash_capacity == 0 {
         panic!("`hash_capacity` can't be zero!");
     }
-    println!("start...");
+    println!("classify start...");
     let start = Instant::now();
     let meros = idx_opts.as_meros();
     let hash_files = find_and_sort_files(&args.k2d_dir, "hash", ".k2d")?;

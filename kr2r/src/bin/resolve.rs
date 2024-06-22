@@ -223,7 +223,7 @@ pub fn run(args: Args) -> Result<()> {
 
     // 开始计时
     let start = Instant::now();
-    println!("start...");
+    println!("resolve start...");
 
     for i in 0..partition {
         let sample_file = &sample_files[i];

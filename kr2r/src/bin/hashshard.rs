@@ -69,7 +69,7 @@ pub fn run(args: Args) -> IOResult<()> {
     let hash_config = HashConfig::from_hash_header(index_filename)?;
 
     let partition = (hash_config.capacity + args.hash_capacity - 1) / args.hash_capacity;
-    println!("start...");
+    println!("hashshard start...");
     // 开始计时
     let start = Instant::now();
 

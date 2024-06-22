@@ -22,13 +22,7 @@ struct BuildArgs {
     #[clap(long)]
     pub k2d_dir: Option<PathBuf>,
 
-    /// chunk directory
-    #[clap(long)]
-    chunk_dir: PathBuf,
-
-    #[clap(long, value_parser = parse_size, default_value = "1G", help = "Specifies the hash file capacity.\nAcceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').\nNote: The specified capacity affects the index size, with a factor of 4 applied.\nFor example, specifying '1G' results in an index size of '4G'.\nDefault: 1G (capacity 1G = file size 4G)")]
-    pub hash_capacity: usize,
-
+    // chunk_dir: PathBuf,
     #[clap(flatten)]
     pub build: Build,
 
@@ -117,8 +111,7 @@ impl From<BuildArgs> for build_k2_db::Args {
             build: item.build,
             k2d_dir: item.k2d_dir,
             taxo: item.taxo,
-            chunk_dir: item.chunk_dir,
-            hash_capacity: item.hash_capacity,
+            hash_capacity: parse_size("1G").unwrap(),
         }
     }
 }

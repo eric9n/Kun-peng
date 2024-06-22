@@ -235,7 +235,7 @@ pub fn run(args: Args) -> Result<()> {
 
     // 开始计时
     let start = Instant::now();
-    println!("start...");
+    println!("annotate start...");
     for chunk_file in chunk_files {
         println!("chunk_file {:?}", chunk_file);
         process_chunk_file(&args, chunk_file, &hash_files)?;

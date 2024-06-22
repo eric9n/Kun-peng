@@ -41,7 +41,6 @@ pub fn create_reader(
 pub fn read_parallel<R, W, O, F, Out>(
     reader: &mut R,
     n_threads: usize,
-    buffer_len: usize,
     meros: &Meros,
     work: W,
     func: F,
@@ -54,7 +53,7 @@ where
     F: FnOnce(&mut ParallelResult<Option<O>>) -> Out + Send,
 {
     assert!(n_threads > 2);
-    assert!(n_threads <= buffer_len);
+    let buffer_len = n_threads + 2;
     let (sender, receiver) = bounded::<Vec<Base<Vec<u8>>>>(buffer_len);
     let (done_send, done_recv) = bounded::<Option<O>>(buffer_len);
     let receiver = Arc::new(receiver); // 使用 Arc 来共享 receiver

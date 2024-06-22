@@ -184,7 +184,7 @@ where
 {
     fn next(&mut self) -> Result<Option<Vec<Base<Vec<u8>>>>> {
         let seqs: Vec<Base<Vec<u8>>> = (0..self.batch_size)
-            .filter_map(|_| self.read_next().transpose()) // 将 Result<Option<_>, _> 转换为 Option<Result<_, _>>
+            .filter_map(|_| self.read_next().transpose())
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Some(seqs).filter(|v| !v.is_empty()))

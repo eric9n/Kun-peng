@@ -7,8 +7,8 @@ use kr2r::db::{
     write_config_to_file,
 };
 use kr2r::utils::{
-    create_partition_files, create_partition_writers, find_library_fna_files, format_bytes,
-    get_file_limit, read_id_to_taxon_map,
+    create_partition_files, create_partition_writers, find_library_fna_files, get_file_limit,
+    read_id_to_taxon_map,
 };
 use kr2r::IndexOptions;
 use std::fs::remove_file;
@@ -25,10 +25,9 @@ pub struct Args {
     #[clap(long, value_parser = parse_size, default_value = "1G", help = "Specifies the hash file capacity.\nAcceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').\nNote: The specified capacity affects the index size, with a factor of 4 applied.\nFor example, specifying '1G' results in an index size of '4G'.\nDefault: 1G (capacity 1G = file size 4G)")]
     pub hash_capacity: usize,
 
-    /// chunk temp directory
-    #[clap(long)]
-    pub chunk_dir: PathBuf,
-
+    // chunk temp directory
+    // #[clap(long)]
+    // pub chunk_dir: PathBuf,
     /// 包含原始配置
     #[clap(flatten)]
     pub build: Build,
@@ -83,10 +82,8 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
         panic!("Exceeds File Number Limit");
     }
 
-    let chunk_files = create_partition_files(partition, &args.chunk_dir, "chunk");
+    let chunk_files = create_partition_files(partition, &k2d_dir, "chunk");
     let mut writers = create_partition_writers(&chunk_files);
-
-    println!("chunk_size {}", format_bytes(chunk_size as f64));
 
     let fna_files = find_library_fna_files(args.build.database);
 
