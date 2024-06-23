@@ -51,17 +51,13 @@ const BATCH_SIZE: usize = 16 * 1024 * 1024;
     long_about = "classify a set of sequences"
 )]
 pub struct ClassifyArgs {
-    /// database hash chunk directory and other files
-    #[clap(long)]
-    pub k2d_dir: PathBuf,
+    // /// database hash chunk directory and other files
+    #[arg(long = "db", required = true)]
+    pub database: PathBuf,
 
     /// chunk directory
     #[clap(long)]
     pub chunk_dir: PathBuf,
-
-    /// Enables use of a Kraken 2 compatible shared database.
-    #[clap(long, default_value_t = false)]
-    pub kraken_db_type: bool,
 
     /// File path for outputting normal Kraken output.
     #[clap(long = "output-dir", value_parser)]
@@ -109,6 +105,10 @@ pub struct ClassifyArgs {
         default_value_t = 2
     )]
     pub minimum_hit_groups: usize,
+
+    /// Enables use of a Kraken 2 compatible shared database.
+    #[clap(long, default_value_t = false)]
+    pub kraken_db_type: bool,
 
     /// In comb. w/ -R, provide minimizer information in report
     #[clap(short = 'K', long, value_parser, default_value_t = false)]

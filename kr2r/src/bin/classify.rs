@@ -23,8 +23,8 @@ use std::time::Instant;
 )]
 pub struct Args {
     /// database hash chunk directory and other files
-    #[clap(long)]
-    pub k2d_dir: PathBuf,
+    #[arg(long = "db", required = true)]
+    pub database: PathBuf,
 
     // /// The file path for the Kraken 2 options.
     // #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
@@ -320,7 +320,7 @@ fn process_files(
 }
 
 pub fn run(args: Args) -> Result<()> {
-    let options_filename = &args.k2d_dir.join("opts.k2d");
+    let options_filename = &args.database.join("opts.k2d");
     let idx_opts = IndexOptions::read_index_options(options_filename)?;
 
     if args.paired_end_processing && !args.single_file_pairs && args.input_files.len() % 2 != 0 {
@@ -331,10 +331,10 @@ pub fn run(args: Args) -> Result<()> {
         ));
     }
 
-    let taxonomy_filename = args.k2d_dir.join("taxo.k2d");
+    let taxonomy_filename = args.database.join("taxo.k2d");
     let taxo = Taxonomy::from_file(taxonomy_filename)?;
 
-    let hash_config = HashConfig::from_hash_header(&args.k2d_dir.join("hash_config.k2d"))?;
+    let hash_config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
 
     println!("{:?}", hash_config);
     if hash_config.hash_capacity == 0 {
@@ -343,7 +343,7 @@ pub fn run(args: Args) -> Result<()> {
     println!("classify start...");
     let start = Instant::now();
     let meros = idx_opts.as_meros();
-    let hash_files = find_and_sort_files(&args.k2d_dir, "hash", ".k2d")?;
+    let hash_files = find_and_sort_files(&args.database, "hash", ".k2d")?;
     let chtable = CHTable::from_hash_files(hash_config, hash_files)?;
 
     process_files(args, meros, hash_config, &chtable, &taxo)?;

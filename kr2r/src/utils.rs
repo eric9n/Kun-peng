@@ -263,7 +263,7 @@ pub fn find_and_sort_files(
         if a_idx as i32 != *num {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
-                "File numbers are not continuous starting from 0.",
+                "File numbers are not continuous starting from 1.",
             ));
         }
     }

@@ -12,16 +12,14 @@ use kr2r::utils::{
 };
 use kr2r::IndexOptions;
 use std::fs::remove_file;
-use std::path::PathBuf;
 use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author, version, about="build `k2d` files", long_about = None)]
+#[clap(author, version, about="build database", long_about = None)]
 pub struct Args {
-    /// database hash chunk directory and other files
-    #[clap(long)]
-    pub k2d_dir: Option<PathBuf>,
-
+    // /// database hash chunk directory and other files
+    // #[clap(long)]
+    // pub k2d_dir: Option<PathBuf>,
     #[clap(long, value_parser = parse_size, default_value = "1G", help = "Specifies the hash file capacity.\nAcceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').\nNote: The specified capacity affects the index size, with a factor of 4 applied.\nFor example, specifying '1G' results in an index size of '4G'.\nDefault: 1G (capacity 1G = file size 4G)")]
     pub hash_capacity: usize,
 
@@ -43,8 +41,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
 
     let id_to_taxon_map = read_id_to_taxon_map(&id_to_taxon_map_filename)?;
 
-    let source: PathBuf = args.build.database.clone();
-    let k2d_dir = args.k2d_dir.unwrap_or(source.clone());
+    let k2d_dir = &args.build.database;
 
     let taxonomy_filename = k2d_dir.join("taxo.k2d");
 

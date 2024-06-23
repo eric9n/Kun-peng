@@ -17,12 +17,11 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author, version, about="build `k2d` files", long_about = None)]
+#[clap(author, version, about="build database", long_about = None)]
 struct BuildArgs {
-    /// database hash chunk directory and other files
-    #[clap(long)]
-    pub k2d_dir: Option<PathBuf>,
-
+    // /// database hash chunk directory and other files
+    // #[clap(long)]
+    // pub k2d_dir: Option<PathBuf>,
     /// Directory to store downloaded files
     #[arg(short, long, required = true)]
     pub download_dir: PathBuf,
@@ -60,7 +59,7 @@ struct Args {
 impl From<ClassifyArgs> for splitr::Args {
     fn from(item: ClassifyArgs) -> Self {
         Self {
-            k2d_dir: item.k2d_dir,
+            database: item.database,
             paired_end_processing: item.paired_end_processing,
             single_file_pairs: item.single_file_pairs,
             minimum_quality_score: item.minimum_quality_score,
@@ -74,7 +73,7 @@ impl From<ClassifyArgs> for splitr::Args {
 impl From<ClassifyArgs> for annotate::Args {
     fn from(item: ClassifyArgs) -> Self {
         Self {
-            k2d_dir: item.k2d_dir,
+            database: item.database,
             chunk_dir: item.chunk_dir,
             batch_size: item.batch_size,
             kraken_db_type: item.kraken_db_type,
@@ -85,7 +84,7 @@ impl From<ClassifyArgs> for annotate::Args {
 impl From<ClassifyArgs> for resolve::Args {
     fn from(item: ClassifyArgs) -> Self {
         Self {
-            k2d_dir: item.k2d_dir,
+            database: item.database,
             chunk_dir: item.chunk_dir,
             batch_size: item.batch_size,
             confidence_threshold: item.confidence_threshold,
@@ -115,7 +114,6 @@ impl From<BuildArgs> for build_k2_db::Args {
     fn from(item: BuildArgs) -> Self {
         Self {
             build: item.build,
-            k2d_dir: item.k2d_dir,
             hash_capacity: parse_size("1G").unwrap(),
         }
     }
@@ -192,10 +190,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let splitr_args = splitr::Args::from(cmd_args.clone());
             let chunk_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".k2")?;
-            if !chunk_files.is_empty() {
+            let sample_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".map")?;
+            let bin_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".map")?;
+            if !chunk_files.is_empty() || !sample_files.is_empty() || !bin_files.is_empty() {
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    format!("{} must be empty", &splitr_args.chunk_dir.display()),
+                    format!(
+                        "{} `sample` files must be empty",
+                        &splitr_args.chunk_dir.display()
+                    ),
                 )));
             }
             splitr::run(splitr_args)?;

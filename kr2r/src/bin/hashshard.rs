@@ -53,10 +53,9 @@ pub struct Args {
     #[clap(long = "db", value_parser, required = true)]
     database: PathBuf,
 
-    /// database hash chunk directory and other files
-    #[clap(long)]
-    k2d_dir: Option<PathBuf>,
-
+    // /// database hash chunk directory and other files
+    // #[clap(long)]
+    // k2d_dir: Option<PathBuf>,
     /// Specifies the hash file capacity. Acceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').
     /// Note: The specified capacity affects the index size, with a factor of 4 applied. For example, specifying '1G' results in an index size of '4G'.
     /// Default: 1G (capacity 1G = file size 4G)
@@ -76,7 +75,7 @@ pub fn run(args: Args) -> IOResult<()> {
     let file_len = hash_config.capacity * 4 + 32;
     let b_size = std::mem::size_of::<u32>();
 
-    let k2d_dir = args.k2d_dir.unwrap_or(args.database.clone());
+    let k2d_dir = args.database.clone();
 
     create_dir_all(&k2d_dir).expect(&format!("create hash dir error {:?}", k2d_dir));
 

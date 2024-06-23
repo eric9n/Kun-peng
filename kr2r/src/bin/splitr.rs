@@ -23,8 +23,8 @@ use std::time::Instant;
 )]
 pub struct Args {
     /// database hash chunk directory and other files
-    #[clap(long)]
-    pub k2d_dir: PathBuf,
+    #[arg(long = "db", required = true)]
+    pub database: PathBuf,
 
     // /// The file path for the Kraken 2 options.
     // #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
@@ -251,7 +251,7 @@ fn convert(args: Args, meros: Meros, hash_config: HashConfig) -> Result<()> {
 
 pub fn run(args: Args) -> Result<()> {
     // let args = Args::parse();
-    let options_filename = &args.k2d_dir.join("opts.k2d");
+    let options_filename = &args.database.join("opts.k2d");
     let idx_opts = IndexOptions::read_index_options(options_filename)?;
 
     if args.paired_end_processing && !args.single_file_pairs && args.input_files.len() % 2 != 0 {
@@ -261,7 +261,7 @@ pub fn run(args: Args) -> Result<()> {
             "Paired-end processing requires an even number of input files.",
         ));
     }
-    let hash_config = HashConfig::from_hash_header(&args.k2d_dir.join("hash_config.k2d"))?;
+    let hash_config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
 
     println!("hash_config {:?}", hash_config);
     if hash_config.hash_capacity == 0 {

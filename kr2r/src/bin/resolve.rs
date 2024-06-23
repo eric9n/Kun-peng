@@ -58,8 +58,8 @@ pub fn read_id_to_seq_map<P: AsRef<Path>>(
 )]
 pub struct Args {
     /// database hash chunk directory and other files
-    #[clap(long)]
-    pub k2d_dir: PathBuf,
+    #[arg(long = "db", required = true)]
+    pub database: PathBuf,
 
     /// chunk directory
     #[clap(long, value_parser, required = true)]
@@ -206,7 +206,7 @@ fn process_batch<P: AsRef<Path>>(
 }
 
 pub fn run(args: Args) -> Result<()> {
-    let k2d_dir = &args.k2d_dir;
+    let k2d_dir = &args.database;
     let taxonomy_filename = k2d_dir.join("taxo.k2d");
     let taxo = Taxonomy::from_file(taxonomy_filename)?;
 
@@ -214,7 +214,7 @@ pub fn run(args: Args) -> Result<()> {
     let sample_id_files = find_and_sort_files(&args.chunk_dir, "sample_id", ".map")?;
 
     let partition = sample_files.len();
-    let hash_config = HashConfig::from_hash_header(&args.k2d_dir.join("hash_config.k2d"))?;
+    let hash_config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
     let value_mask = hash_config.value_mask;
 
     let mut total_taxon_counts = TaxonCounters::new();
