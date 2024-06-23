@@ -171,6 +171,7 @@ bash cal_memory.sh $database_dir
     * High memory requirements
     * Fast performance
 
+Command Help
 ```sh
 ./target/release/kun_peng direct -h
 Directly load all hash tables for classification annotation
@@ -215,6 +216,7 @@ Options:
     * Slower performance compared to Direct Processing Mode
 
 
+Command Help
 ```sh
 ./target/release/kun_peng classify -h
 Integrates 'splitr', 'annotate', and 'resolve' into a unified workflow for sequence classification. classify a set of sequences
