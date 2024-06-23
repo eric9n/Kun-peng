@@ -1,8 +1,25 @@
 This workspace contains two projects: `kr2r` and `ncbi`. The `kr2r` project includes an example that demonstrates how to use the `kun_peng` binary, a tool for processing gene classification, to build a database and process a sample file.
 
-## Get Started
+## Prerequisites
 
+Before running this project, ensure you have the following software installed:
+
+1. **Rust**: This project requires the Rust programming environment.
+
+## Get Started
 Follow these steps to build the projects and run the example.
+
+### Method 1: Download Pre-built Binaries
+If you prefer not to build from source, you can download the pre-built binaries for your platform from the GitHub releases page.
+
+### Method 2: Clone the Repository and Build the project
+First, clone this repository to your local machine:
+
+```sh
+git clone https://github.com/eric9n/kraken2-rust.git
+cd kraken2-rust
+```
+
 
 ### Build the Projects
 
