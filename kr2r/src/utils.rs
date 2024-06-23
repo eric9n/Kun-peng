@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::{self, create_dir_all, File, OpenOptions};
-use std::io::{BufRead, BufReader, BufWriter, Result, Seek, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Result, Write};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -69,13 +69,23 @@ pub fn expand_spaced_seed_mask(spaced_seed_mask: u64, bit_expansion_factor: u64)
     new_mask
 }
 
-pub fn find_library_fna_files<P: AsRef<Path>>(path: P) -> Vec<String> {
+pub fn find_files<P: AsRef<Path>>(path: P, prefix: &str, suffix: &str) -> Vec<PathBuf> {
     WalkDir::new(path)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().file_name() == Some("library.fna".as_ref()))
-        .map(|e| e.path().to_string_lossy().into_owned())
+        .filter(|e| {
+            e.path()
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.starts_with(prefix) && name.ends_with(suffix))
+                .unwrap_or(false)
+        })
+        .map(|e| e.path().to_path_buf())
         .collect()
+}
+
+pub fn find_library_fna_files<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
+    find_files(path, "library", ".fna")
 }
 
 pub fn summary_prelim_map_files<P: AsRef<Path>>(data_dir: P) -> Result<PathBuf> {
@@ -140,77 +150,6 @@ pub fn format_bytes(size: f64) -> String {
     }
 
     format!("{:.2}{}", size, current_suffix)
-}
-
-#[derive(Debug)]
-pub enum FileFormat {
-    Fasta,
-    Fastq,
-}
-
-use flate2::read::GzDecoder;
-use std::io::{self, Read};
-
-pub fn is_gzipped(file: &mut File) -> io::Result<bool> {
-    let mut buffer = [0; 2];
-    file.read_exact(&mut buffer)?;
-    file.rewind()?; // 重置文件指针到开头
-    Ok(buffer == [0x1F, 0x8B])
-}
-
-pub fn detect_file_format<P: AsRef<Path>>(path: P) -> io::Result<FileFormat> {
-    let mut file = open_file(path)?;
-    let read1: Box<dyn io::Read + Send> = if is_gzipped(&mut file)? {
-        Box::new(GzDecoder::new(file))
-    } else {
-        Box::new(file)
-    };
-
-    let reader = BufReader::new(read1);
-    let mut lines = reader.lines();
-
-    if let Some(first_line) = lines.next() {
-        let line = first_line?;
-
-        if line.starts_with('>') {
-            return Ok(FileFormat::Fasta);
-        } else if line.starts_with('@') {
-            let _ = lines.next();
-            if let Some(third_line) = lines.next() {
-                let line: String = third_line?;
-                if line.starts_with('+') {
-                    return Ok(FileFormat::Fastq);
-                }
-            }
-        } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Unrecognized fasta(fastq) file format",
-            ));
-        }
-    }
-
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "Unrecognized fasta(fastq) file format",
-    ))
-    // let mut buffer = [0; 1]; // 仅分配一个字节的缓冲区
-
-    // // 读取文件的第一个字节
-    // let bytes_read = reader.read(&mut buffer)?;
-
-    // if bytes_read == 0 {
-    //     return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Empty file"));
-    // }
-
-    // match buffer[0] {
-    //     b'>' => Ok(FileFormat::Fasta),
-    //     b'@' => Ok(FileFormat::Fastq),
-    //     _ => Err(io::Error::new(
-    //         io::ErrorKind::Other,
-    //         "Unrecognized file format",
-    //     )),
-    // }
 }
 
 #[cfg(unix)]
@@ -324,7 +263,7 @@ pub fn find_and_sort_files(
         if a_idx as i32 != *num {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
-                "File numbers are not continuous starting from 0.",
+                "File numbers are not continuous starting from 1.",
             ));
         }
     }

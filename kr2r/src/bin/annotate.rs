@@ -25,8 +25,8 @@ pub const BATCH_SIZE: usize = 8 * 1024 * 1024;
 )]
 pub struct Args {
     /// database hash chunk directory and other files
-    #[clap(long)]
-    pub k2d_dir: PathBuf,
+    #[arg(long = "db", required = true)]
+    pub database: PathBuf,
 
     /// Enables use of a Kraken 2 compatible shared database. Default is false.
     #[clap(long, default_value_t = false)]
@@ -128,7 +128,8 @@ where
             .into_par_iter()
             .filter_map(|slot| {
                 let indx = slot.idx & idx_mask;
-                let taxid = chtm.get_from_page(indx, slot.value, page_index);
+                let compacted = slot.value.left(value_bits) as u32;
+                let taxid = chtm.get_from_page(indx, compacted, page_index);
 
                 if taxid > 0 {
                     let kmer_id = slot.idx >> idx_bits;
@@ -199,7 +200,7 @@ fn process_chunk_file<P: AsRef<Path>>(
 
     let start = Instant::now();
 
-    let config = HashConfig::from_hash_header(&args.k2d_dir.join("hash_config.k2d"))?;
+    let config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
     let parition = hash_files.len();
     let chtm = if args.kraken_db_type {
         CHTable::from_pair(
@@ -230,11 +231,11 @@ fn process_chunk_file<P: AsRef<Path>>(
 pub fn run(args: Args) -> Result<()> {
     let chunk_files = find_and_sort_files(&args.chunk_dir, "sample", ".k2")?;
 
-    let hash_files = find_and_sort_files(&args.k2d_dir, "hash", ".k2d")?;
+    let hash_files = find_and_sort_files(&args.database, "hash", ".k2d")?;
 
     // 开始计时
     let start = Instant::now();
-    println!("start...");
+    println!("annotate start...");
     for chunk_file in chunk_files {
         println!("chunk_file {:?}", chunk_file);
         process_chunk_file(&args, chunk_file, &hash_files)?;

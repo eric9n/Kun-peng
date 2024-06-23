@@ -1,16 +1,9 @@
-pub mod kr2r_data;
+mod kr2r_data;
 mod kv_store;
-pub mod mmscanner;
 pub mod readcounts;
 pub mod report;
-pub mod seq;
 pub mod taxonomy;
 pub mod utils;
-
-mod feat;
-
-pub use feat::constants::*;
-pub use feat::*;
 
 pub mod db;
 pub use kr2r_data::*;

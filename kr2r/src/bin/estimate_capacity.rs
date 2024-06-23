@@ -1,11 +1,10 @@
 use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use kr2r::args::KLMTArgs;
-use kr2r::mmscanner::MinimizerScanner;
 use kr2r::utils::{find_library_fna_files, format_bytes, open_file};
 use kr2r::KBuildHasher;
-use seq_io::fasta::{Reader, Record};
-use seq_io::parallel::read_parallel;
+
+use seqkmer::{read_parallel, FastaReader};
 use serde_json;
 use std::collections::HashSet;
 use std::fs::File;
@@ -49,8 +48,8 @@ pub struct Args {
 const RANGE_SECTIONS: u64 = 1024;
 const RANGE_MASK: u64 = RANGE_SECTIONS - 1;
 
-fn build_output_path(input_path: &str, extension: &str) -> String {
-    let path = Path::new(input_path);
+fn build_output_path<P: AsRef<Path>>(input_path: &P, extension: &str) -> String {
+    let path = input_path.as_ref();
     let parent_dir = path.parent().unwrap_or_else(|| Path::new(""));
     let stem = path.file_stem().unwrap_or_else(|| path.as_os_str());
 
@@ -60,8 +59,8 @@ fn build_output_path(input_path: &str, extension: &str) -> String {
     output_path.to_str().unwrap().to_owned()
 }
 
-fn process_sequence(
-    fna_file: &str,
+fn process_sequence<P: AsRef<Path>>(
+    fna_file: &P,
     // hllp: &mut HyperLogLogPlus<u64, KBuildHasher>,
     args: Args,
 ) -> HyperLogLogPlus<u64, KBuildHasher> {
@@ -84,33 +83,36 @@ fn process_sequence(
     let mut hllp: HyperLogLogPlus<u64, _> =
         HyperLogLogPlus::new(16, KBuildHasher::default()).unwrap();
 
-    let reader = Reader::from_path(fna_file).unwrap();
+    let mut reader = FastaReader::from_path(fna_file, 1).unwrap();
     let range_n = args.n as u64;
     read_parallel(
-        reader,
-        args.threads as u32,
-        args.threads - 2 as usize,
+        &mut reader,
+        args.threads,
+        &meros,
         |record_set| {
             let mut minimizer_set = HashSet::new();
-            for record in record_set.into_iter() {
-                let seq = record.seq();
-                let kmer_iter = MinimizerScanner::new(&seq, meros)
-                    .into_iter()
-                    .filter(|hash_key| hash_key & RANGE_MASK < range_n)
-                    .collect::<HashSet<u64>>();
 
-                minimizer_set.extend(kmer_iter);
+            for record in record_set {
+                record.body.apply_mut(|m_iter| {
+                    let kmer_iter: HashSet<u64> = m_iter
+                        .filter(|(_, hash_key)| *hash_key & RANGE_MASK < range_n)
+                        .map(|(_, hash_key)| hash_key)
+                        .collect();
+
+                    minimizer_set.extend(kmer_iter);
+                });
             }
-            minimizer_set
+            Some(minimizer_set)
         },
         |record_sets| {
-            while let Some(Ok((_, m_set))) = record_sets.next() {
+            while let Some(Some(m_set)) = record_sets.next() {
                 for minimizer in m_set {
                     hllp.insert(&minimizer);
                 }
             }
         },
-    );
+    )
+    .expect("read parallel error");
 
     // 序列化 hllp 对象并将其写入文件
     let serialized_hllp = serde_json::to_string(&hllp).unwrap();
@@ -140,7 +142,7 @@ pub fn run(args: Args) -> usize {
 
     let source: PathBuf = args.database.clone();
     let fna_files = if source.is_file() {
-        vec![source.to_string_lossy().to_string()]
+        vec![source.clone()]
     } else {
         find_library_fna_files(args.database)
     };
@@ -148,6 +150,8 @@ pub fn run(args: Args) -> usize {
     if fna_files.is_empty() {
         panic!("Error: No library.fna files found in the specified directory. Please ensure that the directory contains at least one library.fna file and try again.");
     }
+
+    println!("estimate start... ");
 
     for fna_file in fna_files {
         let args_clone = Args {

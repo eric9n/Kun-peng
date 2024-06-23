@@ -119,3 +119,84 @@ pub fn canonical_representation(kmer: u64, n: usize, revcom_version: u8) -> u64 
 pub const DEFAULT_TOGGLE_MASK: u64 = 0xe37e28c4271b5a2d;
 pub const DEFAULT_SPACED_SEED_MASK: u64 = 0;
 pub const CURRENT_REVCOM_VERSION: u8 = 1;
+
+// 声明常量
+const M1: u64 = 0xff51afd7ed558ccd;
+const M2: u64 = 0xc4ceb9fe1a85ec53;
+
+///
+/// # Examples
+///
+/// ```
+/// # use kr2r::fmix64;
+/// let key: u64 = 123;
+/// let hash = fmix64(key);
+/// assert_eq!(hash, 9208534749291869864);
+/// ```
+#[inline]
+pub fn fmix64(key: u64) -> u64 {
+    let mut k = key;
+    k ^= k >> 33;
+    k = k.wrapping_mul(M1);
+    k ^= k >> 33;
+    k = k.wrapping_mul(M2);
+    k ^= k >> 33;
+    k
+}
+
+/// minimizer config
+#[derive(Copy, Debug, Clone)]
+pub struct Meros {
+    pub k_mer: usize,
+    pub l_mer: usize,
+    pub mask: u64,
+    pub spaced_seed_mask: u64,
+    pub toggle_mask: u64,
+    pub min_clear_hash_value: Option<u64>,
+}
+
+impl Meros {
+    pub fn new(
+        k_mer: usize,
+        l_mer: usize,
+        spaced_seed_mask: Option<u64>,
+        toggle_mask: Option<u64>,
+        min_clear_hash_value: Option<u64>,
+    ) -> Self {
+        let mut mask = 1u64;
+        mask <<= l_mer * constants::BITS_PER_CHAR;
+        mask -= 1;
+
+        Self {
+            k_mer,
+            l_mer,
+            mask,
+            spaced_seed_mask: spaced_seed_mask.unwrap_or(DEFAULT_SPACED_SEED_MASK),
+            toggle_mask: toggle_mask.unwrap_or(DEFAULT_TOGGLE_MASK) & mask,
+            min_clear_hash_value,
+        }
+    }
+
+    pub fn window_size(&self) -> usize {
+        self.k_mer - self.l_mer
+    }
+}
+
+impl Default for Meros {
+    fn default() -> Self {
+        let l_mer = constants::DEFAULT_MINIMIZER_LENGTH as usize;
+        let k_mer = constants::DEFAULT_KMER_LENGTH as usize;
+        let mut mask = 1u64;
+        mask <<= l_mer * constants::BITS_PER_CHAR;
+        mask -= 1;
+
+        Self {
+            k_mer,
+            l_mer,
+            mask,
+            spaced_seed_mask: DEFAULT_SPACED_SEED_MASK,
+            toggle_mask: DEFAULT_TOGGLE_MASK & mask,
+            min_clear_hash_value: None,
+        }
+    }
+}

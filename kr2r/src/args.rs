@@ -1,10 +1,12 @@
 // 使用时需要引用模块路径
 use crate::utils::expand_spaced_seed_mask;
-use crate::{construct_seed_template, parse_binary, Meros, BITS_PER_CHAR};
-use crate::{
-    DEFAULT_KMER_LENGTH, DEFAULT_MINIMIZER_LENGTH, DEFAULT_MINIMIZER_SPACES, DEFAULT_TOGGLE_MASK,
-};
+use crate::{construct_seed_template, parse_binary};
 use clap::Parser;
+use seqkmer::Meros;
+use seqkmer::{
+    BITS_PER_CHAR, DEFAULT_KMER_LENGTH, DEFAULT_MINIMIZER_LENGTH, DEFAULT_MINIMIZER_SPACES,
+    DEFAULT_TOGGLE_MASK,
+};
 use std::path::PathBuf;
 
 pub const U32MAXPLUS: u64 = u32::MAX as u64;
@@ -29,30 +31,11 @@ pub struct Build {
     pub requested_bits_for_taxid: u8,
 
     /// Number of threads
-    #[clap(short = 'p', long, default_value_t = 10)]
+    #[clap(short = 'p', long, default_value_t = num_cpus::get())]
     pub threads: usize,
 }
 
-#[derive(Parser, Debug, Clone)]
-#[clap(version, about = "taxonomy")]
-pub struct Taxo {
-    // /// Kraken 2 taxonomy filename, default = $database/taxo.k2d
-    // #[clap(short = 't')]
-    // pub taxonomy_filename: Option<PathBuf>,
-
-    // #[clap(short = 'm', required = true)]
-    // pub id_to_taxon_map_filename: PathBuf,
-    /// Sequence ID to taxon map filename
-    /// seqid2taxid.map file path, default = $database/seqid2taxid.map
-    #[arg(short = 'm')]
-    pub id_to_taxon_map_filename: Option<PathBuf>,
-
-    /// NCBI taxonomy directory name, default = $database/taxonomy
-    #[clap(short, long)]
-    pub ncbi_taxonomy_directory: Option<PathBuf>,
-}
-
-const BATCH_SIZE: usize = 8 * 1024 * 1024;
+const BATCH_SIZE: usize = 16 * 1024 * 1024;
 
 /// Command line arguments for the classify program.
 ///
@@ -68,17 +51,13 @@ const BATCH_SIZE: usize = 8 * 1024 * 1024;
     long_about = "classify a set of sequences"
 )]
 pub struct ClassifyArgs {
-    /// database hash chunk directory and other files
-    #[clap(long)]
-    pub k2d_dir: PathBuf,
+    // /// database hash chunk directory and other files
+    #[arg(long = "db", required = true)]
+    pub database: PathBuf,
 
     /// chunk directory
     #[clap(long)]
     pub chunk_dir: PathBuf,
-
-    /// Enables use of a Kraken 2 compatible shared database. Default is false.
-    #[clap(long, default_value_t = false)]
-    pub kraken_db_type: bool,
 
     /// File path for outputting normal Kraken output.
     #[clap(long = "output-dir", value_parser)]
@@ -92,7 +71,7 @@ pub struct ClassifyArgs {
     #[clap(short = 'S', long = "single-file-pairs", action)]
     pub single_file_pairs: bool,
 
-    /// Minimum quality score for FASTQ data, default is 0.
+    /// Minimum quality score for FASTQ data.
     #[clap(
         short = 'Q',
         long = "minimum-quality-score",
@@ -101,15 +80,15 @@ pub struct ClassifyArgs {
     )]
     pub minimum_quality_score: i32,
 
-    /// The number of threads to use, default is 10.
-    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = 10)]
-    pub num_threads: i32,
+    /// The number of threads to use.
+    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
+    pub num_threads: usize,
 
-    /// 批量处理大小 default: 8MB
+    /// 批量处理大小 default: 16MB
     #[clap(long, default_value_t = BATCH_SIZE)]
     pub batch_size: usize,
 
-    /// Confidence score threshold, default is 0.0.
+    /// Confidence score threshold
     #[clap(
         short = 'T',
         long = "confidence-threshold",
@@ -126,6 +105,10 @@ pub struct ClassifyArgs {
         default_value_t = 2
     )]
     pub minimum_hit_groups: usize,
+
+    /// Enables use of a Kraken 2 compatible shared database.
+    #[clap(long, default_value_t = false)]
+    pub kraken_db_type: bool,
 
     /// In comb. w/ -R, provide minimizer information in report
     #[clap(short = 'K', long, value_parser, default_value_t = false)]

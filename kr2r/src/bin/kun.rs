@@ -4,12 +4,13 @@ mod build_k2_db;
 mod classify;
 mod estimate_capacity;
 mod hashshard;
+mod merge_fna;
 mod resolve;
-mod seqid2taxid;
+// mod seqid2taxid;
 mod splitr;
 
 use kr2r::args::ClassifyArgs;
-use kr2r::args::{parse_size, Build, Taxo};
+use kr2r::args::{parse_size, Build};
 use kr2r::utils::find_and_sort_files;
 // use std::io::Result;
 use std::path::PathBuf;
@@ -18,23 +19,21 @@ use std::time::Instant;
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about="build database", long_about = None)]
 struct BuildArgs {
-    /// database hash chunk directory and other files
-    #[clap(long)]
-    pub k2d_dir: Option<PathBuf>,
+    // /// database hash chunk directory and other files
+    // #[clap(long)]
+    // pub k2d_dir: Option<PathBuf>,
+    /// Directory to store downloaded files
+    #[arg(short, long, required = true)]
+    pub download_dir: PathBuf,
 
-    /// chunk directory
-    #[clap(long)]
-    chunk_dir: PathBuf,
-
-    #[clap(long, value_parser = parse_size, default_value = "1G", help = "Specifies the hash file capacity.\nAcceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').\nNote: The specified capacity affects the index size, with a factor of 4 applied.\nFor example, specifying '1G' results in an index size of '4G'.\nDefault: 1G (capacity 1G = file size 4G)")]
-    pub hash_capacity: usize,
-
+    // chunk_dir: PathBuf,
     #[clap(flatten)]
     pub build: Build,
 
-    #[clap(flatten)]
-    taxo: Taxo,
-
+    // #[arg(short = 'm')]
+    // pub id_to_taxon_map_filename: Option<PathBuf>,
+    // #[clap(flatten)]
+    // taxo: Taxo,
     /// estimate capacity from cache if exists
     #[arg(long, default_value_t = true)]
     cache: bool,
@@ -60,7 +59,7 @@ struct Args {
 impl From<ClassifyArgs> for splitr::Args {
     fn from(item: ClassifyArgs) -> Self {
         Self {
-            k2d_dir: item.k2d_dir,
+            database: item.database,
             paired_end_processing: item.paired_end_processing,
             single_file_pairs: item.single_file_pairs,
             minimum_quality_score: item.minimum_quality_score,
@@ -74,7 +73,7 @@ impl From<ClassifyArgs> for splitr::Args {
 impl From<ClassifyArgs> for annotate::Args {
     fn from(item: ClassifyArgs) -> Self {
         Self {
-            k2d_dir: item.k2d_dir,
+            database: item.database,
             chunk_dir: item.chunk_dir,
             batch_size: item.batch_size,
             kraken_db_type: item.kraken_db_type,
@@ -85,7 +84,7 @@ impl From<ClassifyArgs> for annotate::Args {
 impl From<ClassifyArgs> for resolve::Args {
     fn from(item: ClassifyArgs) -> Self {
         Self {
-            k2d_dir: item.k2d_dir,
+            database: item.database,
             chunk_dir: item.chunk_dir,
             batch_size: item.batch_size,
             confidence_threshold: item.confidence_threshold,
@@ -115,19 +114,25 @@ impl From<BuildArgs> for build_k2_db::Args {
     fn from(item: BuildArgs) -> Self {
         Self {
             build: item.build,
-            k2d_dir: item.k2d_dir,
-            taxo: item.taxo,
-            chunk_dir: item.chunk_dir,
-            hash_capacity: item.hash_capacity,
+            hash_capacity: parse_size("1G").unwrap(),
         }
     }
 }
 
-impl From<BuildArgs> for seqid2taxid::Args {
+// impl From<BuildArgs> for seqid2taxid::Args {
+//     fn from(item: BuildArgs) -> Self {
+//         Self {
+//             database: item.build.database,
+//             id_to_taxon_map_filename: item.taxo.id_to_taxon_map_filename,
+//         }
+//     }
+// }
+
+impl From<BuildArgs> for merge_fna::Args {
     fn from(item: BuildArgs) -> Self {
         Self {
+            download_dir: item.download_dir,
             database: item.build.database,
-            id_to_taxon_map_filename: item.taxo.id_to_taxon_map_filename,
         }
     }
 }
@@ -135,7 +140,7 @@ impl From<BuildArgs> for seqid2taxid::Args {
 #[derive(Subcommand, Debug)]
 enum Commands {
     Estimate(estimate_capacity::Args),
-    Seqid2taxid(seqid2taxid::Args),
+    // Seqid2taxid(seqid2taxid::Args),
     Build(BuildArgs),
     Hashshard(hashshard::Args),
     Splitr(splitr::Args),
@@ -143,21 +148,25 @@ enum Commands {
     Resolve(resolve::Args),
     Classify(ClassifyArgs),
     Direct(classify::Args),
+    MergeFna(merge_fna::Args),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     match args.cmd {
+        Commands::MergeFna(cmd_args) => {
+            merge_fna::run(cmd_args)?;
+        }
         Commands::Estimate(cmd_args) => {
             estimate_capacity::run(cmd_args);
         }
-        Commands::Seqid2taxid(cmd_args) => {
-            seqid2taxid::run(cmd_args)?;
-        }
+        // Commands::Seqid2taxid(cmd_args) => {
+        //     seqid2taxid::run(cmd_args)?;
+        // }
         Commands::Build(cmd_args) => {
-            let seq_args = seqid2taxid::Args::from(cmd_args.clone());
-            seqid2taxid::run(seq_args)?;
+            let fna_args = merge_fna::Args::from(cmd_args.clone());
+            merge_fna::run(fna_args)?;
             let ec_args = estimate_capacity::Args::from(cmd_args.clone());
             let required_capacity = estimate_capacity::run(ec_args);
 
@@ -181,10 +190,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let splitr_args = splitr::Args::from(cmd_args.clone());
             let chunk_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".k2")?;
-            if !chunk_files.is_empty() {
+            let sample_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".map")?;
+            let bin_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".map")?;
+            if !chunk_files.is_empty() || !sample_files.is_empty() || !bin_files.is_empty() {
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    format!("{} must be empty", &splitr_args.chunk_dir.display()),
+                    format!(
+                        "{} `sample` files must be empty",
+                        &splitr_args.chunk_dir.display()
+                    ),
                 )));
             }
             splitr::run(splitr_args)?;

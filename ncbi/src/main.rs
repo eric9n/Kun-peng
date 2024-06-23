@@ -52,11 +52,11 @@ fn validate_group(group: &str) -> Result<String, String> {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum Site {
-    /// 下载 genbank 资源
+    /// Download genbank resources
     Genbank,
-    /// 下载 refseq 资源
+    /// Download refseq resources
     Refseq,
-    /// genbank and refseq
+    /// Both genbank and refseq
     All,
 }
 
@@ -76,18 +76,18 @@ impl fmt::Display for Site {
 
 #[derive(Subcommand, Debug)]
 enum Mode {
-    /// 仅检查文件的 md5
+    /// Check the md5 of files only
     Md5,
-    /// 解析 genomic 文件，并且生成 library fna 文件
-    /// 同时将单个fna文件拼接成group为组的总的fna格式文件, 以便于构建database
+    /// Parse genomic files and generate a library fna file
+    /// Also concatenate individual fna files into a group for building a database
     Fna {
-        /// library fna 文件存储目录，为了不和原始文件混淆
+        /// Directory to store the library fna file to avoid mixing with original files
         #[clap(value_parser)]
         out_dir: Option<PathBuf>,
     },
-    /// 仅下载和解析 assembly 文件
+    /// Download and parse assembly files only
     Assembly,
-    /// 单独下载 genomic 文件，指定 url 地址
+    /// Download genomic files separately by specifying a URL
     Url {
         #[clap(value_parser)]
         url: String,
@@ -98,15 +98,15 @@ enum Mode {
 #[clap(
     version,
     about = "ncbi download resource",
-    long_about = "从 ncbi 网站上下载 genomes 资源"
+    long_about = "Download genomes resources from the NCBI website"
 )]
 struct Args {
-    /// 构建数据库的目录
-    #[arg(short, long = "db", default_value = "lib")]
-    database: PathBuf,
+    /// Directory to store downloaded files
+    #[arg(short, long, default_value = "lib")]
+    download_dir: PathBuf,
 
-    /// 下载时的并行大小
-    #[arg(short, long, default_value = "8")]
+    /// Number of threads to use for downloading
+    #[arg(short, long, default_value_t = num_cpus::get() * 2)]
     num_threads: usize,
 
     #[command(subcommand)]
@@ -115,14 +115,14 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// 从 NCBI 下载 taxonomy 文件 (alias: tax)
+    /// Download taxonomy files from NCBI (alias: tax)
     #[command(alias = "tax")]
     Taxonomy,
 
-    /// 从 NCBI 下载 genomes 数据 (alias: gen)
+    /// Download genomes data from NCBI (alias: gen)
     #[command(alias = "gen")]
     Genomes {
-        /// 从 NCBI 哪个站点目录下载（RefSeq或GenBank）
+        /// Site directory to download from NCBI (RefSeq or GenBank)
         #[arg(long, value_enum, default_value_t = Site::Refseq)]
         site: Site,
 
@@ -131,18 +131,19 @@ enum Commands {
         #[arg(long, default_value = "basic")]
         asm_level: String,
 
-        /// 从 NCBI 站点上下载某个种类的数据信息，可以是逗号分隔的多个, archaea,bacteria,viral,fungi,plant,human,protozoa,vertebrate_mammalian,vertebrate_other,invertebrate
+        /// Type of data to download from NCBI site, can be multiple comma-separated values
+        /// e.g., archaea, bacteria, viral, fungi, plant, human, protozoa, vertebrate_mammalian, vertebrate_other, invertebrate
         #[arg(short, long, value_parser = validate_group)]
         group: String,
 
-        /// 子命令，使用 md5 校验和生成 fna 文件
+        /// Subcommand to generate fna files using md5 checksum
         #[command(subcommand)]
         mode: Option<Mode>,
     },
 }
 
 async fn async_run(args: Args) -> Result<()> {
-    let db_path = utils::create_data_dir(&args.database).unwrap();
+    let db_path = utils::create_data_dir(&args.download_dir).unwrap();
     init_meta(&db_path).await;
 
     match args.command {
@@ -245,12 +246,12 @@ async fn async_run(args: Args) -> Result<()> {
                     },
                     Some(Mode::Url { url }) => {
                         if site == Site::All {
-                            log::error!("必须指定合适的site");
+                            log::error!("Must specify a suitable site");
                         } else {
                             let result =
                                 task::run_download_file(&site.to_string(), &data_dir, &url).await;
                             if result.is_err() {
-                                log::error!("下载文件失败... {:?}", result);
+                                log::error!("download error... {:?}", result);
                             }
                         }
                     }

@@ -15,6 +15,7 @@ use tar::Archive;
 pub async fn decompress_and_extract_tar_gz(
     gz_path: &PathBuf,
     out_path: &PathBuf,
+    files_to_extract: Vec<String>,
 ) -> std::io::Result<()> {
     // Open the .tar.gz file
     let file = File::open(gz_path).await?;
@@ -32,7 +33,26 @@ pub async fn decompress_and_extract_tar_gz(
 
     // Use the tar crate to decompress the TAR archive
     let mut archive = Archive::new(&decompressed_data[..]);
-    archive.unpack(out_path)?;
+    // archive.unpack(out_path)?;
+
+    // 遍历 TAR 归档中的每个条目
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?.to_string_lossy().to_string();
+
+        // 检查是否为需要提取的文件
+        if files_to_extract.contains(&path) {
+            let out_file_path = out_path.join(&path);
+
+            // 创建输出文件夹
+            if let Some(parent) = out_file_path.parent() {
+                tokio::fs::create_dir_all(parent).await?;
+            }
+
+            // 解压缩并写入文件
+            entry.unpack(out_file_path)?;
+        }
+    }
 
     Ok(())
 }
