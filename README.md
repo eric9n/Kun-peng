@@ -162,7 +162,11 @@ The classification process is divided into three modes:
 
 1. Direct Processing Mode:
 
-* Description: In this mode, all database files are loaded simultaneously, which requires a significant amount of memory. Before running this mode, you need to check the total size of hash_*.k2d files in the database directory using the provided script (bash cal_memory.sh out_dir). Ensure that your available memory meets or exceeds this size.
+* Description: In this mode, all database files are loaded simultaneously, which requires a significant amount of memory. Before running this mode, you need to check the total size of hash_*.k2d files in the database directory using the provided script. Ensure that your available memory meets or exceeds this size.
+```sh
+bash cal_memory.sh $database_dir
+```
+
 * Characteristics:
     * High memory requirements
     * Fast performance
