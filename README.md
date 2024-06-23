@@ -2,9 +2,8 @@ This workspace contains two projects: `kr2r` and `ncbi`. The `kr2r` project incl
 
 ## Prerequisites
 
-Before running this project, ensure you have the following software installed:
+1. **Rust**: This project requires the Rust programming environment if you plan to build from source. If you are downloading the pre-built binaries, you do not need to install Rust.
 
-1. **Rust**: This project requires the Rust programming environment.
 
 ## Get Started
 Follow these steps to build the projects and run the example.
