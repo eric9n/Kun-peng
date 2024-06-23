@@ -236,7 +236,7 @@ Options:
   -p, --num-threads <NUM_THREADS>
           The number of threads to use [default: 10]
       --batch-size <BATCH_SIZE>
-          批量处理大小 default: 16MB [default: 16777216]
+          [default: 16777216]
   -T, --confidence-threshold <CONFIDENCE_THRESHOLD>
           Confidence score threshold [default: 0]
   -g, --minimum-hit-groups <MINIMUM_HIT_GROUPS>

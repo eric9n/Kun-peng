@@ -94,7 +94,6 @@ pub struct Args {
     )]
     pub minimum_hit_groups: usize,
 
-    /// 批量处理大小 default: 8MB
     #[clap(long, default_value_t = BATCH_SIZE)]
     pub batch_size: usize,
 

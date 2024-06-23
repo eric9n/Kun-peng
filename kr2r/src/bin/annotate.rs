@@ -36,7 +36,6 @@ pub struct Args {
     #[clap(long)]
     pub chunk_dir: PathBuf,
 
-    /// 批量处理大小 default: 8MB
     #[clap(long, default_value_t = BATCH_SIZE)]
     pub batch_size: usize,
 }

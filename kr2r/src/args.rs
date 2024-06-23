@@ -84,7 +84,6 @@ pub struct ClassifyArgs {
     #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
     pub num_threads: usize,
 
-    /// 批量处理大小 default: 16MB
     #[clap(long, default_value_t = BATCH_SIZE)]
     pub batch_size: usize,
 
