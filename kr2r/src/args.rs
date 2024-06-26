@@ -51,7 +51,7 @@ const BATCH_SIZE: usize = 16 * 1024 * 1024;
     long_about = "classify a set of sequences"
 )]
 pub struct ClassifyArgs {
-    // /// database hash chunk directory and other files
+    /// database hash chunk directory and other files
     #[arg(long = "db", required = true)]
     pub database: PathBuf,
 
@@ -122,6 +122,7 @@ pub struct ClassifyArgs {
     pub full_output: bool,
 
     /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
+    /// Supports fasta or fastq format files (e.g., .fasta, .fastq) and gzip compressed files (e.g., .fasta.gz, .fastq.gz).
     // #[clap(short = 'F', long = "files")]
     pub input_files: Vec<String>,
 }

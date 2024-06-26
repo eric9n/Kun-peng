@@ -45,7 +45,7 @@ cd kraken2-rust
 kun_peng build --download-dir data/ --db test_database
 ```
 
-```         
+```
 merge fna start...
 merge fna took: 29.998258ms
 estimate start...
@@ -62,10 +62,10 @@ build k2 db took: 30.847894ms
 mkdir temp_chunk
 # test_out is used to store output files
 mkdir test_out
-kun_peng classify --db test_database data/COVID_19.fa --chunk-dir temp_chunk --output-dir test_out
+kun_peng classify --db test_database --chunk-dir temp_chunk --output-dir test_out data/COVID_19.fa
 ```
 
-```         
+```
 hash_config HashConfig { value_mask: 31, value_bits: 5, capacity: 31818, size: 13051, hash_capacity: 1073741824 }
 splitr start...
 splitr took: 18.212452ms
@@ -125,7 +125,7 @@ kun_peng direct error: [any direct errors here]
 
 This output confirms that the `kun_peng` commands were executed successfully and the files were processed as expected.
 
-#### Run the `ncbi` Example 
+#### Run the `ncbi` Example
 
 Run the example script in the ncbi project to download the necessary files. Execute the following command from the root of the workspace:
 
@@ -261,7 +261,7 @@ Directly load all hash tables for classification annotation
 Usage: kun_peng direct [OPTIONS] --db <DATABASE> [INPUT_FILES]...
 
 Arguments:
-  [INPUT_FILES]...  A list of input file paths (FASTA/FASTQ) to be processed by the classify program
+  [INPUT_FILES]...  A list of input file paths (FASTA/FASTQ) to be processed by the classify program. Supports fasta or fastq format files (e.g., .fasta, .fastq) and gzip compressed files (e.g., .fasta.gz, .fastq.gz)
 
 Options:
       --db <DATABASE>
@@ -306,7 +306,7 @@ Integrates 'splitr', 'annotate', and 'resolve' into a unified workflow for seque
 Usage: kun_peng classify [OPTIONS] --db <DATABASE> --chunk-dir <CHUNK_DIR> [INPUT_FILES]...
 
 Arguments:
-  [INPUT_FILES]...  A list of input file paths (FASTA/FASTQ) to be processed by the classify program
+  [INPUT_FILES]...  A list of input file paths (FASTA/FASTQ) to be processed by the classify program. Supports fasta or fastq format files (e.g., .fasta, .fastq) and gzip compressed files (e.g., .fasta.gz, .fastq.gz)
 
 Options:
       --db <DATABASE>
@@ -371,7 +371,7 @@ Standard Kraken Output Format:
 
 -   test_out/output_1.kreport2：
 
-```         
+```
 100.00  1   0   R   1   root
 100.00  1   0   D   10239     Viruses
 100.00  1   0   D1  2559587     Riboviria
