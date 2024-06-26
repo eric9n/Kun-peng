@@ -191,7 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let splitr_args = splitr::Args::from(cmd_args.clone());
             let chunk_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".k2")?;
             let sample_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".map")?;
-            let bin_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".map")?;
+            let bin_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".bin")?;
             if !chunk_files.is_empty() || !sample_files.is_empty() || !bin_files.is_empty() {
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,
