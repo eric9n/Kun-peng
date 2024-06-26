@@ -65,6 +65,10 @@ pub struct Args {
     #[clap(long, value_parser, required = true)]
     pub chunk_dir: PathBuf,
 
+    /// File path for outputting normal Kraken output.
+    #[clap(long = "output-dir", value_parser)]
+    pub kraken_output_dir: Option<PathBuf>,
+
     /// output file contains all unclassified sequence
     #[clap(long, value_parser, default_value_t = false)]
     pub full_output: bool,
@@ -96,10 +100,6 @@ pub struct Args {
 
     #[clap(long, default_value_t = BATCH_SIZE)]
     pub batch_size: usize,
-
-    /// File path for outputting normal Kraken output.
-    #[clap(long = "output-dir", value_parser)]
-    pub kraken_output_dir: Option<PathBuf>,
 }
 
 fn process_batch<P: AsRef<Path>>(
@@ -234,7 +234,7 @@ pub fn run(args: Args) -> Result<()> {
                 let file = File::create(filename)?;
                 Box::new(BufWriter::new(file)) as Box<dyn Write + Send>
             }
-            None => Box::new(io::stdout()) as Box<dyn Write + Send>,
+            None => Box::new(BufWriter::new(io::stdout())) as Box<dyn Write + Send>,
         };
         let writer = Mutex::new(writer);
         let (thread_taxon_counts, thread_classified, hit_seq_set) = process_batch::<&PathBuf>(

@@ -169,7 +169,7 @@ where
             let file = File::create(filename)?;
             Box::new(BufWriter::new(file)) as Box<dyn Write + Send>
         }
-        None => Box::new(io::stdout()) as Box<dyn Write + Send>,
+        None => Box::new(BufWriter::new(io::stdout())) as Box<dyn Write + Send>,
     };
 
     let cur_taxon_counts = TaxonCountersDash::new();
@@ -254,9 +254,15 @@ fn process_files(
         let file_path = out_dir.join("sample_file.map");
         let file_writer = create_sample_file(&file_path);
         let file_index = get_lastest_file_index(&file_path)?;
-        (file_index, Box::new(file_writer) as Box<dyn Write + Send>)
+        (
+            file_index,
+            Box::new(BufWriter::new(file_writer)) as Box<dyn Write + Send>,
+        )
     } else {
-        (0, Box::new(io::stdout()) as Box<dyn Write + Send>)
+        (
+            0,
+            Box::new(BufWriter::new(io::stdout())) as Box<dyn Write + Send>,
+        )
     };
 
     let mut process_funcs = |files: Vec<&[String]>| -> Result<()> {
