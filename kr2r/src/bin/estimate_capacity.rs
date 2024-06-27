@@ -8,7 +8,7 @@ use seqkmer::{read_parallel, FastaReader};
 use serde_json;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{Read, Result, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug, Clone)]
@@ -83,7 +83,8 @@ fn process_sequence<P: AsRef<Path>>(
     let mut hllp: HyperLogLogPlus<u64, _> =
         HyperLogLogPlus::new(16, KBuildHasher::default()).unwrap();
 
-    let mut reader = FastaReader::from_path(fna_file, 1).unwrap();
+    let mut reader = FastaReader::from_path(fna_file, 1)
+        .expect("Failed to open the FASTA file with FastaReader");
     let range_n = args.n as u64;
     read_parallel(
         &mut reader,
