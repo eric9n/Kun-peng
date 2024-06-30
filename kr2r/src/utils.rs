@@ -156,7 +156,7 @@ pub fn format_bytes(size: f64) -> String {
 extern crate libc;
 
 #[cfg(unix)]
-use libc::{getrlimit, rlimit, RLIMIT_NOFILE};
+use libc::{getrlimit, rlimit, setrlimit, RLIMIT_NOFILE};
 
 #[cfg(unix)]
 pub fn get_file_limit() -> usize {
@@ -178,9 +178,28 @@ pub fn get_file_limit() -> usize {
     }
 }
 
+#[cfg(unix)]
+pub fn set_fd_limit(new_limit: u64) -> io::Result<()> {
+    let rlim = rlimit {
+        rlim_cur: new_limit,
+        rlim_max: new_limit,
+    };
+
+    let ret = unsafe { setrlimit(RLIMIT_NOFILE, &rlim) };
+    if ret != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
 #[cfg(windows)]
 pub fn get_file_limit() -> usize {
     8192
+}
+
+#[cfg(windows)]
+pub fn set_fd_limit(new_limit: u64) -> io::Result<()> {
+    Ok(())
 }
 
 pub fn create_partition_files(partition: usize, base_path: &PathBuf, prefix: &str) -> Vec<PathBuf> {

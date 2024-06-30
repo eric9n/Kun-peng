@@ -2,7 +2,7 @@ use clap::Parser;
 use kr2r::compact_hash::{HashConfig, Slot};
 use kr2r::utils::{
     create_partition_files, create_partition_writers, create_sample_file, get_file_limit,
-    get_lastest_file_index,
+    get_lastest_file_index, set_fd_limit,
 };
 use kr2r::IndexOptions;
 use seqkmer::{read_parallel, FastxReader, Meros, MinimizerIterator, OptionPair, Reader};
@@ -11,6 +11,7 @@ use std::io::{BufWriter, Write};
 use std::io::{Error, ErrorKind, Result};
 use std::path::PathBuf;
 use std::time::Instant;
+
 /// Command line arguments for the splitr program.
 ///
 /// This structure defines the command line arguments that are accepted by the splitr program.
@@ -271,7 +272,9 @@ pub fn run(args: Args) -> Result<()> {
     println!("splitr start...");
     let file_num_limit = get_file_limit();
     if hash_config.partition >= file_num_limit {
-        panic!("Exceeds File Number Limit");
+        set_fd_limit(hash_config.partition as u64 + 1)
+            .expect("Failed to set file descriptor limit");
+        // panic!("Exceeds File Number Limit");
     }
 
     let meros = idx_opts.as_meros();

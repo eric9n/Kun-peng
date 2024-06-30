@@ -8,7 +8,7 @@ use kr2r::db::{
 };
 use kr2r::utils::{
     create_partition_files, create_partition_writers, find_library_fna_files, get_file_limit,
-    read_id_to_taxon_map,
+    read_id_to_taxon_map, set_fd_limit,
 };
 use kr2r::IndexOptions;
 use std::fs::remove_file;
@@ -66,7 +66,8 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     let chunk_size = args.hash_capacity as usize;
 
     if partition >= file_num_limit {
-        panic!("Exceeds File Number Limit");
+        set_fd_limit(partition as u64 + 1).expect("Failed to set file descriptor limit");
+        // panic!("Exceeds File Number Limit");
     }
 
     let chunk_files = create_partition_files(partition, &k2d_dir, "chunk");
