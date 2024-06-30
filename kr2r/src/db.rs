@@ -188,58 +188,6 @@ pub fn get_bits_for_taxid(
     Ok(bits_needed_for_value.max(requested_bits_for_taxid))
 }
 
-// /// 将fna文件转换成k2格式的临时文件
-// pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
-//     fna_file: P,
-//     meros: Meros,
-//     taxonomy: &Taxonomy,
-//     id_to_taxon_map: &HashMap<String, u64>,
-//     hash_config: HashConfig,
-//     writers: &mut Vec<BufWriter<File>>,
-//     chunk_size: usize,
-//     threads: u32,
-// ) {
-//     let reader = Reader::from_path(fna_file).unwrap();
-//     let queue_len = (threads - 2) as usize;
-//     let value_bits = hash_config.value_bits;
-//     let cell_size = std::mem::size_of::<Slot<u32>>();
-
-//     read_parallel(
-//         reader,
-//         threads,
-//         queue_len,
-//         |record_set| {
-//             let mut k2_cell_list = Vec::new();
-
-//             for record in record_set.into_iter() {
-//                 if let Ok(seq_id) = record.id() {
-//                     if let Some(ext_taxid) = id_to_taxon_map.get(seq_id) {
-//                         let taxid = taxonomy.get_internal_id(*ext_taxid);
-//                         for hash_key in MinimizerScanner::new(record.seq(), meros).into_iter() {
-//                             let index: usize = hash_config.index(hash_key);
-//                             let idx = index % chunk_size;
-//                             let partition_index = index / chunk_size;
-//                             let cell = Slot::new(idx, u32::hash_value(hash_key, value_bits, taxid));
-//                             k2_cell_list.push((partition_index, cell));
-//                         }
-//                     };
-//                 }
-//             }
-//             k2_cell_list
-//         },
-//         |record_sets| {
-//             while let Some(Ok((_, k2_cell_map))) = record_sets.next() {
-//                 for cell in k2_cell_map {
-//                     let partition_index = cell.0;
-//                     if let Some(writer) = writers.get_mut(partition_index) {
-//                         writer.write_all(&cell.1.as_slice(cell_size)).unwrap();
-//                     }
-//                 }
-//             }
-//         },
-//     );
-// }
-
 /// 将fna文件转换成k2格式的临时文件
 pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
     fna_file: P,
@@ -281,22 +229,6 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
                         k2_cell_list.extend_from_slice(&k2_cell);
                     }
                 });
-
-                // if let Some(ext_taxid) = id_to_taxon_map.get(&record.id) {
-                //     let taxid = taxonomy.get_internal_id(*ext_taxid);
-                //     record
-                //         .marker
-                //         .fold(&mut k2_cell_list, |k2_cell_list, marker| {
-                //             for &hash_key in marker.minimizer.iter() {
-                //                 let index: usize = hash_config.index(hash_key);
-                //                 let idx = index % chunk_size;
-                //                 let partition_index = index / chunk_size;
-                //                 let cell =
-                //                     Slot::new(idx, u32::hash_value(hash_key, value_bits, taxid));
-                //                 k2_cell_list.push((partition_index, cell));
-                //             }
-                //         });
-                // }
             }
             Some(k2_cell_list)
         },

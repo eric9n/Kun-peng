@@ -38,11 +38,8 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     let meros = args.build.klmt.as_meros();
 
     let id_to_taxon_map_filename = args.build.database.join("seqid2taxid.map");
-
     let id_to_taxon_map = read_id_to_taxon_map(&id_to_taxon_map_filename)?;
-
     let k2d_dir = &args.build.database;
-
     let taxonomy_filename = k2d_dir.join("taxo.k2d");
 
     let ncbi_taxonomy_directory = &args.build.database.join("taxonomy");
@@ -77,7 +74,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
 
     let fna_files = find_library_fna_files(&args.build.database);
 
-    for fna_file in &fna_files {
+    for fna_file in fna_files {
         println!("convert fna file {:?}", fna_file);
         convert_fna_to_k2_format(
             fna_file,
@@ -95,6 +92,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     let partition = chunk_files.len();
     let mut size: u64 = 0;
 
+    println!("start process k2 files...");
     for i in 1..=partition {
         // 计算持续时间
         let count = process_k2file(
