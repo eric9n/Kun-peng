@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use lazy_static::lazy_static;
 use ncbi::fna::write_to_fna;
 use ncbi::meta::{init_meta, save_meta};
+use ncbi::plas::download_plas_files;
 use ncbi::task;
 use ncbi::utils;
 use std::collections::HashMap;
@@ -21,6 +22,7 @@ const NCBI_LIBRARY: &'static [&str] = &[
     "vertebrate_mammalian",
     "vertebrate_other",
     "invertebrate",
+    "plasmid",
 ];
 
 lazy_static! {
@@ -74,6 +76,25 @@ impl fmt::Display for Site {
     }
 }
 
+#[derive(Subcommand, Debug, ValueEnum, Clone)]
+enum Plas {
+    Plasmid,
+    Plastid,
+}
+
+impl fmt::Display for Plas {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Plas::Plasmid => "plasmid",
+                Plas::Plastid => "plastid",
+            }
+        )
+    }
+}
+
 #[derive(Subcommand, Debug)]
 enum Mode {
     /// Check the md5 of files only
@@ -115,6 +136,11 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// plasmid or plastid
+    Plas {
+        #[command(subcommand)]
+        mode: Plas,
+    },
     /// Download taxonomy files from NCBI (alias: tax)
     #[command(alias = "tax")]
     Taxonomy,
@@ -132,7 +158,7 @@ enum Commands {
         asm_level: String,
 
         /// Type of data to download from NCBI site, can be multiple comma-separated values
-        /// e.g., archaea, bacteria, viral, fungi, plant, human, protozoa, vertebrate_mammalian, vertebrate_other, invertebrate
+        /// e.g., archaea, bacteria, viral, fungi, plant, human, protozoa, vertebrate_mammalian, vertebrate_other, invertebrate, plasmid
         #[arg(short, long, value_parser = validate_group)]
         group: String,
 
@@ -147,6 +173,14 @@ async fn async_run(args: Args) -> Result<()> {
     init_meta(&db_path).await;
 
     match args.command {
+        Commands::Plas { mode } => {
+            let data_dir: PathBuf = db_path
+                .join("library")
+                .join(mode.to_string())
+                .join("refseq");
+            utils::create_dir(&data_dir)?;
+            download_plas_files(data_dir, &mode.to_string()).await?
+        }
         Commands::Taxonomy => {
             let data_dir: PathBuf = db_path.join("taxonomy");
             utils::create_dir(&data_dir)?;
