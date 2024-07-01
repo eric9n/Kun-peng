@@ -8,7 +8,7 @@ use seqkmer::{read_parallel, FastaReader};
 use serde_json;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{Read, Result, Write};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug, Clone)]
