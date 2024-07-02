@@ -101,12 +101,13 @@ jobs:
         run: |
           docker run --name centos7-container -v $GITHUB_WORKSPACE:/github/workspace -w /github/workspace centos:7 \
           /bin/bash -c "echo '[base]' > /etc/yum.repos.d/CentOS-Base.repo; \
-echo 'name=CentOS-7 - Base' >> /etc/yum.repos.d/CentOS-Base.repo; \
-echo 'baseurl=http://mirror.centos.org/centos/7/os/x86_64/' >> /etc/yum.repos.d/CentOS-Base.repo; \
-echo 'gpgcheck=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
-echo 'enabled=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
-echo 'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7' >> /etc/yum.repos.d/CentOS-Base.repo; \
-yum update -y && yum install -y gcc make openssl openssl-devel && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && export PATH=\$HOME/.cargo/bin:\$PATH && cd /github/workspace && cargo build --release"
+          echo 'name=CentOS-7 - Base' >> /etc/yum.repos.d/CentOS-Base.repo; \
+          echo 'baseurl=http://mirror.centos.org/centos/7/os/x86_64/' >> /etc/yum.repos.d/CentOS-Base.repo; \
+          echo 'gpgcheck=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
+          echo 'enabled=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
+          echo 'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7' >> /etc/yum.repos.d/CentOS-Base.repo; \
+          yum update -y && yum install -y gcc make openssl openssl-devel && \
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && export PATH=\$HOME/.cargo/bin:\$PATH && cd /github/workspace && cargo build --release"
 
           mkdir -p ./target/release/packaged_centos7
           for binary in $BINARIES_LIST; do
