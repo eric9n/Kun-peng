@@ -102,7 +102,7 @@ jobs:
           docker run --name centos7-container -v $GITHUB_WORKSPACE:/github/workspace -w /github/workspace centos:7 \
           /bin/bash -c "echo '[base]' > /etc/yum.repos.d/CentOS-Base.repo; \
           echo 'name=CentOS-7 - Base' >> /etc/yum.repos.d/CentOS-Base.repo; \
-          echo 'baseurl=http://mirror.centos.org/centos/7/os/x86_64/' >> /etc/yum.repos.d/CentOS-Base.repo; \
+          echo 'baseurl=http://vault.centos.org/centos/7/os/x86_64/' >> /etc/yum.repos.d/CentOS-Base.repo; \
           echo 'gpgcheck=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
           echo 'enabled=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
           echo 'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7' >> /etc/yum.repos.d/CentOS-Base.repo; \
