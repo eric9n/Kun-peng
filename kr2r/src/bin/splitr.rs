@@ -193,59 +193,44 @@ where
     Ok(())
 }
 
-fn convert(args: Args, meros: Meros, hash_config: HashConfig) -> Result<()> {
-    let partition = hash_config.partition;
-    let mut writers: Vec<BufWriter<fs::File>> =
-        init_chunk_writers(&args, partition, hash_config.hash_capacity);
-
+/// 处理样本文件
+fn process_files<F>(args: &Args, hash_config: HashConfig, mut action: F) -> Result<()>
+where
+    F: FnMut(usize, OptionPair<String>) -> Result<()>,
+{
     let file_path = args.chunk_dir.join("sample_file.map");
     let mut file_writer = create_sample_file(&file_path);
-    // 如果文件内容为空，则默认最大值为0
     let mut file_index = get_lastest_file_index(&file_path)?;
 
-    let mut process_files = |files: Vec<&[String]>| -> Result<()> {
-        let file_bits = (((files.len() + file_index) as f64).log2().ceil() as usize).max(1);
-        if file_bits > hash_config.value_bits {
-            panic!("The number of files is too large to process.");
-        }
-
-        for file_pair in files {
-            file_index += 1;
-
-            writeln!(file_writer, "{}\t{}", file_index, file_pair.join(","))?;
-            file_writer.flush().unwrap();
-
-            create_sample_file(
-                args.chunk_dir
-                    .join(format!("sample_file_{}.bin", file_index)),
-            );
-            let mut sample_writer =
-                create_sample_file(args.chunk_dir.join(format!("sample_id_{}.map", file_index)));
-
-            let score = args.minimum_quality_score;
-            let paths = OptionPair::from_slice(file_pair);
-            let mut reader = FastxReader::from_paths(paths, file_index, score)?;
-            process_fastx_file(
-                &args,
-                meros,
-                hash_config,
-                file_index,
-                &mut reader,
-                &mut writers,
-                &mut sample_writer,
-            )
-            .expect("process fastx file error");
-        }
-        Ok(())
-    };
-
-    if args.paired_end_processing && !args.single_file_pairs {
-        // 处理成对的文件
-        let files = args.input_files.chunks(2).collect();
-        process_files(files)?;
+    let chunk_size = if args.paired_end_processing && !args.single_file_pairs {
+        2
     } else {
-        let files = args.input_files.chunks(1).collect();
-        process_files(files)?;
+        1
+    };
+    let files = args.input_files.chunks(chunk_size).collect::<Vec<_>>();
+
+    let file_bits = (((files.len() + file_index) as f64).log2().ceil() as usize).max(1);
+    if file_bits > hash_config.value_bits {
+        panic!("The number of files is too large to process.");
+    }
+
+    for file_pair in files {
+        file_index += 1;
+        let path_pair = OptionPair::from_slice(file_pair);
+        writeln!(
+            file_writer,
+            "{}\t{}",
+            file_index,
+            path_pair.reduce_str(",", |a| a.to_string())
+        )?;
+        file_writer.flush().unwrap();
+
+        create_sample_file(
+            args.chunk_dir
+                .join(format!("sample_file_{}.bin", file_index)),
+        );
+
+        action(file_index, path_pair)?;
     }
 
     Ok(())
@@ -279,7 +264,28 @@ pub fn run(args: Args) -> Result<()> {
 
     let meros = idx_opts.as_meros();
     let start = Instant::now();
-    convert(args, meros, hash_config)?;
+    let partition = hash_config.partition;
+    let mut writers: Vec<BufWriter<fs::File>> =
+        init_chunk_writers(&args, partition, hash_config.hash_capacity);
+
+    process_files(&args, hash_config, |file_index, path_pair| {
+        let mut sample_writer =
+            create_sample_file(args.chunk_dir.join(format!("sample_id_{}.map", file_index)));
+
+        let score = args.minimum_quality_score;
+        let mut reader = FastxReader::from_paths(path_pair, file_index, score)?;
+        process_fastx_file(
+            &args,
+            meros,
+            hash_config,
+            file_index,
+            &mut reader,
+            &mut writers,
+            &mut sample_writer,
+        )
+        .expect("process fastx file error");
+        Ok(())
+    })?;
     let duration = start.elapsed();
     println!("splitr took: {:?}", duration);
 

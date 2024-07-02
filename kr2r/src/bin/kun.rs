@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 mod annotate;
 mod build_k2_db;
-mod classify;
+mod direct;
 mod estimate_capacity;
 mod hashshard;
 mod merge_fna;
@@ -119,15 +119,6 @@ impl From<BuildArgs> for build_k2_db::Args {
     }
 }
 
-// impl From<BuildArgs> for seqid2taxid::Args {
-//     fn from(item: BuildArgs) -> Self {
-//         Self {
-//             database: item.build.database,
-//             id_to_taxon_map_filename: item.taxo.id_to_taxon_map_filename,
-//         }
-//     }
-// }
-
 impl From<BuildArgs> for merge_fna::Args {
     fn from(item: BuildArgs) -> Self {
         Self {
@@ -147,7 +138,7 @@ enum Commands {
     Annotate(annotate::Args),
     Resolve(resolve::Args),
     Classify(ClassifyArgs),
-    Direct(classify::Args),
+    Direct(direct::Args),
     MergeFna(merge_fna::Args),
 }
 
@@ -211,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Classify took: {:?}", duration);
         }
         Commands::Direct(cmd_args) => {
-            classify::run(cmd_args)?;
+            direct::run(cmd_args)?;
         }
     }
 

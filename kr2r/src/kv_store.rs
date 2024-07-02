@@ -2,11 +2,6 @@ use seahash::SeaHasher;
 use serde::{Deserialize, Serialize};
 use std::hash::{BuildHasher, Hasher};
 
-// 定义 KeyValueStore trait
-trait KeyValueStore {
-    fn get(&self, key: u64) -> u32;
-}
-
 // 声明常量
 const M1: u64 = 0xff51afd7ed558ccd;
 const M2: u64 = 0xc4ceb9fe1a85ec53;

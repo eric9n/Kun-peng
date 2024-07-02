@@ -139,6 +139,7 @@ fn merge_fna(assembly_files: &Vec<PathBuf>, database: &PathBuf) -> Result<()> {
     );
 
     let fna_start: regex::Regex = regex::Regex::new(r"^>(\S+)").unwrap();
+    let mut is_empty = true;
     for assembly_file in assembly_files {
         if let Some(caps) = file_site.captures(assembly_file.to_string_lossy().as_ref()) {
             if let Some(matched) = caps.get(1) {
@@ -151,6 +152,7 @@ fn merge_fna(assembly_files: &Vec<PathBuf>, database: &PathBuf) -> Result<()> {
                         continue;
                     }
 
+                    is_empty = false;
                     process_gz_file(
                         &gz_file,
                         &mut map_writer,
@@ -166,6 +168,9 @@ fn merge_fna(assembly_files: &Vec<PathBuf>, database: &PathBuf) -> Result<()> {
         }
     }
 
+    if is_empty {
+        panic!("genimics fna files is empty! please check download dir");
+    }
     Ok(())
 }
 

@@ -127,11 +127,6 @@ where
         Self { idx, value }
     }
 
-    pub fn update_right(&mut self, right: B, value_bits: usize) {
-        let left = self.value.left(value_bits);
-        self.value = B::combined(left, right, value_bits);
-    }
-
     #[inline]
     pub fn as_slice(&self, slot_size: usize) -> &[u8] {
         let slot_ptr = self as *const Self as *const u8;
@@ -412,25 +407,6 @@ pub struct CHTable {
 }
 
 impl CHTable {
-    pub fn from_pair<P: AsRef<Path> + Debug>(
-        config: HashConfig,
-        chunk_file1: P,
-        chunk_file2: P,
-    ) -> Result<CHTable> {
-        let mut page = read_page_from_file(chunk_file1)?;
-        let next_page = if page.data.last().map_or(false, |&x| x == 0) {
-            read_first_block_from_file(chunk_file2)?
-        } else {
-            Page::default()
-        };
-        page.merge(next_page);
-        let count = page.index;
-        let mut pages = vec![Page::default(); count - 1];
-        pages.push(page);
-        let chtm: CHTable = CHTable { config, pages };
-        Ok(chtm)
-    }
-
     pub fn from_hash_files<P: AsRef<Path> + Debug>(
         config: HashConfig,
         hash_files: Vec<P>,
@@ -450,6 +426,25 @@ impl CHTable {
         }
 
         let chtm = CHTable { config, pages };
+        Ok(chtm)
+    }
+
+    pub fn from_pair<P: AsRef<Path> + Debug>(
+        config: HashConfig,
+        chunk_file1: P,
+        chunk_file2: P,
+    ) -> Result<CHTable> {
+        let mut page = read_page_from_file(chunk_file1)?;
+        let next_page = if page.data.last().map_or(false, |&x| x == 0) {
+            read_first_block_from_file(chunk_file2)?
+        } else {
+            Page::default()
+        };
+        page.merge(next_page);
+        let count = page.index;
+        let mut pages = vec![Page::default(); count - 1];
+        pages.push(page);
+        let chtm: CHTable = CHTable { config, pages };
         Ok(chtm)
     }
 

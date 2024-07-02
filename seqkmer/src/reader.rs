@@ -1,6 +1,7 @@
 use crate::seq::{Base, SeqFormat};
 use crate::utils::OptionPair;
 use flate2::read::GzDecoder;
+use std::fmt;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Result, Seek};
 use std::path::Path;
@@ -114,8 +115,7 @@ impl fmt::Display for PosData {
     }
 }
 
-use std::fmt;
-
+/// 序列的命中分布
 #[derive(Debug)]
 pub struct SpaceDist {
     pub value: Vec<PosData>,

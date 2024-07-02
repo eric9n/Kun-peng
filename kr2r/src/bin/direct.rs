@@ -26,9 +26,6 @@ pub struct Args {
     #[arg(long = "db", required = true)]
     pub database: PathBuf,
 
-    // /// The file path for the Kraken 2 options.
-    // #[clap(short = 'o', long = "options-filename", value_parser, required = true)]
-    // options_filename: String,
     /// Enable paired-end processing.
     #[clap(short = 'P', long = "paired-end-processing", action)]
     pub paired_end_processing: bool,

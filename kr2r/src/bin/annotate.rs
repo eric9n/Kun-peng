@@ -124,7 +124,7 @@ where
         };
 
         let result: HashMap<u64, Vec<u8>> = slots
-            .into_par_iter()
+            .par_iter()
             .filter_map(|slot| {
                 let indx = slot.idx & idx_mask;
                 let compacted = slot.value.left(value_bits) as u32;

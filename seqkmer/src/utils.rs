@@ -27,18 +27,6 @@ impl<T> OptionPair<T> {
         }
     }
 
-    // pub fn concat<U, V, F>(&self, init: &mut U, mut f: F) -> V
-    // where
-    //     F: FnMut(&mut U, &T) -> V,
-    // {
-    //     match self {
-    //         OptionPair::Single(t) => f(init, t),
-    //         OptionPair::Pair(t1, t2) => {
-    //             f(init, t1);
-    //             f(init, t2)
-    //         }
-    //     }
-    // }
     pub fn reduce<U, F>(&self, init: U, mut f: F) -> U
     where
         F: FnMut(U, &T) -> U,

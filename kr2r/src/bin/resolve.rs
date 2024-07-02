@@ -131,7 +131,7 @@ fn process_batch<P: AsRef<Path>>(
             std::slice::from_raw_parts(batch_buffer.as_ptr() as *const Row, slots_in_batch)
         };
 
-        slots.into_par_iter().for_each(|item| {
+        slots.par_iter().for_each(|item| {
             let seq_id = item.seq_id;
             hit_seq_id_set.insert(seq_id);
             hit_counts
@@ -160,13 +160,6 @@ fn process_batch<P: AsRef<Path>>(
                 minimum_hit_groups,
                 value_mask,
             );
-            // let (counts, cur_counts, hit_groups) = count_values(&rows, value_mask, item.2);
-            // let hit_string = add_hitlist_string(&rows, value_mask, item.2, item.3, taxonomy);
-            // let require_score = (confidence_threshold * total_kmers as f64).ceil() as u64;
-            // let mut call = resolve_tree(&counts, taxonomy, require_score);
-            // if call > 0 && hit_groups < minimum_hit_groups {
-            //     call = 0;
-            // };
 
             hit_data.3.iter().for_each(|(key, value)| {
                 cur_taxon_counts
@@ -176,18 +169,6 @@ fn process_batch<P: AsRef<Path>>(
                     .unwrap();
             });
 
-            // let ext_call = taxonomy.nodes[call as usize].external_id;
-            // let clasify = if call > 0 {
-            //     classify_counter.fetch_add(1, Ordering::SeqCst);
-            //     cur_taxon_counts
-            //         .entry(call as u64)
-            //         .or_default()
-            //         .increment_read_count();
-
-            //     "C"
-            // } else {
-            //     "U"
-            // };
             // 使用锁来同步写入
             let output_line = format!(
                 "{}\t{}\t{}\t{}\t{}\n",
