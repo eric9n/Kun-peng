@@ -1,15 +1,13 @@
 use clap::Parser;
 use kr2r::compact_hash::{CHTable, Compact, HashConfig, Row, Slot};
 use kr2r::utils::{find_and_sort_files, open_file};
-// use std::collections::HashMap;
-use rayon::prelude::*;
+use seqkmer::buffer_read_parallel;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Result, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
-
 // 定义每批次处理的 Slot 数量
 pub const BATCH_SIZE: usize = 8 * 1024 * 1024;
 
@@ -100,9 +98,7 @@ fn process_batch<R>(
 where
     R: Read + Send,
 {
-    let slot_size = std::mem::size_of::<Slot<u64>>();
     let row_size = std::mem::size_of::<Row>();
-    let mut batch_buffer = vec![0u8; slot_size * batch_size];
     let mut last_file_index: Option<u64> = None;
     let mut writer: Option<BufWriter<File>> = None;
 
@@ -111,21 +107,13 @@ where
     let idx_mask = hash_config.get_idx_mask();
     let idx_bits = hash_config.get_idx_bits();
 
-    while let Ok(bytes_read) = reader.read(&mut batch_buffer) {
-        if bytes_read == 0 {
-            break;
-        } // 文件末尾
-
-        // 处理读取的数据批次
-        let slots_in_batch = bytes_read / slot_size;
-
-        let slots = unsafe {
-            std::slice::from_raw_parts(batch_buffer.as_ptr() as *const Slot<u64>, slots_in_batch)
-        };
-
-        let result: HashMap<u64, Vec<u8>> = slots
-            .par_iter()
-            .filter_map(|slot| {
+    buffer_read_parallel(
+        reader,
+        num_cpus::get(),
+        batch_size,
+        |dataset: &[Slot<u64>]| {
+            let mut results: HashMap<u64, Vec<u8>> = HashMap::new();
+            for slot in dataset {
                 let indx = slot.idx & idx_mask;
                 let compacted = slot.value.left(value_bits) as u32;
                 let taxid = chtm.get_from_page(indx, compacted, page_index);
@@ -137,48 +125,37 @@ where
                     let left = slot.value.left(value_bits) as u32;
                     let high = u32::combined(left, taxid, value_bits);
                     let row = Row::new(high, seq_id, kmer_id as u32);
-                    // let value = slot.to_b(high);
-                    // let value_bytes = value.to_le_bytes(); // 将u64转换为[u8; 8]
                     let value_bytes = row.as_slice(row_size);
-                    Some((file_index, value_bytes.to_vec()))
-                } else {
-                    None
-                }
-            })
-            .fold(
-                || HashMap::new(),
-                |mut acc: HashMap<u64, Vec<u8>>, (file_index, value_bytes)| {
-                    acc.entry(file_index)
+
+                    results
+                        .entry(file_index)
                         .or_insert_with(Vec::new)
                         .extend(value_bytes);
-                    acc
-                },
-            )
-            .reduce(
-                || HashMap::new(),
-                |mut acc, h| {
-                    for (k, mut v) in h {
-                        acc.entry(k).or_insert_with(Vec::new).append(&mut v);
-                    }
-                    acc
-                },
-            );
-
-        let mut file_indices: Vec<_> = result.keys().cloned().collect();
-        file_indices.sort_unstable(); // 对file_index进行排序
-
-        for file_index in file_indices {
-            if let Some(bytes) = result.get(&file_index) {
-                write_to_file(
-                    file_index,
-                    bytes,
-                    &mut last_file_index,
-                    &mut writer,
-                    &chunk_dir,
-                )?;
+                }
             }
-        }
-    }
+            Some(results)
+        },
+        |result| {
+            while let Some(Some(res)) = result.next() {
+                let mut file_indices: Vec<_> = res.keys().cloned().collect();
+                file_indices.sort_unstable(); // 对file_index进行排序
+
+                for file_index in file_indices {
+                    if let Some(bytes) = res.get(&file_index) {
+                        write_to_file(
+                            file_index,
+                            bytes,
+                            &mut last_file_index,
+                            &mut writer,
+                            &chunk_dir,
+                        )
+                        .expect("write to file error");
+                    }
+                }
+            }
+        },
+    )
+    .expect("failed");
 
     if let Some(w) = writer.as_mut() {
         w.flush()?;
@@ -200,16 +177,13 @@ fn process_chunk_file<P: AsRef<Path>>(
     let start = Instant::now();
 
     let config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
-    let parition = hash_files.len();
-    let chtm = if args.kraken_db_type {
-        CHTable::from_pair(
-            config,
-            &hash_files[page_index],
-            &hash_files[(page_index + 1) % parition],
-        )?
-    } else {
-        CHTable::from(config, &hash_files[page_index])?
-    };
+    let chtm = CHTable::from_range(
+        config,
+        hash_files,
+        page_index,
+        page_index + 1,
+        args.kraken_db_type,
+    )?;
 
     // 计算持续时间
     let duration = start.elapsed();
@@ -229,7 +203,6 @@ fn process_chunk_file<P: AsRef<Path>>(
 
 pub fn run(args: Args) -> Result<()> {
     let chunk_files = find_and_sort_files(&args.chunk_dir, "sample", ".k2")?;
-
     let hash_files = find_and_sort_files(&args.database, "hash", ".k2d")?;
 
     // 开始计时

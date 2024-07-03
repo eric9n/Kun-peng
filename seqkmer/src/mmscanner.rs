@@ -264,24 +264,3 @@ pub fn scan_sequence<'a>(
         }
     }
 }
-
-pub fn tranfer_sequence<'a>(
-    sequence: &'a Base<Vec<u8>>,
-    meros: &'a Meros,
-) -> Base<Vec<(usize, u64)>> {
-    let func = |seq: &'a Vec<u8>| {
-        let cursor = Cursor::new(meros.l_mer, meros.mask);
-        let window = MinimizerWindow::new(meros.window_size());
-        MinimizerIterator::new(seq, cursor, window, meros).collect()
-    };
-
-    match &sequence.body {
-        OptionPair::Pair(seq1, seq2) => Base::new(
-            sequence.header.clone(),
-            OptionPair::Pair(func(&seq1), func(&seq2)),
-        ),
-        OptionPair::Single(seq1) => {
-            Base::new(sequence.header.clone(), OptionPair::Single(func(&seq1)))
-        }
-    }
-}

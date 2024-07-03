@@ -11,7 +11,7 @@ mod splitr;
 
 use kr2r::args::ClassifyArgs;
 use kr2r::args::{parse_size, Build};
-use kr2r::utils::find_and_sort_files;
+use kr2r::utils::find_files;
 // use std::io::Result;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -180,9 +180,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let start = Instant::now();
 
             let splitr_args = splitr::Args::from(cmd_args.clone());
-            let chunk_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".k2")?;
-            let sample_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".map")?;
-            let bin_files = find_and_sort_files(&splitr_args.chunk_dir, "sample", ".bin")?;
+            let chunk_files = find_files(&splitr_args.chunk_dir, "sample", ".k2");
+            let sample_files = find_files(&splitr_args.chunk_dir, "sample", ".map");
+            let bin_files = find_files(&splitr_args.chunk_dir, "sample", ".bin");
             if !chunk_files.is_empty() || !sample_files.is_empty() || !bin_files.is_empty() {
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,

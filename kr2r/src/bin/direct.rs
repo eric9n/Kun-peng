@@ -26,6 +26,10 @@ pub struct Args {
     #[arg(long = "db", required = true)]
     pub database: PathBuf,
 
+    /// File path for outputting normal Kraken output.
+    #[clap(long = "output-dir", value_parser)]
+    pub kraken_output_dir: Option<PathBuf>,
+
     /// Enable paired-end processing.
     #[clap(short = 'P', long = "paired-end-processing", action)]
     pub paired_end_processing: bool,
@@ -73,9 +77,9 @@ pub struct Args {
     #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
     pub num_threads: usize,
 
-    /// File path for outputting normal Kraken output.
-    #[clap(long = "output-dir", value_parser)]
-    pub kraken_output_dir: Option<PathBuf>,
+    /// Enables use of a Kraken 2 compatible shared database. Default is false.
+    #[clap(long, default_value_t = false)]
+    pub kraken_db_type: bool,
 
     /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
     /// Supports fasta or fastq format files (e.g., .fasta, .fastq) and gzip compressed files (e.g., .fasta.gz, .fastq.gz).
@@ -98,7 +102,7 @@ fn process_seq(
         let partition_index = idx / chunk_size;
         let index = idx % chunk_size;
 
-        let taxid = chtable.get_from_page(index, compacted, partition_index + 1);
+        let taxid = chtable.get_from_page(index, compacted, partition_index);
         if taxid > 0 {
             let high = u32::combined(compacted, taxid, value_bits);
             let row = Row::new(high, 0, sort as u32 + 1 + offset as u32);
@@ -348,7 +352,7 @@ pub fn run(args: Args) -> Result<()> {
     let start = Instant::now();
     let meros = idx_opts.as_meros();
     let hash_files = find_and_sort_files(&args.database, "hash", ".k2d")?;
-    let chtable = CHTable::from_hash_files(hash_config, hash_files)?;
+    let chtable = CHTable::from_hash_files(hash_config, &hash_files, args.kraken_db_type)?;
 
     process_files(args, meros, hash_config, &chtable, &taxo)?;
     let duration = start.elapsed();

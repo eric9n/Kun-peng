@@ -409,56 +409,37 @@ pub struct CHTable {
 impl CHTable {
     pub fn from_hash_files<P: AsRef<Path> + Debug>(
         config: HashConfig,
-        hash_files: Vec<P>,
+        hash_sorted_files: &Vec<P>,
+        kd_type: bool,
     ) -> Result<CHTable> {
-        let mut pages = vec![Page::default(); hash_files.len() + 1];
-        for hash_file in hash_files {
+        let end = hash_sorted_files.len();
+        Self::from_range(config, hash_sorted_files, 0, end, kd_type)
+    }
+
+    pub fn from_range<P: AsRef<Path> + Debug>(
+        config: HashConfig,
+        hash_sorted_files: &Vec<P>,
+        start: usize,
+        end: usize,
+        kd_type: bool,
+    ) -> Result<CHTable> {
+        let mut pages = vec![Page::default(); start];
+        let parition = hash_sorted_files.len();
+        for i in start..end {
+            let mut hash_file = &hash_sorted_files[i];
             let mut page = read_page_from_file(&hash_file)?;
             let next_page = if page.data.last().map_or(false, |&x| x == 0) {
+                if kd_type {
+                    hash_file = &hash_sorted_files[(i + 1) % parition]
+                }
                 read_first_block_from_file(&hash_file)?
             } else {
                 Page::default()
             };
             page.merge(next_page);
-            if let Some(elem) = pages.get_mut(page.index) {
-                *elem = page;
-            }
+            pages.push(page);
         }
 
-        let chtm = CHTable { config, pages };
-        Ok(chtm)
-    }
-
-    pub fn from_pair<P: AsRef<Path> + Debug>(
-        config: HashConfig,
-        chunk_file1: P,
-        chunk_file2: P,
-    ) -> Result<CHTable> {
-        let mut page = read_page_from_file(chunk_file1)?;
-        let next_page = if page.data.last().map_or(false, |&x| x == 0) {
-            read_first_block_from_file(chunk_file2)?
-        } else {
-            Page::default()
-        };
-        page.merge(next_page);
-        let count = page.index;
-        let mut pages = vec![Page::default(); count - 1];
-        pages.push(page);
-        let chtm: CHTable = CHTable { config, pages };
-        Ok(chtm)
-    }
-
-    pub fn from<P: AsRef<Path> + Debug>(config: HashConfig, chunk_file1: P) -> Result<CHTable> {
-        let mut page = read_page_from_file(&chunk_file1)?;
-        let next_page = if page.data.last().map_or(false, |&x| x == 0) {
-            read_first_block_from_file(&chunk_file1)?
-        } else {
-            Page::default()
-        };
-        page.merge(next_page);
-        let count = page.index;
-        let mut pages = vec![Page::default(); count - 1];
-        pages.push(page);
         let chtm = CHTable { config, pages };
         Ok(chtm)
     }

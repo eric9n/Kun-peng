@@ -1,5 +1,4 @@
 use clap::Parser;
-use dashmap::{DashMap, DashSet};
 use kr2r::classify::process_hitgroup;
 use kr2r::compact_hash::{HashConfig, Row};
 use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
@@ -7,26 +6,25 @@ use kr2r::report::report_kraken_style;
 use kr2r::taxonomy::Taxonomy;
 use kr2r::utils::{find_and_sort_files, open_file};
 use kr2r::HitGroup;
-use rayon::prelude::*;
-use seqkmer::{trim_pair_info, OptionPair};
-use std::collections::HashMap;
+// use rayon::prelude::*;
+use seqkmer::{buffer_map_parallel, trim_pair_info, OptionPair};
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Result, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
 use std::time::Instant;
 
-const BATCH_SIZE: usize = 8 * 1024 * 1024;
+const BATCH_SIZE: usize = 16 * 1024 * 1024;
 
 pub fn read_id_to_seq_map<P: AsRef<Path>>(
     filename: P,
-) -> Result<DashMap<u32, (String, String, usize, Option<usize>)>> {
+) -> Result<HashMap<u32, (String, String, usize, Option<usize>)>> {
     let file = open_file(filename)?;
     let reader = BufReader::new(file);
-    let id_map = DashMap::new();
+    let mut id_map = HashMap::new();
 
-    reader.lines().par_bridge().for_each(|line| {
+    reader.lines().for_each(|line| {
         let line = line.expect("Could not read line");
         let parts: Vec<&str> = line.trim().split_whitespace().collect();
         if parts.len() >= 4 {
@@ -102,82 +100,84 @@ pub struct Args {
     pub batch_size: usize,
 }
 
+fn read_rows_from_file<P: AsRef<Path>>(file_path: P) -> io::Result<HashMap<u32, Vec<Row>>> {
+    let file = File::open(file_path)?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = [0u8; std::mem::size_of::<Row>()]; // 确保buffer的大小与Row结构体的大小一致
+    let mut map: HashMap<u32, Vec<Row>> = HashMap::new();
+
+    while reader.read_exact(&mut buffer).is_ok() {
+        let row: Row = unsafe { std::mem::transmute(buffer) }; // 将读取的字节直接转换为Row结构体
+        map.entry(row.seq_id).or_default().push(row); // 插入到HashMap中
+    }
+
+    Ok(map)
+}
+
 fn process_batch<P: AsRef<Path>>(
     sample_file: P,
     args: &Args,
     taxonomy: &Taxonomy,
-    id_map: &DashMap<u32, (String, String, usize, Option<usize>)>,
-    writer: &Mutex<Box<dyn Write + Send>>,
+    id_map: &HashMap<u32, (String, String, usize, Option<usize>)>,
+    writer: &mut Box<dyn Write + Send>,
     value_mask: usize,
-) -> Result<(TaxonCountersDash, usize, DashSet<u32>)> {
-    let file = open_file(sample_file)?;
-    let mut reader = BufReader::new(file);
-    let size = std::mem::size_of::<Row>();
-    let mut batch_buffer = vec![0u8; size * BATCH_SIZE];
-
-    let hit_counts = DashMap::new();
-    let hit_seq_id_set = DashSet::new();
+) -> Result<(TaxonCountersDash, usize, HashSet<u32>)> {
+    let hit_seq_id_set = HashSet::new();
     let confidence_threshold = args.confidence_threshold;
     let minimum_hit_groups = args.minimum_hit_groups;
 
-    while let Ok(bytes_read) = reader.read(&mut batch_buffer) {
-        if bytes_read == 0 {
-            break;
-        } // 文件末尾
+    let hit_counts: HashMap<u32, Vec<Row>> = read_rows_from_file(sample_file)?;
 
-        // 处理读取的数据批次
-        let slots_in_batch = bytes_read / size;
-        let slots = unsafe {
-            std::slice::from_raw_parts(batch_buffer.as_ptr() as *const Row, slots_in_batch)
-        };
-
-        slots.par_iter().for_each(|item| {
-            let seq_id = item.seq_id;
-            hit_seq_id_set.insert(seq_id);
-            hit_counts
-                .entry(seq_id)
-                .or_insert_with(Vec::new)
-                .push(*item)
-        });
-    }
-
-    // let writer = Mutex::new(writer);
     let classify_counter = AtomicUsize::new(0);
     let cur_taxon_counts = TaxonCountersDash::new();
 
-    hit_counts.into_par_iter().for_each(|(k, mut rows)| {
-        if let Some(item) = id_map.get(&k) {
-            rows.sort_unstable();
-            let dna_id = trim_pair_info(&item.0);
-            let range = OptionPair::from(((0, item.2), item.3.map(|size| (item.2, size + item.2))));
-            let hits = HitGroup::new(rows, range);
+    buffer_map_parallel(
+        &hit_counts,
+        num_cpus::get(),
+        |(k, rows)| {
+            if let Some(item) = id_map.get(&k) {
+                let mut rows = rows.to_owned();
+                rows.sort_unstable();
+                let dna_id = trim_pair_info(&item.0);
+                let range =
+                    OptionPair::from(((0, item.2), item.3.map(|size| (item.2, size + item.2))));
+                let hits = HitGroup::new(rows, range);
 
-            let hit_data = process_hitgroup(
-                &hits,
-                taxonomy,
-                &classify_counter,
-                hits.required_score(confidence_threshold),
-                minimum_hit_groups,
-                value_mask,
-            );
+                let hit_data = process_hitgroup(
+                    &hits,
+                    taxonomy,
+                    &classify_counter,
+                    hits.required_score(confidence_threshold),
+                    minimum_hit_groups,
+                    value_mask,
+                );
 
-            hit_data.3.iter().for_each(|(key, value)| {
-                cur_taxon_counts
-                    .entry(*key)
-                    .or_default()
-                    .merge(value)
-                    .unwrap();
-            });
+                hit_data.3.iter().for_each(|(key, value)| {
+                    cur_taxon_counts
+                        .entry(*key)
+                        .or_default()
+                        .merge(value)
+                        .unwrap();
+                });
 
-            // 使用锁来同步写入
-            let output_line = format!(
-                "{}\t{}\t{}\t{}\t{}\n",
-                hit_data.0, dna_id, hit_data.1, item.1, hit_data.2
-            );
-            let mut file = writer.lock().unwrap();
-            file.write_all(output_line.as_bytes()).unwrap();
-        }
-    });
+                // 使用锁来同步写入
+                let output_line = format!(
+                    "{}\t{}\t{}\t{}\t{}\n",
+                    hit_data.0, dna_id, hit_data.1, item.1, hit_data.2
+                );
+                Some(output_line)
+            } else {
+                None
+            }
+        },
+        |result| {
+            while let Some(Some(res)) = result.next() {
+                writer.write_all(res.as_bytes()).unwrap();
+            }
+        },
+    )
+    .expect("failed");
+
     Ok((
         cur_taxon_counts,
         classify_counter.load(Ordering::SeqCst),
@@ -208,8 +208,9 @@ pub fn run(args: Args) -> Result<()> {
     for i in 0..partition {
         let sample_file = &sample_files[i];
         let sample_id_map = read_id_to_seq_map(&sample_id_files[i])?;
+
         let thread_sequences = sample_id_map.len();
-        let writer: Box<dyn Write + Send> = match &args.kraken_output_dir {
+        let mut writer: Box<dyn Write + Send> = match &args.kraken_output_dir {
             Some(ref file_path) => {
                 let filename = file_path.join(format!("output_{}.txt", i + 1));
                 let file = File::create(filename)?;
@@ -217,31 +218,29 @@ pub fn run(args: Args) -> Result<()> {
             }
             None => Box::new(BufWriter::new(io::stdout())) as Box<dyn Write + Send>,
         };
-        let writer = Mutex::new(writer);
         let (thread_taxon_counts, thread_classified, hit_seq_set) = process_batch::<&PathBuf>(
             sample_file,
             &args,
             &taxo,
             &sample_id_map,
-            &writer,
+            &mut writer,
             value_mask,
         )?;
 
         if args.full_output {
             sample_id_map
                 .iter()
-                .filter(|item| !hit_seq_set.contains(item.key()))
-                .for_each(|item| {
-                    let dna_id = trim_pair_info(&item.0);
+                .filter(|(key, _)| !hit_seq_set.contains(key))
+                .for_each(|(_, value)| {
+                    let dna_id = trim_pair_info(&value.0); // 假设 key 是 &str 类型
                     let output_line = format!(
                         "U\t{}\t0\t{}\t{}\n",
                         dna_id,
-                        item.1,
-                        if item.3.is_none() { "" } else { " |:| " }
+                        value.1,
+                        if value.3.is_none() { "" } else { " |:| " }
                     );
 
-                    let mut file = writer.lock().unwrap();
-                    file.write_all(output_line.as_bytes()).unwrap();
+                    writer.write_all(output_line.as_bytes()).unwrap();
                 });
         }
 
