@@ -1,4 +1,4 @@
-use crate::fasta::FastaReader;
+use crate::fasta::{BufferFastaReader, FastaReader};
 use crate::fastq::FastqReader;
 use crate::reader::{detect_file_format, Reader};
 use crate::seq::{Base, SeqFormat};
@@ -32,6 +32,28 @@ impl FastxReader<Box<dyn Reader + Send>> {
         match file_format? {
             OptionPair::Single(SeqFormat::Fasta) => {
                 let reader = FastaReader::from_path(paths.single().unwrap().as_ref(), file_index)?;
+                Ok(Self::new(Box::new(reader) as Box<dyn Reader + Send>))
+            }
+            OptionPair::Single(SeqFormat::Fastq)
+            | OptionPair::Pair(SeqFormat::Fastq, SeqFormat::Fastq) => {
+                let reader = FastqReader::from_path(paths, file_index, quality_score)?;
+                Ok(Self::new(Box::new(reader) as Box<dyn Reader + Send>))
+            }
+            _ => panic!("Unsupported file format combination"),
+        }
+    }
+
+    pub fn from_buffer_reader<P: AsRef<Path>>(
+        paths: OptionPair<P>,
+        file_index: usize,
+        quality_score: i32,
+    ) -> Result<Self> {
+        let file_format = paths.map(|path: &P| detect_file_format(path));
+
+        match file_format? {
+            OptionPair::Single(SeqFormat::Fasta) => {
+                let reader =
+                    BufferFastaReader::from_path(paths.single().unwrap().as_ref(), file_index)?;
                 Ok(Self::new(Box::new(reader) as Box<dyn Reader + Send>))
             }
             OptionPair::Single(SeqFormat::Fastq)

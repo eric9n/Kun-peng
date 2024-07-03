@@ -173,27 +173,6 @@ impl<'a> Iterator for MinimizerIterator<'a> {
     type Item = (usize, u64);
 
     fn next(&mut self) -> Option<Self::Item> {
-        // self.sequence
-        //     .iter()
-        //     .filter_map(|&ch| {
-        //         if ch == b'\n' || ch == b'\r' {
-        //             None
-        //         } else {
-        //             match char_to_value(ch) {
-        //                 Some(code) => self.cursor.next_lmer(code).and_then(|lmer| {
-        //                     let candidate_lmer: u64 = to_candidate_lmer(&self.meros, lmer);
-        //                     self.window
-        //                         .next(candidate_lmer)
-        //                         .map(|minimizer| murmur_hash3(minimizer ^ self.meros.toggle_mask))
-        //                 }),
-        //                 None => {
-        //                     self.clear_state();
-        //                     None
-        //                 }
-        //             }
-        //         }
-        //     })
-        //     .next()
         while self.pos < self.end {
             let ch = self.seq[self.pos];
             self.pos += 1;
@@ -273,6 +252,27 @@ pub fn scan_sequence<'a>(
         let cursor = Cursor::new(meros.l_mer, meros.mask);
         let window = MinimizerWindow::new(meros.window_size());
         MinimizerIterator::new(seq, cursor, window, meros)
+    };
+
+    match &sequence.body {
+        OptionPair::Pair(seq1, seq2) => Base::new(
+            sequence.header.clone(),
+            OptionPair::Pair(func(&seq1), func(&seq2)),
+        ),
+        OptionPair::Single(seq1) => {
+            Base::new(sequence.header.clone(), OptionPair::Single(func(&seq1)))
+        }
+    }
+}
+
+pub fn tranfer_sequence<'a>(
+    sequence: &'a Base<Vec<u8>>,
+    meros: &'a Meros,
+) -> Base<Vec<(usize, u64)>> {
+    let func = |seq: &'a Vec<u8>| {
+        let cursor = Cursor::new(meros.l_mer, meros.mask);
+        let window = MinimizerWindow::new(meros.window_size());
+        MinimizerIterator::new(seq, cursor, window, meros).collect()
     };
 
     match &sequence.body {

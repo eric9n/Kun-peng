@@ -2,12 +2,11 @@
 use crate::compact_hash::{Compact, HashConfig, Slot};
 // use crate::mmscanner::MinimizerScanner;
 use crate::taxonomy::{NCBITaxonomy, Taxonomy};
-use seqkmer::Meros;
+use seqkmer::{read_parallel, BufferFastaReader, Meros};
 
 use crate::utils::open_file;
 use byteorder::{LittleEndian, WriteBytesExt};
 use rayon::prelude::*;
-use seqkmer::{read_parallel, FastaReader};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Result as IOResult, Write};
@@ -199,7 +198,7 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
     chunk_size: usize,
     threads: usize,
 ) {
-    let mut reader = FastaReader::from_path(fna_file, 1).unwrap();
+    let mut reader = BufferFastaReader::from_path(fna_file, 1).unwrap();
     let value_bits = hash_config.value_bits;
     let cell_size = std::mem::size_of::<Slot<u32>>();
 
@@ -230,6 +229,7 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
                     }
                 });
             }
+
             Some(k2_cell_list)
         },
         |record_sets| {

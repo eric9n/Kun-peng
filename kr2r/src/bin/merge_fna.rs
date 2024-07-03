@@ -2,10 +2,11 @@ use clap::Parser;
 
 use flate2::read::GzDecoder;
 use kr2r::utils::{find_files, open_file};
-use std::collections::HashMap;
+use rayon::prelude::*;
 use std::fs::{create_dir_all, File, OpenOptions};
-use std::io::{BufRead, BufReader, BufWriter, Result, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Result, Write};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]
@@ -23,8 +24,8 @@ pub struct Args {
     // pub id_to_taxon_map_filename: Option<PathBuf>,
 }
 
-fn parse_assembly_fna(assembly_file: &PathBuf, site: &str) -> Result<HashMap<String, String>> {
-    let mut gz_files: HashMap<String, String> = HashMap::new();
+fn parse_assembly_fna(assembly_file: &PathBuf, site: &str) -> Result<Vec<(String, String)>> {
+    let mut gz_files = Vec::new();
     let file = open_file(&assembly_file)?;
     let reader = BufReader::new(file);
     let lines = reader.lines();
@@ -57,7 +58,7 @@ fn parse_assembly_fna(assembly_file: &PathBuf, site: &str) -> Result<HashMap<Str
                 site,
                 ftp_path.split('/').last().unwrap_or_default()
             );
-            gz_files.insert(fna_file_name, taxid.into());
+            gz_files.push((fna_file_name, taxid.into()));
         }
     }
     Ok(gz_files)
@@ -119,58 +120,91 @@ fn process_gz_file(
 const PREFIX: &'static str = "assembly_summary";
 const SUFFIX: &'static str = "txt";
 
-fn merge_fna(assembly_files: &Vec<PathBuf>, database: &PathBuf) -> Result<()> {
+fn merge_fna_parallel(assembly_files: &Vec<PathBuf>, database: &PathBuf) -> Result<()> {
     let pattern = format!(r"{}_(\S+)\.{}", PREFIX, SUFFIX);
     let file_site = regex::Regex::new(&pattern).unwrap();
 
-    let library_fna_path = database.join("library.fna");
-    let seqid2taxid_path = database.join("seqid2taxid.map");
-    let mut fna_writer = BufWriter::new(
-        OpenOptions::new()
-            .create(true)
-            .write(true)
-            .open(&library_fna_path)?,
-    );
-    let mut map_writer = BufWriter::new(
-        OpenOptions::new()
-            .create(true)
-            .write(true)
-            .open(&seqid2taxid_path)?,
-    );
-
     let fna_start: regex::Regex = regex::Regex::new(r"^>(\S+)").unwrap();
-    let mut is_empty = true;
+    let is_empty = AtomicBool::new(true);
     for assembly_file in assembly_files {
         if let Some(caps) = file_site.captures(assembly_file.to_string_lossy().as_ref()) {
             if let Some(matched) = caps.get(1) {
                 let gz_files = parse_assembly_fna(assembly_file, matched.as_str())?;
 
-                for (gz_path, taxid) in gz_files {
+                gz_files.par_iter().for_each(|(gz_path, taxid)| {
                     let gz_file = PathBuf::from(&gz_path);
                     if !gz_file.exists() {
                         // eprintln!("{} does not exist", gz_file.to_string_lossy());
-                        continue;
+                        return;
                     }
+                    let thread_index = rayon::current_thread_index().unwrap_or(0);
+                    let library_fna_path = database.join(format!("library_{}.fna", thread_index));
+                    let seqid2taxid_path =
+                        database.join(format!("seqid2taxid_{}.map", thread_index));
+                    let mut fna_writer = BufWriter::new(
+                        OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .write(true)
+                            .open(&library_fna_path)
+                            .unwrap(),
+                    );
+                    let mut map_writer = BufWriter::new(
+                        OpenOptions::new()
+                            .create(true)
+                            .write(true)
+                            .append(true)
+                            .open(&seqid2taxid_path)
+                            .unwrap(),
+                    );
 
-                    is_empty = false;
                     process_gz_file(
                         &gz_file,
                         &mut map_writer,
                         &mut fna_writer,
                         &fna_start,
                         &taxid,
-                    )?;
-                }
+                    )
+                    .unwrap();
 
-                fna_writer.flush()?;
-                map_writer.flush()?;
+                    fna_writer.flush().unwrap();
+                    map_writer.flush().unwrap();
+                    is_empty.fetch_and(false, Ordering::Relaxed);
+                });
             }
         }
     }
 
-    if is_empty {
+    let fna_files = find_files(database, "library_", "fna");
+    let seqid_files = find_files(database, "seqid2taxid_", "map");
+    let library_fna_path = database.join("library.fna");
+    let seqid2taxid_path = database.join("seqid2taxid.map");
+    merge_files(&fna_files, &library_fna_path)?;
+    merge_files(&seqid_files, &seqid2taxid_path)?;
+    if is_empty.load(Ordering::Relaxed) {
         panic!("genimics fna files is empty! please check download dir");
     }
+    Ok(())
+}
+
+fn merge_files(paths: &Vec<PathBuf>, output_path: &PathBuf) -> Result<()> {
+    let mut output = BufWriter::new(File::create(output_path)?);
+    for path in paths {
+        let mut input = File::open(path)?;
+        let mut buffer = [0; 1024 * 1024]; // 使用 1MB 的缓冲区
+
+        // 逐块读取并写入
+        loop {
+            let bytes_read = input.read(&mut buffer)?;
+            if bytes_read == 0 {
+                break; // 文件读取完毕
+            }
+            output.write_all(&buffer[..bytes_read])?;
+        }
+        std::fs::remove_file(path)?;
+    }
+
+    output.flush()?;
     Ok(())
 }
 
@@ -213,7 +247,7 @@ pub fn run(args: Args) -> Result<()> {
     }
     let assembly_files = find_files(&download_dir, &PREFIX, &SUFFIX);
 
-    merge_fna(&assembly_files, &args.database)?;
+    merge_fna_parallel(&assembly_files, &args.database)?;
 
     // 计算持续时间
     let duration = start.elapsed();

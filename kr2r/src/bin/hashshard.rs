@@ -47,7 +47,10 @@ fn mmap_read_write<P: AsRef<Path>, Q: AsRef<Path>>(
 }
 
 #[derive(Parser, Debug, Clone)]
-#[clap(version, about = "split hash file", long_about = "split hash file")]
+#[clap(
+    version,
+    about = "Convert Kraken2 database files to Kun-peng database format for efficient processing and analysis."
+)]
 pub struct Args {
     /// The database directory for the Kraken 2 index. contains index files(hash.k2d opts.k2d taxo.k2d)
     #[clap(long = "db", value_parser, required = true)]

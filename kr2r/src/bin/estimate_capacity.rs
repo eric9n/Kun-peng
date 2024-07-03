@@ -4,7 +4,7 @@ use kr2r::args::KLMTArgs;
 use kr2r::utils::{find_library_fna_files, format_bytes, open_file};
 use kr2r::KBuildHasher;
 
-use seqkmer::{read_parallel, FastaReader};
+use seqkmer::{read_parallel, BufferFastaReader};
 use serde_json;
 use std::collections::HashSet;
 use std::fs::File;
@@ -83,7 +83,7 @@ fn process_sequence<P: AsRef<Path>>(
     let mut hllp: HyperLogLogPlus<u64, _> =
         HyperLogLogPlus::new(16, KBuildHasher::default()).unwrap();
 
-    let mut reader = FastaReader::from_path(fna_file, 1)
+    let mut reader = BufferFastaReader::from_path(fna_file, 1)
         .expect("Failed to open the FASTA file with FastaReader");
     let range_n = args.n as u64;
     read_parallel(
