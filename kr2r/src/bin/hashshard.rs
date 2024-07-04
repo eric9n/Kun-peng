@@ -37,11 +37,6 @@ fn mmap_read_write<P: AsRef<Path>, Q: AsRef<Path>>(
 
     // 将读取的数据写入目标文件
     dest_file.write_all(&buffer)?;
-    // let file = OpenOptions::new().read(true).open(&source_path)?;
-    // let mmap = unsafe { MmapOptions::new().offset(offset).len(length).map(&file)? };
-
-    // // 将内存映射的数据写入目标文件
-    // dest_file.write_all(&mmap)?;
 
     Ok(())
 }
@@ -68,9 +63,12 @@ pub struct Args {
 
 pub fn run(args: Args) -> IOResult<()> {
     let index_filename = &args.database.join("hash.k2d");
-    let hash_config = HashConfig::from_hash_header(index_filename)?;
 
+    let mut hash_config = HashConfig::from_kraken2_header(index_filename)?;
     let partition = (hash_config.capacity + args.hash_capacity - 1) / args.hash_capacity;
+    hash_config.partition = partition;
+    hash_config.hash_capacity = args.hash_capacity;
+
     println!("hashshard start...");
     // 开始计时
     let start = Instant::now();
@@ -87,14 +85,7 @@ pub fn run(args: Args) -> IOResult<()> {
         panic!("hash config is exists!!!");
     }
 
-    mmap_read_write(
-        &index_filename,
-        config_file,
-        partition,
-        args.hash_capacity,
-        0,
-        32,
-    )?;
+    hash_config.write_to_file(config_file)?;
 
     for i in 1..=partition {
         let chunk_file = k2d_dir.join(format!("hash_{}.k2d", i));

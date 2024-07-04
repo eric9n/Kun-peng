@@ -2,10 +2,7 @@
 use clap::Parser;
 use kr2r::args::{parse_size, Build};
 use kr2r::compact_hash::HashConfig;
-use kr2r::db::{
-    convert_fna_to_k2_format, generate_taxonomy, get_bits_for_taxid, process_k2file,
-    write_config_to_file,
-};
+use kr2r::db::{convert_fna_to_k2_format, generate_taxonomy, get_bits_for_taxid, process_k2file};
 use kr2r::utils::{
     create_partition_files, create_partition_writers, find_library_fna_files, get_file_limit,
     read_id_to_taxon_map, set_fd_limit,
@@ -58,7 +55,8 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
 
     let capacity = required_capacity;
     let partition = (capacity + args.hash_capacity - 1) / args.hash_capacity;
-    let hash_config = HashConfig::new(capacity, value_bits, 0, partition, args.hash_capacity);
+    let mut hash_config =
+        HashConfig::new(1, capacity, value_bits, 0, partition, args.hash_capacity);
 
     // 开始计时
     let start = Instant::now();
@@ -91,7 +89,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
 
     let hash_filename = k2d_dir.join("hash_config.k2d");
     let partition = chunk_files.len();
-    let mut size: u64 = 0;
+    let mut size: usize = 0;
 
     println!("start process k2 files...");
     for i in 1..=partition {
@@ -104,7 +102,7 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
             chunk_size,
             i,
         )?;
-        size += count as u64;
+        size += count;
         let duration = start.elapsed();
         println!(
             "process chunk file {:?}/{:}: duration: {:?}",
@@ -112,15 +110,8 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
         );
     }
 
-    write_config_to_file(
-        &hash_filename,
-        partition as u64,
-        args.hash_capacity as u64,
-        capacity as u64,
-        size,
-        32 - hash_config.value_bits as u64,
-        hash_config.value_bits as u64,
-    )?;
+    hash_config.size = size;
+    hash_config.write_to_file(&hash_filename)?;
 
     // 计算持续时间
     let duration = start.elapsed();

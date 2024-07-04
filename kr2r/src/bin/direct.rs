@@ -77,10 +77,6 @@ pub struct Args {
     #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
     pub num_threads: usize,
 
-    /// Enables use of a Kraken 2 compatible shared database. Default is false.
-    #[clap(long, default_value_t = false)]
-    pub kraken_db_type: bool,
-
     /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
     /// Supports fasta or fastq format files (e.g., .fasta, .fastq) and gzip compressed files (e.g., .fasta.gz, .fastq.gz).
     // #[clap(short = 'F', long = "files")]
@@ -352,7 +348,7 @@ pub fn run(args: Args) -> Result<()> {
     let start = Instant::now();
     let meros = idx_opts.as_meros();
     let hash_files = find_and_sort_files(&args.database, "hash", ".k2d")?;
-    let chtable = CHTable::from_hash_files(hash_config, &hash_files, args.kraken_db_type)?;
+    let chtable = CHTable::from_hash_files(hash_config, &hash_files)?;
 
     process_files(args, meros, hash_config, &chtable, &taxo)?;
     let duration = start.elapsed();

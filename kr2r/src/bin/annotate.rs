@@ -26,10 +26,6 @@ pub struct Args {
     #[arg(long = "db", required = true)]
     pub database: PathBuf,
 
-    /// Enables use of a Kraken 2 compatible shared database. Default is false.
-    #[clap(long, default_value_t = false)]
-    pub kraken_db_type: bool,
-
     /// chunk directory
     #[clap(long)]
     pub chunk_dir: PathBuf,
@@ -178,13 +174,7 @@ fn process_chunk_file<P: AsRef<Path>>(
 
     println!("start load table...");
     let config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
-    let chtm = CHTable::from_range(
-        config,
-        hash_files,
-        page_index,
-        page_index + 1,
-        args.kraken_db_type,
-    )?;
+    let chtm = CHTable::from_range(config, hash_files, page_index, page_index + 1)?;
 
     // 计算持续时间
     let duration = start.elapsed();

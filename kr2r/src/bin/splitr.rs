@@ -250,7 +250,7 @@ pub fn run(args: Args) -> Result<()> {
     }
     let hash_config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
 
-    println!("hash_config {:?}", hash_config);
+    println!("{:?}", hash_config);
     if hash_config.hash_capacity == 0 {
         panic!("`hash_capacity` can't be zero!");
     }

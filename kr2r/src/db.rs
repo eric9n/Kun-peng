@@ -78,28 +78,6 @@ fn write_hashtable_to_file(
     Ok(count)
 }
 
-pub fn write_config_to_file(
-    file_path: &PathBuf,
-    partition: u64,
-    hash_capacity: u64,
-    capacity: u64,
-    size: u64,
-    key_bits: u64,
-    value_bits: u64,
-) -> IOResult<()> {
-    // 打开文件用于写入
-    let file = File::create(file_path)?;
-    let mut writer = BufWriter::new(file);
-    writer.write_u64::<LittleEndian>(partition)?;
-    writer.write_u64::<LittleEndian>(hash_capacity)?;
-    writer.write_u64::<LittleEndian>(capacity)?;
-    writer.write_u64::<LittleEndian>(size)?;
-    writer.write_u64::<LittleEndian>(key_bits)?;
-    writer.write_u64::<LittleEndian>(value_bits)?;
-    writer.flush()?;
-    Ok(())
-}
-
 pub fn process_k2file(
     config: HashConfig,
     database: &PathBuf,

@@ -1,7 +1,8 @@
-use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
+use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::cmp::Ordering as CmpOrdering;
+use std::fs::File;
 use std::fs::OpenOptions;
-use std::io::{Read, Result};
+use std::io::{BufWriter, Read, Result, Write};
 use std::path::Path;
 
 /// 1101010101 => left: 11010, right: 10101;
@@ -176,17 +177,21 @@ pub struct HashConfig {
     pub partition: usize,
     // 分块大小
     pub hash_capacity: usize,
+    // 数据库版本 0是kraken 2 database转换过来的
+    pub version: usize,
 }
 
 // 为HashConfig手动实现Debug trait
 impl fmt::Debug for HashConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("HashConfig")
-            .field("value_mask", &self.value_mask)
-            .field("value_bits", &self.value_bits)
+            .field("version", &self.version)
+            .field("partition", &self.partition)
+            .field("hash_capacity", &self.hash_capacity)
             .field("capacity", &self.capacity)
             .field("size", &self.size)
-            .field("hash_capacity", &self.hash_capacity)
+            .field("value_bits", &self.value_bits)
+            .field("value_mask", &self.value_mask)
             // 注意，我们没有包括_phantom字段
             .finish()
     }
@@ -194,6 +199,7 @@ impl fmt::Debug for HashConfig {
 
 impl HashConfig {
     pub fn new(
+        version: usize,
         capacity: usize,
         value_bits: usize,
         size: usize,
@@ -208,20 +214,44 @@ impl HashConfig {
             size,
             partition,
             hash_capacity,
+            version,
         }
     }
 
-    pub fn from_hash_header<P: AsRef<Path>>(filename: P) -> Result<Self> {
-        let mut file = OpenOptions::new().read(true).open(&filename)?;
-        let partition = file.read_u64::<LittleEndian>()? as usize;
-        let hash_capacity = file.read_u64::<LittleEndian>()? as usize;
+    pub fn write_to_file<P: AsRef<Path>>(&self, file_path: P) -> Result<()> {
+        // 打开文件用于写入
+        let file = File::create(file_path)?;
+        let mut writer = BufWriter::new(file);
+        writer.write_u64::<LittleEndian>(self.version as u64)?;
+        writer.write_u64::<LittleEndian>(self.partition as u64)?;
+        writer.write_u64::<LittleEndian>(self.hash_capacity as u64)?;
+        writer.write_u64::<LittleEndian>(self.capacity as u64)?;
+        writer.write_u64::<LittleEndian>(self.size as u64)?;
+        writer.write_u64::<LittleEndian>(self.value_bits as u64)?;
+        writer.flush()?;
+        Ok(())
+    }
 
+    pub fn from_kraken2_header<P: AsRef<Path>>(filename: P) -> Result<Self> {
+        let mut file = OpenOptions::new().read(true).open(&filename)?;
         let capacity = file.read_u64::<LittleEndian>()? as usize;
         let size = file.read_u64::<LittleEndian>()? as usize;
         let _ = file.read_u64::<LittleEndian>()? as usize;
         let value_bits = file.read_u64::<LittleEndian>()? as usize;
+        Ok(Self::new(0, capacity, value_bits, size, 0, 0))
+    }
+
+    pub fn from_hash_header<P: AsRef<Path>>(filename: P) -> Result<Self> {
+        let mut file = OpenOptions::new().read(true).open(&filename)?;
+        let version = file.read_u64::<LittleEndian>()? as usize;
+        let partition = file.read_u64::<LittleEndian>()? as usize;
+        let hash_capacity = file.read_u64::<LittleEndian>()? as usize;
+        let capacity = file.read_u64::<LittleEndian>()? as usize;
+        let size = file.read_u64::<LittleEndian>()? as usize;
+        let value_bits = file.read_u64::<LittleEndian>()? as usize;
 
         Ok(Self::new(
+            version,
             capacity,
             value_bits,
             size,
@@ -406,10 +436,9 @@ impl CHTable {
     pub fn from_hash_files<P: AsRef<Path> + Debug>(
         config: HashConfig,
         hash_sorted_files: &Vec<P>,
-        kd_type: bool,
     ) -> Result<CHTable> {
         let end = hash_sorted_files.len();
-        Self::from_range(config, hash_sorted_files, 0, end, kd_type)
+        Self::from_range(config, hash_sorted_files, 0, end)
     }
 
     pub fn from_range<P: AsRef<Path> + Debug>(
@@ -417,7 +446,6 @@ impl CHTable {
         hash_sorted_files: &Vec<P>,
         start: usize,
         end: usize,
-        kd_type: bool,
     ) -> Result<CHTable> {
         let mut pages = vec![Page::default(); start];
         let parition = hash_sorted_files.len();
@@ -425,7 +453,7 @@ impl CHTable {
             let mut hash_file = &hash_sorted_files[i];
             let mut page = read_page_from_file(&hash_file)?;
             let next_page = if page.data.last().map_or(false, |&x| x != 0) {
-                if kd_type {
+                if config.version < 1 {
                     hash_file = &hash_sorted_files[(i + 1) % parition]
                 }
                 read_first_block_from_file(&hash_file)?

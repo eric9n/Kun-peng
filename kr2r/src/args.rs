@@ -105,10 +105,6 @@ pub struct ClassifyArgs {
     )]
     pub minimum_hit_groups: usize,
 
-    /// Enables use of a Kraken 2 compatible shared database.
-    #[clap(long, default_value_t = false)]
-    pub kraken_db_type: bool,
-
     /// In comb. w/ -R, provide minimizer information in report
     #[clap(short = 'K', long, value_parser, default_value_t = false)]
     pub report_kmer_data: bool,

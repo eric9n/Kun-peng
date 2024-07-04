@@ -76,7 +76,6 @@ impl From<ClassifyArgs> for annotate::Args {
             database: item.database,
             chunk_dir: item.chunk_dir,
             batch_size: item.batch_size,
-            kraken_db_type: item.kraken_db_type,
         }
     }
 }
