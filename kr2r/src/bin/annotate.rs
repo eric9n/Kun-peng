@@ -111,7 +111,7 @@ where
         reader,
         num_cpus::get(),
         batch_size,
-        |dataset: &[Slot<u64>]| {
+        |dataset: Vec<Slot<u64>>| {
             let mut results: HashMap<u64, Vec<u8>> = HashMap::new();
             for slot in dataset {
                 let indx = slot.idx & idx_mask;
@@ -176,6 +176,7 @@ fn process_chunk_file<P: AsRef<Path>>(
 
     let start = Instant::now();
 
+    println!("start load table...");
     let config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
     let chtm = CHTable::from_range(
         config,
@@ -209,7 +210,6 @@ pub fn run(args: Args) -> Result<()> {
     let start = Instant::now();
     println!("annotate start...");
     for chunk_file in chunk_files {
-        println!("chunk_file {:?}", chunk_file);
         process_chunk_file(&args, chunk_file, &hash_files)?;
     }
     // 计算持续时间

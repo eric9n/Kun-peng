@@ -277,7 +277,7 @@ fn read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
     let capacity = LittleEndian::read_u64(&buffer[8..16]) as usize;
 
     // 读取数据部分
-    let mut data = vec![0u32; capacity];
+    let mut data = vec![0u32; capacity + 1024 * 1024];
     let data_bytes = unsafe {
         std::slice::from_raw_parts_mut(
             data.as_mut_ptr() as *mut u8,
@@ -299,7 +299,7 @@ fn read_first_block_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
     let capacity = LittleEndian::read_u64(&buffer[8..16]) as usize;
 
     let mut first_zero_end = capacity;
-    let chunk_size = 1024; // Define the chunk size for reading
+    let chunk_size = 1024 * 4;
     let mut found_zero = false;
     let mut data = vec![0u32; capacity];
     let mut read_pos = 0;
@@ -373,17 +373,14 @@ impl Page {
         value_bits: usize,
         value_mask: usize,
     ) -> u32 {
-        // let compacted_key = value.left(value_bits) as u32;
         let mut idx = index;
-        if idx > self.size {
-            return u32::default();
+        if idx >= self.size {
+            return 0;
         }
 
         loop {
             if let Some(cell) = self.data.get(idx) {
-                if cell.right(value_mask) == u32::default()
-                    || cell.left(value_bits) == compacted_key
-                {
+                if cell.right(value_mask) == 0 || cell.left(value_bits) == compacted_key {
                     return cell.right(value_mask);
                 }
 
@@ -392,11 +389,10 @@ impl Page {
                     break;
                 }
             } else {
-                // 如果get(idx)失败，返回默认值
-                return u32::default();
+                return 0;
             }
         }
-        u32::default()
+        0
     }
 }
 
@@ -428,7 +424,7 @@ impl CHTable {
         for i in start..end {
             let mut hash_file = &hash_sorted_files[i];
             let mut page = read_page_from_file(&hash_file)?;
-            let next_page = if page.data.last().map_or(false, |&x| x == 0) {
+            let next_page = if page.data.last().map_or(false, |&x| x != 0) {
                 if kd_type {
                     hash_file = &hash_sorted_files[(i + 1) % parition]
                 }

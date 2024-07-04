@@ -7,7 +7,6 @@ use scoped_threadpool::Pool;
 use std::collections::HashMap;
 use std::io::Result;
 use std::sync::Arc;
-
 pub struct ParallelResult<P>
 where
     P: Send,
@@ -108,16 +107,16 @@ pub fn buffer_read_parallel<R, D, W, O, F, Out>(
     func: F,
 ) -> Result<()>
 where
-    D: Send + Sized + Sync,
+    D: Send + Sized + Sync + Clone,
     R: std::io::Read + Send,
     O: Send,
     Out: Send + Default,
-    W: Send + Sync + Fn(&[D]) -> Option<O>,
+    W: Send + Sync + Fn(Vec<D>) -> Option<O>,
     F: FnOnce(&mut ParallelResult<Option<O>>) -> Out + Send,
 {
     assert!(n_threads > 2);
     let buffer_len = n_threads + 2;
-    let (sender, receiver) = bounded::<&[D]>(buffer_len);
+    let (sender, receiver) = bounded::<Vec<D>>(buffer_len);
     let (done_send, done_recv) = bounded::<Option<O>>(buffer_len);
     let receiver = Arc::new(receiver); // 使用 Arc 来共享 receiver
     let done_send = Arc::new(done_send);
@@ -140,7 +139,9 @@ where
                 let slots = unsafe {
                     std::slice::from_raw_parts(batch_buffer.as_ptr() as *const D, slots_in_batch)
                 };
-                sender.send(slots).expect("Failed to send sequences");
+                sender
+                    .send(slots.to_vec())
+                    .expect("Failed to send sequences");
             }
         });
 
@@ -163,7 +164,7 @@ where
             let _ = func(&mut parallel_result);
         });
 
-        pool_scope.join_all();
+        // pool_scope.join_all();
     });
 
     Ok(())
