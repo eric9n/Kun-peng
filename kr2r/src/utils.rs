@@ -239,11 +239,68 @@ pub fn create_sample_file<P: AsRef<Path>>(filename: P) -> BufWriter<File> {
 
 use regex::Regex;
 
+pub fn find_and_trans_files(
+    directory: &Path,
+    prefix: &str,
+    suffix: &str,
+    check: bool,
+) -> io::Result<HashMap<usize, PathBuf>> {
+    // 构建正则表达式以匹配文件名中的数字
+    let pattern = format!(r"{}_(\d+){}", prefix, suffix);
+    let re = Regex::new(&pattern).unwrap();
+
+    // 读取指定目录下的所有条目
+    let entries = fs::read_dir(directory)?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .map_or(false, |s| s.starts_with(prefix) && s.ends_with(suffix))
+        })
+        .collect::<Vec<PathBuf>>();
+
+    // 使用正则表达式提取数字，并将它们存入HashMap
+    let mut map_entries = HashMap::new();
+    for path in entries {
+        if let Some(fname) = path.file_name().and_then(|name| name.to_str()) {
+            if let Some(cap) = re.captures(fname) {
+                if let Some(m) = cap.get(1) {
+                    if let Ok(num) = m.as_str().parse::<usize>() {
+                        map_entries.insert(num, path);
+                    }
+                }
+            }
+        }
+    }
+
+    if check {
+        // 检查数字是否从0开始连续
+        let mut keys: Vec<_> = map_entries.keys().cloned().collect();
+        keys.sort_unstable();
+        for (i, key) in keys.iter().enumerate() {
+            if i + 1 != *key {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "File numbers are not continuous starting from 1.",
+                ));
+            }
+        }
+    }
+
+    // 返回排序后的文件路径
+    Ok(map_entries)
+}
+
 // 函数定义
 pub fn find_and_sort_files(
     directory: &Path,
     prefix: &str,
     suffix: &str,
+    check: bool,
 ) -> io::Result<Vec<PathBuf>> {
     // 构建正则表达式以匹配文件名中的数字
     let pattern = format!(r"{}_(\d+){}", prefix, suffix);
@@ -268,27 +325,32 @@ pub fn find_and_sort_files(
         .into_iter()
         .filter_map(|path| {
             re.captures(path.file_name()?.to_str()?)
-                .and_then(|caps| caps.get(1).map(|m| m.as_str().parse::<i32>().ok()))
+                .and_then(|caps| caps.get(1).map(|m| m.as_str().parse::<usize>().ok()))
                 .flatten()
                 .map(|num| (path, num))
         })
-        .collect::<Vec<(PathBuf, i32)>>();
+        .collect::<Vec<(PathBuf, usize)>>();
 
     sorted_entries.sort_by_key(|k| k.1);
 
-    // 检查数字是否从0开始连续
-    for (i, (_, num)) in sorted_entries.iter().enumerate() {
-        let a_idx = i + 1;
-        if a_idx as i32 != *num {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "File numbers are not continuous starting from 1.",
-            ));
+    if check {
+        // 检查数字是否从0开始连续
+        for (i, (_, num)) in sorted_entries.iter().enumerate() {
+            let a_idx = i + 1;
+            if a_idx != *num {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "File numbers are not continuous starting from 1.",
+                ));
+            }
         }
     }
 
     // 返回排序后的文件路径
-    Ok(sorted_entries.into_iter().map(|(path, _)| path).collect())
+    Ok(sorted_entries
+        .iter()
+        .map(|(path, _)| path.clone())
+        .collect())
 }
 
 pub fn open_file<P: AsRef<Path>>(path: P) -> io::Result<File> {

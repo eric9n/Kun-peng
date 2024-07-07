@@ -193,14 +193,15 @@ fn process_chunk_file<P: AsRef<Path>>(
 }
 
 pub fn run(args: Args) -> Result<()> {
-    let chunk_files = find_and_sort_files(&args.chunk_dir, "sample", ".k2")?;
-    let hash_files = find_and_sort_files(&args.database, "hash", ".k2d")?;
+    let chunk_files = find_and_sort_files(&args.chunk_dir, "sample", ".k2", true)?;
+    let hash_files = find_and_sort_files(&args.database, "hash", ".k2d", true)?;
 
     // 开始计时
     let start = Instant::now();
     println!("annotate start...");
-    for chunk_file in chunk_files {
+    for chunk_file in &chunk_files {
         process_chunk_file(&args, chunk_file, &hash_files)?;
+        let _ = std::fs::remove_file(chunk_file);
     }
     // 计算持续时间
     let duration = start.elapsed();

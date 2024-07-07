@@ -4,7 +4,7 @@ use kr2r::compact_hash::{HashConfig, Row};
 use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
 use kr2r::report::report_kraken_style;
 use kr2r::taxonomy::Taxonomy;
-use kr2r::utils::{find_and_sort_files, open_file};
+use kr2r::utils::{find_and_trans_files, open_file};
 use kr2r::HitGroup;
 // use rayon::prelude::*;
 use seqkmer::{buffer_map_parallel, trim_pair_info, OptionPair};
@@ -190,10 +190,10 @@ pub fn run(args: Args) -> Result<()> {
     let taxonomy_filename = k2d_dir.join("taxo.k2d");
     let taxo = Taxonomy::from_file(taxonomy_filename)?;
 
-    let sample_files = find_and_sort_files(&args.chunk_dir, "sample_file", ".bin")?;
-    let sample_id_files = find_and_sort_files(&args.chunk_dir, "sample_id", ".map")?;
+    let sample_files = find_and_trans_files(&args.chunk_dir, "sample_file", ".bin", false)?;
+    let sample_id_files = find_and_trans_files(&args.chunk_dir, "sample_id", ".map", false)?;
 
-    let partition = sample_files.len();
+    // let partition = sample_files.len();
     let hash_config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
     let value_mask = hash_config.value_mask;
 
@@ -205,21 +205,22 @@ pub fn run(args: Args) -> Result<()> {
     let start = Instant::now();
     println!("resolve start...");
 
-    for i in 0..partition {
-        let sample_file = &sample_files[i];
+    for (i, sample_file) in &sample_files {
+        // for i in 0..partition {
+        // let sample_file = &sample_files[i];
         let sample_id_map = read_id_to_seq_map(&sample_id_files[i])?;
 
         let thread_sequences = sample_id_map.len();
         let mut writer: Box<dyn Write + Send> = match &args.kraken_output_dir {
             Some(ref file_path) => {
-                let filename = file_path.join(format!("output_{}.txt", i + 1));
+                let filename = file_path.join(format!("output_{}.txt", i));
                 let file = File::create(filename)?;
                 Box::new(BufWriter::new(file)) as Box<dyn Write + Send>
             }
             None => Box::new(BufWriter::new(io::stdout())) as Box<dyn Write + Send>,
         };
         let (thread_taxon_counts, thread_classified, hit_seq_set) = process_batch::<&PathBuf>(
-            sample_file,
+            &sample_file,
             &args,
             &taxo,
             &sample_id_map,
@@ -261,7 +262,7 @@ pub fn run(args: Args) -> Result<()> {
                 .unwrap();
         });
         if let Some(output) = &args.kraken_output_dir {
-            let filename = output.join(format!("output_{}.kreport2", i + 1));
+            let filename = output.join(format!("output_{}.kreport2", i));
             report_kraken_style(
                 filename,
                 args.report_zero_counts,
@@ -278,16 +279,25 @@ pub fn run(args: Args) -> Result<()> {
     }
 
     if let Some(output) = &args.kraken_output_dir {
-        let filename = output.join("output.kreport2");
-        report_kraken_style(
-            filename,
-            args.report_zero_counts,
-            args.report_kmer_data,
-            &taxo,
-            &total_taxon_counts,
-            total_seqs as u64,
-            total_unclassified as u64,
-        )?;
+        let min = &sample_files.keys().min().cloned().unwrap();
+        let max = &sample_files.keys().max().cloned().unwrap();
+
+        if max > min {
+            let filename = output.join(format!("output_{}-{}.kreport2", min, max));
+            report_kraken_style(
+                filename,
+                args.report_zero_counts,
+                args.report_kmer_data,
+                &taxo,
+                &total_taxon_counts,
+                total_seqs as u64,
+                total_unclassified as u64,
+            )?;
+        }
+
+        let source_sample_file = args.chunk_dir.join("sample_file.map");
+        let to_sample_file = output.join("sample_file.txt");
+        std::fs::copy(source_sample_file, to_sample_file)?;
     }
 
     // 计算持续时间
@@ -295,6 +305,15 @@ pub fn run(args: Args) -> Result<()> {
     // 打印运行时间
     println!("resolve took: {:?}", duration);
 
+    for (_, sample_file) in &sample_files {
+        let _ = std::fs::remove_file(sample_file);
+    }
+
+    for (_, sample_file) in sample_id_files {
+        let _ = std::fs::remove_file(sample_file);
+    }
+    // let source_sample_file = args.chunk_dir.join("sample_file.map");
+    // let _ = std::fs::remove_file(source_sample_file);
     Ok(())
 }
 

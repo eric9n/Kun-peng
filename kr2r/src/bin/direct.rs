@@ -347,7 +347,7 @@ pub fn run(args: Args) -> Result<()> {
     println!("classify start...");
     let start = Instant::now();
     let meros = idx_opts.as_meros();
-    let hash_files = find_and_sort_files(&args.database, "hash", ".k2d")?;
+    let hash_files = find_and_sort_files(&args.database, "hash", ".k2d", true)?;
     let chtable = CHTable::from_hash_files(hash_config, &hash_files)?;
 
     process_files(args, meros, hash_config, &chtable, &taxo)?;

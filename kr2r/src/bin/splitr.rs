@@ -257,8 +257,12 @@ pub fn run(args: Args) -> Result<()> {
     println!("splitr start...");
     let file_num_limit = get_file_limit();
     if hash_config.partition >= file_num_limit {
+        eprintln!(
+            "file num limit {:?}, need: {:?}",
+            file_num_limit, hash_config.partition
+        );
         set_fd_limit(hash_config.partition as u64 + 1)
-            .expect("Failed to set file descriptor limit");
+            .expect("Failed to set file descriptor limit, please run this operation with administrative/root privileges.");
         // panic!("Exceeds File Number Limit");
     }
 
