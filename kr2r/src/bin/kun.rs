@@ -76,6 +76,7 @@ impl From<ClassifyArgs> for annotate::Args {
             database: item.database,
             chunk_dir: item.chunk_dir,
             batch_size: item.batch_size,
+            num_threads: item.num_threads,
         }
     }
 }
@@ -92,6 +93,7 @@ impl From<ClassifyArgs> for resolve::Args {
             report_kmer_data: item.report_kmer_data,
             report_zero_counts: item.report_zero_counts,
             full_output: item.full_output,
+            num_threads: item.num_threads,
         }
     }
 }

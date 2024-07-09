@@ -32,6 +32,10 @@ pub struct Args {
 
     #[clap(long, default_value_t = BATCH_SIZE)]
     pub batch_size: usize,
+
+    /// The number of threads to use.
+    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
+    pub num_threads: usize,
 }
 
 fn read_chunk_header<R: Read>(reader: &mut R) -> io::Result<(usize, usize)> {
@@ -90,6 +94,7 @@ fn process_batch<R>(
     chunk_dir: PathBuf,
     batch_size: usize,
     page_index: usize,
+    num_threads: usize,
 ) -> std::io::Result<()>
 where
     R: Read + Send,
@@ -105,7 +110,7 @@ where
 
     buffer_read_parallel(
         reader,
-        num_cpus::get(),
+        num_threads,
         batch_size,
         |dataset: Vec<Slot<u64>>| {
             let mut results: HashMap<u64, Vec<u8>> = HashMap::new();
@@ -187,6 +192,7 @@ fn process_chunk_file<P: AsRef<Path>>(
         args.chunk_dir.clone(),
         args.batch_size,
         page_index,
+        args.num_threads,
     )?;
 
     Ok(())

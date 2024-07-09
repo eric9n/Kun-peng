@@ -98,6 +98,10 @@ pub struct Args {
 
     #[clap(long, default_value_t = BATCH_SIZE)]
     pub batch_size: usize,
+
+    /// The number of threads to use.
+    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
+    pub num_threads: usize,
 }
 
 fn read_rows_from_file<P: AsRef<Path>>(file_path: P) -> io::Result<HashMap<u32, Vec<Row>>> {
