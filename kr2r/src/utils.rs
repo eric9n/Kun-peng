@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::{self, create_dir_all, File, OpenOptions};
-use std::io::{self, BufRead, BufReader, BufWriter, Result, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Result};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -82,57 +82,6 @@ pub fn find_files<P: AsRef<Path>>(path: P, prefix: &str, suffix: &str) -> Vec<Pa
         })
         .map(|e| e.path().to_path_buf())
         .collect()
-}
-
-pub fn find_library_fna_files<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
-    find_files(path, "library", ".fna")
-}
-
-pub fn summary_prelim_map_files<P: AsRef<Path>>(data_dir: P) -> Result<PathBuf> {
-    let lib_path = data_dir.as_ref().join("library");
-
-    let prelim_map_files: Vec<PathBuf> = WalkDir::new(&lib_path)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().file_name() == Some("prelim_map.txt".as_ref()))
-        .map(|e| e.path().to_path_buf())
-        .collect();
-
-    let summary_file_path = data_dir.as_ref().join("prelim_map.txt");
-    if summary_file_path.exists() && summary_file_path.is_file() {
-        // 删除文件
-        fs::remove_file(&summary_file_path)?;
-    }
-
-    let mut summary_file = File::create(&summary_file_path)?;
-    // 遍历找到的文件并汇总内容
-    for path in prelim_map_files {
-        let file = open_file(path)?;
-        let reader = BufReader::new(file);
-        for line in reader.lines() {
-            let line = line?;
-            writeln!(summary_file, "{}", line)?;
-        }
-    }
-
-    Ok(summary_file_path)
-}
-
-pub fn create_seqid2taxid_file<P: AsRef<Path>>(prelim_map_file: P, output_file: P) -> Result<()> {
-    let file = open_file(prelim_map_file)?;
-    let reader = BufReader::new(file);
-    let mut output = File::create(output_file).unwrap();
-
-    for line in reader.lines() {
-        let line = line?;
-        let columns: Vec<&str> = line.split('\t').collect();
-        if columns.len() >= 3 {
-            // 写入第二列和第三列到输出文件
-            writeln!(output, "{}\t{}", columns[1], columns[2])?;
-        }
-    }
-
-    Ok(())
 }
 
 pub fn format_bytes(size: f64) -> String {
@@ -218,7 +167,7 @@ pub fn create_partition_writers(partition_files: &Vec<PathBuf>) -> Vec<BufWriter
             // 尝试创建文件，如果失败则直接返回错误
             let file = OpenOptions::new()
                 .write(true)
-                // .append(true) // 确保以追加模式打开文件
+                .append(true) // 确保以追加模式打开文件
                 .create(true) // 如果文件不存在，则创建
                 .open(item)
                 .unwrap();

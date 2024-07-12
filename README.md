@@ -181,7 +181,7 @@ Usage: kun_peng <COMMAND>
 Commands:
   estimate   estimate capacity
   build      build `k2d` files
-  hashshard  split hash file
+  hashshard  Convert Kraken2 database files to Kun-peng database format for efficient processing and analysis.
   splitr     Split fast(q/a) file into ranges
   annotate   annotate a set of sequences
   resolve    resolve taxonomy tree
@@ -235,6 +235,29 @@ Options:
   -V, --version
           Print version
 ```
+
+### Convert Kraken2 database
+
+This tool converts Kraken2 database files into Kun-peng database format for more efficient processing and analysis. By specifying the database directory and the hash file capacity, users can control the size of the resulting database index files.
+
+```sh
+./target/release/kun_peng hashshard -h
+Convert Kraken2 database files to Kun-peng database format for efficient processing and analysis.
+
+Usage: kun_peng hashshard [OPTIONS] --db <DATABASE>
+
+Options:
+      --db <DATABASE>                  The database directory for the Kraken 2 index. contains index files(hash.k2d opts.k2d taxo.k2d)
+      --hash-capacity <HASH_CAPACITY>  Specifies the hash file capacity.
+                                       Acceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').
+                                       Note: The specified capacity affects the index size, with a factor of 4 applied.
+                                       For example, specifying '1G' results in an index size of '4G'.
+                                       Default: 1G (capacity 1G = file size 4G) [default: 1G]
+  -h, --help                           Print help
+  -V, --version                        Print version
+
+```
+
 
 ### classify
 

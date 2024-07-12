@@ -1,12 +1,13 @@
 use clap::Parser;
-
 use flate2::read::GzDecoder;
-use kr2r::utils::{find_files, open_file};
+use kr2r::db::generate_taxonomy;
+use kr2r::utils::{find_files, open_file, read_id_to_taxon_map};
 use rayon::prelude::*;
 use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Read, Result, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]
@@ -120,7 +121,11 @@ fn process_gz_file(
 const PREFIX: &'static str = "assembly_summary";
 const SUFFIX: &'static str = "txt";
 
-fn merge_fna_parallel(assembly_files: &Vec<PathBuf>, database: &PathBuf) -> Result<()> {
+fn merge_fna_parallel(
+    assembly_files: &Vec<PathBuf>,
+    database: &PathBuf,
+    library_dir: &PathBuf,
+) -> Result<()> {
     let pattern = format!(r"{}_(\S+)\.{}", PREFIX, SUFFIX);
     let file_site = regex::Regex::new(&pattern).unwrap();
 
@@ -138,7 +143,8 @@ fn merge_fna_parallel(assembly_files: &Vec<PathBuf>, database: &PathBuf) -> Resu
                         return;
                     }
                     let thread_index = rayon::current_thread_index().unwrap_or(0);
-                    let library_fna_path = database.join(format!("library_{}.fna", thread_index));
+                    let library_fna_path =
+                        library_dir.join(format!("library_{}.fna", thread_index));
                     let seqid2taxid_path =
                         database.join(format!("seqid2taxid_{}.map", thread_index));
                     let mut fna_writer = BufWriter::new(
@@ -175,11 +181,11 @@ fn merge_fna_parallel(assembly_files: &Vec<PathBuf>, database: &PathBuf) -> Resu
         }
     }
 
-    let fna_files = find_files(database, "library_", "fna");
+    // let fna_files = find_files(database, "library_", "fna");
     let seqid_files = find_files(database, "seqid2taxid_", "map");
-    let library_fna_path = database.join("library.fna");
+    // let library_fna_path = database.join("library.fna");
     let seqid2taxid_path = database.join("seqid2taxid.map");
-    merge_files(&fna_files, &library_fna_path)?;
+    // merge_files(&fna_files, &library_fna_path)?;
     merge_files(&seqid_files, &seqid2taxid_path)?;
     if is_empty.load(Ordering::Relaxed) {
         panic!("genimics fna files is empty! please check download dir");
@@ -188,22 +194,30 @@ fn merge_fna_parallel(assembly_files: &Vec<PathBuf>, database: &PathBuf) -> Resu
 }
 
 fn merge_files(paths: &Vec<PathBuf>, output_path: &PathBuf) -> Result<()> {
-    let mut output = BufWriter::new(File::create(output_path)?);
-    for path in paths {
-        let mut input = File::open(path)?;
-        let mut buffer = [0; 1024 * 1024]; // 使用 1MB 的缓冲区
+    let output = Arc::new(Mutex::new(BufWriter::new(File::create(output_path)?)));
+    let buffer_size = 64 * 1024 * 1024; // Increased buffer size for better performance
 
-        // 逐块读取并写入
+    paths.par_iter().try_for_each(|path| -> Result<()> {
+        let input = File::open(path)?;
+        let mut reader = BufReader::new(input);
+        let mut buffer = vec![0; buffer_size];
+
         loop {
-            let bytes_read = input.read(&mut buffer)?;
+            let bytes_read = reader.read(&mut buffer)?;
             if bytes_read == 0 {
                 break; // 文件读取完毕
             }
+
+            let mut output = output.lock().unwrap();
             output.write_all(&buffer[..bytes_read])?;
         }
-        std::fs::remove_file(path)?;
-    }
 
+        std::fs::remove_file(path)?;
+        Ok(())
+    })?;
+
+    // Ensure all buffered data is flushed to the output file
+    let mut output = output.lock().unwrap();
     output.flush()?;
     Ok(())
 }
@@ -217,6 +231,9 @@ pub fn run(args: Args) -> Result<()> {
 
     let dst_tax_dir = database.join("taxonomy");
     create_dir_all(&dst_tax_dir)?;
+
+    let library_dir = database.join("library");
+    create_dir_all(&library_dir)?;
 
     let source_names_file = &download_dir.join("taxonomy").join("names.dmp");
     assert!(source_names_file.exists());
@@ -247,8 +264,20 @@ pub fn run(args: Args) -> Result<()> {
     }
     let assembly_files = find_files(&download_dir, &PREFIX, &SUFFIX);
 
-    merge_fna_parallel(&assembly_files, &args.database)?;
+    merge_fna_parallel(&assembly_files, &args.database, &library_dir)?;
 
+    let id_to_taxon_map_filename = args.database.join("seqid2taxid.map");
+    let id_to_taxon_map = read_id_to_taxon_map(&id_to_taxon_map_filename)?;
+    let k2d_dir = &args.database;
+    let taxonomy_filename = k2d_dir.join("taxo.k2d");
+
+    let ncbi_taxonomy_directory = &args.database.join("taxonomy");
+
+    let _ = generate_taxonomy(
+        &ncbi_taxonomy_directory,
+        &taxonomy_filename,
+        &id_to_taxon_map,
+    )?;
     // 计算持续时间
     let duration = start.elapsed();
     println!("merge fna took: {:?}", duration);

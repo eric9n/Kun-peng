@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 mod annotate;
 mod build_k2_db;
+mod chunk_db;
 mod direct;
 mod estimate_capacity;
 mod hashshard;
@@ -111,7 +112,7 @@ impl From<BuildArgs> for estimate_capacity::Args {
     }
 }
 
-impl From<BuildArgs> for build_k2_db::Args {
+impl From<BuildArgs> for chunk_db::Args {
     fn from(item: BuildArgs) -> Self {
         Self {
             build: item.build,
@@ -153,17 +154,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Estimate(cmd_args) => {
             estimate_capacity::run(cmd_args);
         }
-        // Commands::Seqid2taxid(cmd_args) => {
-        //     seqid2taxid::run(cmd_args)?;
-        // }
         Commands::Build(cmd_args) => {
             let fna_args = merge_fna::Args::from(cmd_args.clone());
             merge_fna::run(fna_args)?;
             let ec_args = estimate_capacity::Args::from(cmd_args.clone());
             let required_capacity = estimate_capacity::run(ec_args);
 
-            let build_args = build_k2_db::Args::from(cmd_args.clone());
-            build_k2_db::run(build_args, required_capacity)?;
+            let build_args = chunk_db::Args::from(cmd_args.clone());
+            let database = &build_args.build.database.clone();
+            chunk_db::run(build_args, required_capacity)?;
+            build_k2_db::run(database)?;
         }
         Commands::Hashshard(cmd_args) => {
             hashshard::run(cmd_args)?;

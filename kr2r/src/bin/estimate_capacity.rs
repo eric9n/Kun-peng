@@ -1,7 +1,7 @@
 use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use kr2r::args::KLMTArgs;
-use kr2r::utils::{find_library_fna_files, format_bytes, open_file};
+use kr2r::utils::{find_files, format_bytes, open_file};
 use kr2r::KBuildHasher;
 
 use seqkmer::{read_parallel, BufferFastaReader};
@@ -145,7 +145,8 @@ pub fn run(args: Args) -> usize {
     let fna_files = if source.is_file() {
         vec![source.clone()]
     } else {
-        find_library_fna_files(args.database)
+        let library_dir = &args.database.join("library");
+        find_files(library_dir, "library", ".fna")
     };
 
     if fna_files.is_empty() {

@@ -66,11 +66,13 @@ fn write_hashtable_to_file(
     let mut count = 0;
     writer.write_u64::<LittleEndian>(page_index)?;
     writer.write_u64::<LittleEndian>(capacity)?;
+
     for item in page {
         let value = item.load(Ordering::Relaxed);
         if value != 0 {
             count += 1;
         }
+
         writer.write_u32::<LittleEndian>(value)?;
     }
 
@@ -133,7 +135,7 @@ pub fn generate_taxonomy(
     ncbi_taxonomy_directory: &PathBuf,
     taxonomy_filename: &PathBuf,
     id_map: &HashMap<String, u64>,
-) -> Result<Taxonomy, Box<dyn std::error::Error>> {
+) -> IOResult<Taxonomy> {
     let nodes_filename = ncbi_taxonomy_directory.join("nodes.dmp");
     let names_filename = ncbi_taxonomy_directory.join("names.dmp");
     let mut ncbi = NCBITaxonomy::from_ncbi(nodes_filename, names_filename)?;
