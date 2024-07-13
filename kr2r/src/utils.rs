@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap as Map, HashMap};
 use std::fs::{self, create_dir_all, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, BufWriter, Result};
 use std::path::{Path, PathBuf};
@@ -70,7 +70,7 @@ pub fn expand_spaced_seed_mask(spaced_seed_mask: u64, bit_expansion_factor: u64)
 }
 
 pub fn find_files<P: AsRef<Path>>(path: P, prefix: &str, suffix: &str) -> Vec<PathBuf> {
-    WalkDir::new(path)
+    let mut files: Vec<PathBuf> = WalkDir::new(path)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
@@ -81,7 +81,9 @@ pub fn find_files<P: AsRef<Path>>(path: P, prefix: &str, suffix: &str) -> Vec<Pa
                 .unwrap_or(false)
         })
         .map(|e| e.path().to_path_buf())
-        .collect()
+        .collect();
+    files.sort_unstable();
+    files
 }
 
 pub fn format_bytes(size: f64) -> String {
@@ -193,7 +195,7 @@ pub fn find_and_trans_files(
     prefix: &str,
     suffix: &str,
     check: bool,
-) -> io::Result<HashMap<usize, PathBuf>> {
+) -> io::Result<Map<usize, PathBuf>> {
     // 构建正则表达式以匹配文件名中的数字
     let pattern = format!(r"{}_(\d+){}", prefix, suffix);
     let re = Regex::new(&pattern).unwrap();
@@ -212,8 +214,8 @@ pub fn find_and_trans_files(
         })
         .collect::<Vec<PathBuf>>();
 
-    // 使用正则表达式提取数字，并将它们存入HashMap
-    let mut map_entries = HashMap::new();
+    // 使用正则表达式提取数字，并将它们存入BTreeMap
+    let mut map_entries = Map::new();
     for path in entries {
         if let Some(fname) = path.file_name().and_then(|name| name.to_str()) {
             if let Some(cap) = re.captures(fname) {
