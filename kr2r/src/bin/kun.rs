@@ -48,6 +48,10 @@ struct BuildArgs {
     ///    between 0 and 1).
     #[clap(long, long, default_value_t = 0.7)]
     load_factor: f64,
+
+    /// library fna temp file max size
+    #[arg(long = "max-file-size", value_parser = parse_size, default_value = "2G")]
+    pub max_file_size: usize,
 }
 
 #[derive(Parser, Debug)]
@@ -126,6 +130,7 @@ impl From<BuildArgs> for merge_fna::Args {
         Self {
             download_dir: item.download_dir,
             database: item.build.database,
+            max_file_size: item.max_file_size,
         }
     }
 }

@@ -1,12 +1,14 @@
 use clap::Parser;
 use flate2::read::GzDecoder;
+use kr2r::args::parse_size;
 use kr2r::db::generate_taxonomy;
 use kr2r::utils::{find_files, open_file, read_id_to_taxon_map};
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Read, Result, Write};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -20,9 +22,74 @@ pub struct Args {
     /// ncbi library fna database directory
     #[arg(long = "db", required = true)]
     pub database: PathBuf,
-    // /// seqid2taxid.map file path, default = $database/seqid2taxid.map
-    // #[arg(short = 'm', long)]
-    // pub id_to_taxon_map_filename: Option<PathBuf>,
+
+    /// library fna temp file max size
+    #[arg(long = "max-file-size", value_parser = parse_size, default_value = "2G")]
+    pub max_file_size: usize,
+}
+
+struct SizedWriter {
+    writer: BufWriter<File>,
+    bytes_written: u64,
+    thread_index: usize,
+    file_suffix: AtomicUsize,
+    library_dir: PathBuf,
+    max_file_size: u64,
+}
+
+impl SizedWriter {
+    fn new(library_dir: &PathBuf, thread_index: usize, max_file_size: u64) -> Result<Self> {
+        let file_suffix = AtomicUsize::new(0);
+        let path = Self::get_file_path(library_dir, thread_index, 0);
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .write(true)
+            .open(&path)?;
+        let writer = BufWriter::new(file);
+
+        Ok(Self {
+            writer,
+            bytes_written: 0,
+            thread_index,
+            file_suffix,
+            library_dir: library_dir.to_path_buf(),
+            max_file_size,
+        })
+    }
+
+    fn get_file_path(library_dir: &PathBuf, thread_index: usize, suffix: usize) -> PathBuf {
+        library_dir.join(format!("library_{}_{}.fna", thread_index, suffix))
+    }
+
+    fn is_kraken_taxid_start(buf: &[u8]) -> bool {
+        buf.starts_with(b">taxid")
+    }
+
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        if Self::is_kraken_taxid_start(buf)
+            && self.bytes_written + buf.len() as u64 > self.max_file_size
+        {
+            self.writer.flush()?;
+            let new_suffix = self.file_suffix.fetch_add(1, Ordering::SeqCst) + 1;
+            let new_path = Self::get_file_path(&self.library_dir, self.thread_index, new_suffix);
+            let new_file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .write(true)
+                .open(&new_path)?;
+            self.writer = BufWriter::new(new_file);
+            self.bytes_written = 0;
+        }
+
+        let bytes_written = self.writer.write(buf)?;
+        self.bytes_written += bytes_written as u64;
+        Ok(bytes_written)
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        self.writer.flush()
+    }
 }
 
 fn parse_assembly_fna(assembly_file: &PathBuf, site: &str) -> Result<Vec<(String, String)>> {
@@ -68,7 +135,7 @@ fn parse_assembly_fna(assembly_file: &PathBuf, site: &str) -> Result<Vec<(String
 fn process_gz_file(
     gz_file: &PathBuf,
     map_writer: &mut BufWriter<File>,
-    fna_writer: &mut BufWriter<File>,
+    fna_writer: &mut SizedWriter,
     fna_start: &regex::Regex,
     taxid: &str,
 ) -> Result<()> {
@@ -83,8 +150,14 @@ fn process_gz_file(
     while reader.read_line(&mut line)? != 0 {
         if let Some(caps) = fna_start.captures(&line) {
             let seqid = &caps[1];
-            map_buffer.push_str(&format!("kraken:taxid|{}|{}\t{}\n", taxid, seqid, taxid));
-            fna_buffer.push_str(&format!(">kraken:taxid|{}|{}", taxid, &line[1..]));
+            map_buffer.push_str(&format!("taxid|{}|{}\t{}\n", taxid, seqid, taxid));
+
+            if !fna_buffer.is_empty() {
+                fna_writer.write(fna_buffer.as_bytes())?;
+                fna_buffer.clear();
+            }
+
+            fna_buffer.push_str(&format!(">taxid|{}|{}", taxid, &line[1..]));
         } else {
             fna_buffer.push_str(&line);
         }
@@ -96,7 +169,7 @@ fn process_gz_file(
         }
 
         if fna_buffer.len() > 10000 {
-            fna_writer.write_all(fna_buffer.as_bytes())?;
+            fna_writer.write(fna_buffer.as_bytes())?;
             fna_buffer.clear();
         }
 
@@ -109,7 +182,7 @@ fn process_gz_file(
     }
 
     if !fna_buffer.is_empty() {
-        fna_writer.write_all(fna_buffer.as_bytes())?;
+        fna_writer.write(fna_buffer.as_bytes())?;
     }
 
     fna_writer.flush()?;
@@ -125,12 +198,15 @@ fn merge_fna_parallel(
     assembly_files: &Vec<PathBuf>,
     database: &PathBuf,
     library_dir: &PathBuf,
+    max_file_size: u64,
 ) -> Result<()> {
     let pattern = format!(r"{}_(\S+)\.{}", PREFIX, SUFFIX);
     let file_site = regex::Regex::new(&pattern).unwrap();
 
     let fna_start: regex::Regex = regex::Regex::new(r"^>(\S+)").unwrap();
     let is_empty = AtomicBool::new(true);
+    let writers: Arc<Mutex<HashMap<usize, SizedWriter>>> = Arc::new(Mutex::new(HashMap::new()));
+
     for assembly_file in assembly_files {
         if let Some(caps) = file_site.captures(assembly_file.to_string_lossy().as_ref()) {
             if let Some(matched) = caps.get(1) {
@@ -142,19 +218,14 @@ fn merge_fna_parallel(
                         // eprintln!("{} does not exist", gz_file.to_string_lossy());
                         return;
                     }
+
                     let thread_index = rayon::current_thread_index().unwrap_or(0);
-                    let library_fna_path =
-                        library_dir.join(format!("library_{}.fna", thread_index));
+                    let mut writers = writers.lock().unwrap();
+                    let mut fna_writer = writers.entry(thread_index).or_insert_with(|| {
+                        SizedWriter::new(&library_dir, thread_index, max_file_size).unwrap()
+                    });
                     let seqid2taxid_path =
                         database.join(format!("seqid2taxid_{}.map", thread_index));
-                    let mut fna_writer = BufWriter::new(
-                        OpenOptions::new()
-                            .create(true)
-                            .append(true)
-                            .write(true)
-                            .open(&library_fna_path)
-                            .unwrap(),
-                    );
                     let mut map_writer = BufWriter::new(
                         OpenOptions::new()
                             .create(true)
@@ -164,18 +235,19 @@ fn merge_fna_parallel(
                             .unwrap(),
                     );
 
-                    process_gz_file(
+                    if let Err(e) = process_gz_file(
                         &gz_file,
                         &mut map_writer,
                         &mut fna_writer,
                         &fna_start,
                         &taxid,
-                    )
-                    .unwrap();
-
-                    fna_writer.flush().unwrap();
-                    map_writer.flush().unwrap();
-                    is_empty.fetch_and(false, Ordering::Relaxed);
+                    ) {
+                        eprintln!("process_gz_file error: {}", e);
+                    } else {
+                        fna_writer.flush().unwrap();
+                        map_writer.flush().unwrap();
+                        is_empty.fetch_and(false, Ordering::Relaxed);
+                    }
                 });
             }
         }
@@ -228,6 +300,7 @@ pub fn run(args: Args) -> Result<()> {
     println!("merge fna start...");
     let download_dir = args.download_dir;
     let database = &args.database;
+    let max_file_size = &args.max_file_size;
 
     let dst_tax_dir = database.join("taxonomy");
     create_dir_all(&dst_tax_dir)?;
@@ -264,7 +337,12 @@ pub fn run(args: Args) -> Result<()> {
     }
     let assembly_files = find_files(&download_dir, &PREFIX, &SUFFIX);
 
-    merge_fna_parallel(&assembly_files, &args.database, &library_dir)?;
+    merge_fna_parallel(
+        &assembly_files,
+        &args.database,
+        &library_dir,
+        *max_file_size as u64,
+    )?;
 
     let id_to_taxon_map_filename = args.database.join("seqid2taxid.map");
     let id_to_taxon_map = read_id_to_taxon_map(&id_to_taxon_map_filename)?;

@@ -170,7 +170,7 @@ pub async fn write_to_fna(
         while reader.read_line(&mut line).await? != 0 {
             if let Some(caps) = re.captures(&line) {
                 let seqid = &caps[1];
-                let full_tax_id = format!("kraken:taxid|{}", taxid);
+                let full_tax_id = format!("taxid|{}", taxid);
                 map_writer
                     .write_all(format!("TAXID\t{}|{}\t{}\n", full_tax_id, seqid, taxid).as_bytes())
                     .await?;
