@@ -16,7 +16,7 @@ use std::time::Instant;
 #[clap(version, about = "A tool for processing genomic files")]
 pub struct Args {
     /// Directory to store downloaded files
-    #[arg(short, long, default_value = "lib")]
+    #[arg(short, long, required = true)]
     pub download_dir: PathBuf,
 
     /// ncbi library fna database directory

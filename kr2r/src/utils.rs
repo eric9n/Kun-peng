@@ -190,6 +190,54 @@ pub fn create_sample_file<P: AsRef<Path>>(filename: P) -> BufWriter<File> {
 
 use regex::Regex;
 
+pub fn find_and_trans_bin_files(
+    directory: &Path,
+    prefix: &str,
+    suffix: &str,
+    check: bool,
+) -> io::Result<Map<usize, Vec<PathBuf>>> {
+    // 改为聚合相同数字的文件路径
+    // 构建正则表达式以匹配文件名中的第一个数字
+    let pattern = format!(r"{}_(\d+)_\d+{}", prefix, suffix);
+    let re = Regex::new(&pattern).expect("Invalid regex pattern");
+
+    // 读取指定目录下的所有条目
+    let mut map_entries = Map::new();
+    for entry in fs::read_dir(directory)? {
+        let path = entry?.path();
+
+        if path.is_file() {
+            if let Some(file_name) = path.file_name().and_then(|name| name.to_str()) {
+                // 使用正则表达式匹配文件名，并提取第一个数字部分
+                if let Some(cap) = re.captures(file_name) {
+                    if let Some(m) = cap.get(1) {
+                        if let Ok(num) = m.as_str().parse::<usize>() {
+                            map_entries.entry(num).or_insert_with(Vec::new).push(path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if check {
+        // 检查数字是否从1开始连续
+        let mut keys: Vec<_> = map_entries.keys().cloned().collect();
+        keys.sort_unstable();
+        for (i, &key) in keys.iter().enumerate() {
+            if i + 1 != key {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "File numbers are not continuous starting from 1.",
+                ));
+            }
+        }
+    }
+
+    // 返回聚合后的文件路径
+    Ok(map_entries)
+}
+
 pub fn find_and_trans_files(
     directory: &Path,
     prefix: &str,

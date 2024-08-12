@@ -225,11 +225,6 @@ where
         )?;
         file_writer.flush().unwrap();
 
-        create_sample_file(
-            args.chunk_dir
-                .join(format!("sample_file_{}.bin", file_index)),
-        );
-
         action(file_index, path_pair)?;
     }
 

@@ -81,6 +81,7 @@ impl From<ClassifyArgs> for annotate::Args {
             database: item.database,
             chunk_dir: item.chunk_dir,
             batch_size: item.batch_size,
+            buffer_size: item.buffer_size,
             num_threads: item.num_threads,
         }
     }
@@ -91,7 +92,6 @@ impl From<ClassifyArgs> for resolve::Args {
         Self {
             database: item.database,
             chunk_dir: item.chunk_dir,
-            batch_size: item.batch_size,
             confidence_threshold: item.confidence_threshold,
             minimum_hit_groups: item.minimum_hit_groups,
             kraken_output_dir: item.kraken_output_dir,

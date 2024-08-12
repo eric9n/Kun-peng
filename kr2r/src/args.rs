@@ -35,7 +35,7 @@ pub struct Build {
     pub threads: usize,
 }
 
-const BATCH_SIZE: usize = 16 * 1024 * 1024;
+const BUFFER_SIZE: usize = 16 * 1024 * 1024;
 
 /// Command line arguments for the classify program.
 ///
@@ -84,8 +84,12 @@ pub struct ClassifyArgs {
     #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
     pub num_threads: usize,
 
-    #[clap(long, default_value_t = BATCH_SIZE)]
-    pub batch_size: usize,
+    #[clap(long, default_value_t = BUFFER_SIZE)]
+    pub buffer_size: usize,
+
+    /// The size of each batch for processing taxid match results, used to control memory usage
+    #[clap(long, default_value_t = 16)]
+    pub batch_size: u32,
 
     /// Confidence score threshold
     #[clap(

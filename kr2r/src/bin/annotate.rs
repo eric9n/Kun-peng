@@ -9,7 +9,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
 // 定义每批次处理的 Slot 数量
-pub const BATCH_SIZE: usize = 8 * 1024 * 1024;
+pub const BUFFER_SIZE: usize = 8 * 1024 * 1024;
 
 /// Command line arguments for the splitr program.
 ///
@@ -30,8 +30,12 @@ pub struct Args {
     #[clap(long)]
     pub chunk_dir: PathBuf,
 
-    #[clap(long, default_value_t = BATCH_SIZE)]
-    pub batch_size: usize,
+    #[clap(long, default_value_t = BUFFER_SIZE)]
+    pub buffer_size: usize,
+
+    /// The size of each batch for processing taxid match results, used to control memory usage
+    #[clap(long, default_value_t = 16)]
+    pub batch_size: u32,
 
     /// The number of threads to use.
     #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
@@ -57,7 +61,7 @@ fn read_chunk_header<R: Read>(reader: &mut R) -> io::Result<(usize, usize)> {
     Ok((index as usize, chunk_size as usize))
 }
 
-fn write_to_file(
+fn _write_to_file(
     file_index: u64,
     bytes: &[u8],
     last_file_index: &mut Option<u64>,
@@ -87,12 +91,56 @@ fn write_to_file(
     Ok(())
 }
 
+fn write_to_file(
+    file_index: u64,
+    seq_id_mod: u32,
+    bytes: &[u8],
+    writers: &mut HashMap<(u64, u32), BufWriter<File>>,
+    chunk_dir: &PathBuf,
+) -> io::Result<()> {
+    // 检查是否已经有该文件的 writer，没有则创建一个新的
+    let writer = writers.entry((file_index, seq_id_mod)).or_insert_with(|| {
+        let file_name = format!("sample_file_{}_{}.bin", file_index, seq_id_mod);
+        let file_path = chunk_dir.join(file_name);
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&file_path)
+            .expect("failed to open file");
+        BufWriter::new(file)
+    });
+
+    writer.write_all(bytes)?;
+
+    Ok(())
+}
+
+fn clean_up_writers(
+    writers: &mut HashMap<(u64, u32), BufWriter<File>>,
+    current_file_index: u64,
+) -> io::Result<()> {
+    let keys_to_remove: Vec<(u64, u32)> = writers
+        .keys()
+        .cloned()
+        .filter(|(idx, _)| *idx != current_file_index)
+        .collect();
+
+    for key in keys_to_remove {
+        if let Some(mut writer) = writers.remove(&key) {
+            writer.flush()?; // 刷新并清理
+        }
+    }
+
+    Ok(())
+}
+
 fn process_batch<R>(
     reader: &mut R,
     hash_config: &HashConfig,
     chtm: &CHTable,
     chunk_dir: PathBuf,
-    batch_size: usize,
+    buffer_size: usize,
+    bin_threads: u32,
     page_index: usize,
     num_threads: usize,
 ) -> std::io::Result<()>
@@ -100,8 +148,8 @@ where
     R: Read + Send,
 {
     let row_size = std::mem::size_of::<Row>();
-    let mut last_file_index: Option<u64> = None;
-    let mut writer: Option<BufWriter<File>> = None;
+    let mut writers: HashMap<(u64, u32), BufWriter<File>> = HashMap::new();
+    let mut current_file_index: Option<u64> = None;
 
     let value_mask = hash_config.get_value_mask();
     let value_bits = hash_config.get_value_bits();
@@ -111,9 +159,9 @@ where
     buffer_read_parallel(
         reader,
         num_threads,
-        batch_size,
+        buffer_size,
         |dataset: Vec<Slot<u64>>| {
-            let mut results: HashMap<u64, Vec<u8>> = HashMap::new();
+            let mut results: HashMap<(u64, u32), Vec<u8>> = HashMap::new();
             for slot in dataset {
                 let indx = slot.idx & idx_mask;
                 let compacted = slot.value.left(value_bits) as u32;
@@ -127,9 +175,10 @@ where
                     let high = u32::combined(left, taxid, value_bits);
                     let row = Row::new(high, seq_id, kmer_id as u32);
                     let value_bytes = row.as_slice(row_size);
+                    let seq_id_mod = seq_id % bin_threads;
 
                     results
-                        .entry(file_index)
+                        .entry((file_index, seq_id_mod))
                         .or_insert_with(Vec::new)
                         .extend(value_bytes);
                 }
@@ -138,19 +187,19 @@ where
         },
         |result| {
             while let Some(Some(res)) = result.next() {
-                let mut file_indices: Vec<_> = res.keys().cloned().collect();
-                file_indices.sort_unstable(); // 对file_index进行排序
+                let mut file_keys: Vec<_> = res.keys().cloned().collect();
+                file_keys.sort_unstable(); // 对 (file_index, seq_id_mod) 进行排序
 
-                for file_index in file_indices {
-                    if let Some(bytes) = res.get(&file_index) {
-                        write_to_file(
-                            file_index,
-                            bytes,
-                            &mut last_file_index,
-                            &mut writer,
-                            &chunk_dir,
-                        )
-                        .expect("write to file error");
+                for (file_index, seq_id_mod) in file_keys {
+                    if let Some(bytes) = res.get(&(file_index, seq_id_mod)) {
+                        // 如果当前处理的 file_index 改变了，清理非当前的 writers
+                        if current_file_index != Some(file_index) {
+                            clean_up_writers(&mut writers, file_index).expect("clean writer");
+                            current_file_index = Some(file_index);
+                        }
+
+                        write_to_file(file_index, seq_id_mod, bytes, &mut writers, &chunk_dir)
+                            .expect("write to file error");
                     }
                 }
             }
@@ -158,8 +207,9 @@ where
     )
     .expect("failed");
 
-    if let Some(w) = writer.as_mut() {
-        w.flush()?;
+    // 最终批次处理完成后，刷新所有的 writer
+    for writer in writers.values_mut() {
+        writer.flush()?;
     }
 
     Ok(())
@@ -190,6 +240,7 @@ fn process_chunk_file<P: AsRef<Path>>(
         &config,
         &chtm,
         args.chunk_dir.clone(),
+        args.buffer_size,
         args.batch_size,
         page_index,
         args.num_threads,
