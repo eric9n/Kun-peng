@@ -187,7 +187,7 @@ pub fn run(args: Args) -> Result<()> {
     let taxonomy_filename = k2d_dir.join("taxo.k2d");
     let taxo = Taxonomy::from_file(taxonomy_filename)?;
 
-    let sample_files = find_and_trans_bin_files(&args.chunk_dir, "sample_file", r".bin", false)?;
+    let sample_files = find_and_trans_bin_files(&args.chunk_dir, "sample_file", ".bin", false)?;
     let sample_id_files = find_and_trans_files(&args.chunk_dir, "sample_id", ".map", false)?;
 
     // let partition = sample_files.len();
