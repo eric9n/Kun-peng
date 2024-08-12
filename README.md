@@ -346,8 +346,11 @@ Options:
           Minimum quality score for FASTQ data [default: 0]
   -p, --num-threads <NUM_THREADS>
           The number of threads to use [default: 10]
-      --batch-size <BATCH_SIZE>
+     --buffer-size <BUFFER_SIZE>
           [default: 16777216]
+      --batch-size <BATCH_SIZE>
+          The size of each batch for processing taxid match results, used to control memory usage
+          [default: 16]
   -T, --confidence-threshold <CONFIDENCE_THRESHOLD>
           Confidence score threshold [default: 0]
   -g, --minimum-hit-groups <MINIMUM_HIT_GROUPS>
@@ -358,8 +361,6 @@ Options:
           In comb. w/ -R, provide minimizer information in report
   -z, --report-zero-counts
           In comb. w/ -R, report taxa w/ 0 count
-      --full-output
-          output file contains all unclassified sequence
   -h, --help
           Print help (see more with '--help')
   -V, --version

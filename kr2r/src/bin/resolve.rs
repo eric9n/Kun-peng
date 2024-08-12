@@ -8,7 +8,7 @@ use kr2r::utils::{find_and_trans_bin_files, find_and_trans_files, open_file};
 use kr2r::HitGroup;
 // use rayon::prelude::*;
 use seqkmer::{buffer_map_parallel, trim_pair_info, OptionPair};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Result, Write};
 use std::path::{Path, PathBuf};
@@ -65,9 +65,9 @@ pub struct Args {
     #[clap(long = "output-dir", value_parser)]
     pub kraken_output_dir: Option<PathBuf>,
 
-    /// output file contains all unclassified sequence
-    #[clap(long, value_parser, default_value_t = false)]
-    pub full_output: bool,
+    // /// output file contains all unclassified sequence
+    // #[clap(long, value_parser, default_value_t = false)]
+    // pub full_output: bool,
     /// Confidence score threshold, default is 0.0.
     #[clap(
         short = 'T',
@@ -120,8 +120,7 @@ fn process_batch<P: AsRef<Path>>(
     id_map: &HashMap<u32, (String, String, usize, Option<usize>)>,
     writer: &mut Box<dyn Write + Send>,
     value_mask: usize,
-) -> Result<(TaxonCountersDash, usize, HashSet<u32>)> {
-    let hit_seq_id_set = HashSet::new();
+) -> Result<(TaxonCountersDash, usize)> {
     let confidence_threshold = args.confidence_threshold;
     let minimum_hit_groups = args.minimum_hit_groups;
 
@@ -138,6 +137,7 @@ fn process_batch<P: AsRef<Path>>(
                 if let Some(item) = id_map.get(&k) {
                     let mut rows = rows.to_owned();
                     rows.sort_unstable();
+
                     let dna_id = trim_pair_info(&item.0);
                     let range =
                         OptionPair::from(((0, item.2), item.3.map(|size| (item.2, size + item.2))));
@@ -179,11 +179,7 @@ fn process_batch<P: AsRef<Path>>(
         .expect("failed");
     }
 
-    Ok((
-        cur_taxon_counts,
-        classify_counter.load(Ordering::SeqCst),
-        hit_seq_id_set,
-    ))
+    Ok((cur_taxon_counts, classify_counter.load(Ordering::SeqCst)))
 }
 
 pub fn run(args: Args) -> Result<()> {
@@ -218,7 +214,7 @@ pub fn run(args: Args) -> Result<()> {
             }
             None => Box::new(BufWriter::new(io::stdout())) as Box<dyn Write + Send>,
         };
-        let (thread_taxon_counts, thread_classified, hit_seq_set) = process_batch::<PathBuf>(
+        let (thread_taxon_counts, thread_classified) = process_batch::<PathBuf>(
             sam_files,
             &args,
             &taxo,
@@ -227,22 +223,22 @@ pub fn run(args: Args) -> Result<()> {
             value_mask,
         )?;
 
-        if args.full_output {
-            sample_id_map
-                .iter()
-                .filter(|(key, _)| !hit_seq_set.contains(key))
-                .for_each(|(_, value)| {
-                    let dna_id = trim_pair_info(&value.0); // 假设 key 是 &str 类型
-                    let output_line = format!(
-                        "U\t{}\t0\t{}\t{}\n",
-                        dna_id,
-                        value.1,
-                        if value.3.is_none() { "" } else { " |:| " }
-                    );
+        // if args.full_output {
+        //     sample_id_map
+        //         .iter()
+        //         .filter(|(key, _)| !hit_seq_set.contains(key))
+        //         .for_each(|(_, value)| {
+        //             let dna_id = trim_pair_info(&value.0); // 假设 key 是 &str 类型
+        //             let output_line = format!(
+        //                 "U\t{}\t0\t{}\t{}\n",
+        //                 dna_id,
+        //                 value.1,
+        //                 if value.3.is_none() { "" } else { " |:| " }
+        //             );
 
-                    writer.write_all(output_line.as_bytes()).unwrap();
-                });
-        }
+        //             writer.write_all(output_line.as_bytes()).unwrap();
+        //         });
+        // }
 
         let mut sample_taxon_counts: HashMap<
             u64,

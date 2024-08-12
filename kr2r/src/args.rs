@@ -117,10 +117,9 @@ pub struct ClassifyArgs {
     #[clap(short = 'z', long, value_parser, default_value_t = false)]
     pub report_zero_counts: bool,
 
-    /// output file contains all unclassified sequence
-    #[clap(long, value_parser, default_value_t = false)]
-    pub full_output: bool,
-
+    // /// output file contains all unclassified sequence
+    // #[clap(long, value_parser, default_value_t = false)]
+    // pub full_output: bool,
     /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
     /// Supports fasta or fastq format files (e.g., .fasta, .fastq) and gzip compressed files (e.g., .fasta.gz, .fastq.gz).
     // #[clap(short = 'F', long = "files")]
