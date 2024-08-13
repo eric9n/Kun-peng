@@ -8,8 +8,9 @@ use std::io::{self, BufReader, BufWriter, Read, Result, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
+
 // 定义每批次处理的 Slot 数量
-pub const BUFFER_SIZE: usize = 8 * 1024 * 1024;
+pub const BUFFER_SIZE: usize = 48 * 1024 * 1024;
 
 /// Command line arguments for the splitr program.
 ///
