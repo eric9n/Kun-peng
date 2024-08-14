@@ -35,7 +35,7 @@ pub struct Args {
     pub buffer_size: usize,
 
     /// The size of each batch for processing taxid match results, used to control memory usage
-    #[clap(long, default_value_t = 16)]
+    #[clap(long, value_parser = clap::value_parser!(u32).range(1..=32), default_value_t = 4)]
     pub batch_size: u32,
 
     /// The number of threads to use.
@@ -261,6 +261,7 @@ pub fn run(args: Args) -> Result<()> {
         process_chunk_file(&args, chunk_file, &hash_files)?;
         let _ = std::fs::remove_file(chunk_file);
     }
+
     // 计算持续时间
     let duration = start.elapsed();
     // 打印运行时间

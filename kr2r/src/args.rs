@@ -88,7 +88,7 @@ pub struct ClassifyArgs {
     pub buffer_size: usize,
 
     /// The size of each batch for processing taxid match results, used to control memory usage
-    #[clap(long, default_value_t = 16)]
+    #[clap(long, value_parser = clap::value_parser!(u32).range(1..=32), default_value_t = 4)]
     pub batch_size: u32,
 
     /// Confidence score threshold

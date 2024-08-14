@@ -93,10 +93,6 @@ pub struct Args {
         default_value_t = 2
     )]
     pub minimum_hit_groups: usize,
-
-    /// The number of threads to use.
-    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
-    pub num_threads: usize,
 }
 
 fn read_rows_from_file<P: AsRef<Path>>(file_path: P) -> io::Result<HashMap<u32, Vec<Row>>> {
@@ -222,23 +218,6 @@ pub fn run(args: Args) -> Result<()> {
             &mut writer,
             value_mask,
         )?;
-
-        // if args.full_output {
-        //     sample_id_map
-        //         .iter()
-        //         .filter(|(key, _)| !hit_seq_set.contains(key))
-        //         .for_each(|(_, value)| {
-        //             let dna_id = trim_pair_info(&value.0); // 假设 key 是 &str 类型
-        //             let output_line = format!(
-        //                 "U\t{}\t0\t{}\t{}\n",
-        //                 dna_id,
-        //                 value.1,
-        //                 if value.3.is_none() { "" } else { " |:| " }
-        //             );
-
-        //             writer.write_all(output_line.as_bytes()).unwrap();
-        //         });
-        // }
 
         let mut sample_taxon_counts: HashMap<
             u64,

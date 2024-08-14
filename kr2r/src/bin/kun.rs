@@ -97,8 +97,6 @@ impl From<ClassifyArgs> for resolve::Args {
             kraken_output_dir: item.kraken_output_dir,
             report_kmer_data: item.report_kmer_data,
             report_zero_counts: item.report_zero_counts,
-            // full_output: item.full_output,
-            num_threads: item.num_threads,
         }
     }
 }
