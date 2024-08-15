@@ -296,29 +296,6 @@ impl HashConfig {
     }
 }
 
-fn read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
-    let mut file = std::fs::File::open(filename)?;
-
-    // 读取索引和容量
-    let mut buffer = [0u8; 16];
-    file.read_exact(&mut buffer)?;
-
-    let index = LittleEndian::read_u64(&buffer[0..8]) as usize;
-    let capacity = LittleEndian::read_u64(&buffer[8..16]) as usize;
-
-    // 读取数据部分
-    let mut data = vec![0u32; capacity + 1024 * 1024];
-    let data_bytes = unsafe {
-        std::slice::from_raw_parts_mut(
-            data.as_mut_ptr() as *mut u8,
-            capacity * std::mem::size_of::<u32>(),
-        )
-    };
-    file.read_exact(data_bytes)?;
-
-    Ok(Page::new(index, capacity, data))
-}
-
 fn read_first_block_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
     let mut file = std::fs::File::open(filename)?;
 
@@ -361,6 +338,79 @@ fn read_first_block_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
     Ok(Page::new(index, first_zero_end, data))
 }
 
+fn read_page_metadata(file: &mut File) -> Result<(usize, usize)> {
+    let index = file.read_u64::<LittleEndian>()? as usize;
+    let capacity = file.read_u64::<LittleEndian>()? as usize;
+    Ok((index, capacity))
+}
+
+fn read_page_data(file: &mut File, data: &mut [u32]) -> Result<()> {
+    let data_bytes = unsafe {
+        std::slice::from_raw_parts_mut(
+            data.as_mut_ptr() as *mut u8,
+            data.len() * std::mem::size_of::<u32>(),
+        )
+    };
+    file.read_exact(data_bytes)?;
+    Ok(())
+}
+
+fn read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
+    let mut file = std::fs::File::open(filename)?;
+    let (index, capacity) = read_page_metadata(&mut file)?;
+    let mut data = vec![0u32; capacity];
+    read_page_data(&mut file, &mut data)?;
+
+    Ok(Page::new(index, capacity, data))
+}
+
+fn read_large_page_from_file<P: AsRef<Path>>(large_page: &mut Page, filename: P) -> Result<()> {
+    let mut file = File::open(filename)?;
+
+    let (index, capacity) = read_page_metadata(&mut file)?;
+
+    let current_len = large_page.data.capacity();
+
+    if capacity > current_len {
+        // 如果文件中的容量大于当前页的容量，则扩展内存
+        large_page.data.resize(capacity, 0);
+    } else if capacity < current_len {
+        // 如果文件中的容量小于当前页的容量，则截断并清零多余的部分
+        large_page.data.truncate(capacity);
+        large_page.data.shrink_to_fit(); // 释放多余的内存
+    }
+
+    read_page_data(&mut file, &mut large_page.data)?;
+
+    large_page.index = index;
+    large_page.size = capacity;
+
+    Ok(())
+}
+
+pub fn read_next_page<P: AsRef<Path> + Debug>(
+    large_page: &mut Page,
+    hash_sorted_files: &Vec<P>,
+    page_index: usize,
+    config: HashConfig,
+) -> Result<()> {
+    let mut hash_file = &hash_sorted_files[page_index];
+    let parition = config.partition;
+    read_large_page_from_file(large_page, hash_file)?;
+
+    let next_page = if large_page.data.last().map_or(false, |&x| x != 0) {
+        if config.version < 1 {
+            hash_file = &hash_sorted_files[(page_index + 1) % parition]
+        }
+        read_first_block_from_file(&hash_file)?
+    } else {
+        Page::default()
+    };
+    large_page.merge(next_page);
+
+    Ok(())
+}
+
 #[derive(Clone)]
 pub struct Page {
     pub index: usize,
@@ -370,15 +420,15 @@ pub struct Page {
 
 impl Default for Page {
     fn default() -> Self {
-        Self {
-            index: 1,
-            size: 1,
-            data: vec![0],
-        }
+        Self::with_capacity(1, 1)
     }
 }
 
 impl Page {
+    pub fn with_capacity(index: usize, capacity: usize) -> Self {
+        Self::new(index, capacity, vec![0; capacity + 1024])
+    }
+
     pub fn new(index: usize, size: usize, data: Vec<u32>) -> Self {
         Self { index, size, data }
     }
@@ -392,8 +442,12 @@ impl Page {
     }
 
     pub fn merge(&mut self, other: Self) {
-        self.size = self.size + other.size;
-        self.data.extend_from_slice(&other.data);
+        let new_size = self.size + other.size;
+        if self.data.capacity() < new_size {
+            self.data.reserve(new_size - self.data.len());
+        }
+        self.data.extend_from_slice(&other.data[..other.size]);
+        self.size = new_size;
     }
 
     pub fn find_index(

@@ -1,5 +1,5 @@
 use clap::Parser;
-use kr2r::compact_hash::{CHTable, Compact, HashConfig, Row, Slot};
+use kr2r::compact_hash::{read_next_page, Compact, HashConfig, Page, Row, Slot};
 use kr2r::utils::{find_and_sort_files, open_file};
 use seqkmer::buffer_read_parallel;
 use std::collections::HashMap;
@@ -138,11 +138,11 @@ fn clean_up_writers(
 fn process_batch<R>(
     reader: &mut R,
     hash_config: &HashConfig,
-    chtm: &CHTable,
+    page: &Page,
     chunk_dir: PathBuf,
     buffer_size: usize,
     bin_threads: u32,
-    page_index: usize,
+    // page_index: usize,
     num_threads: usize,
 ) -> std::io::Result<()>
 where
@@ -166,7 +166,8 @@ where
             for slot in dataset {
                 let indx = slot.idx & idx_mask;
                 let compacted = slot.value.left(value_bits) as u32;
-                let taxid = chtm.get_from_page(indx, compacted, page_index);
+                // let taxid = chtm.get_from_page(indx, compacted, page_index);
+                let taxid = page.find_index(indx, compacted, value_bits, value_mask);
 
                 if taxid > 0 {
                     let kmer_id = slot.idx >> idx_bits;
@@ -220,6 +221,7 @@ fn process_chunk_file<P: AsRef<Path>>(
     args: &Args,
     chunk_file: P,
     hash_files: &Vec<PathBuf>,
+    large_page: &mut Page,
 ) -> Result<()> {
     let file = open_file(chunk_file)?;
     let mut reader = BufReader::new(file);
@@ -230,8 +232,8 @@ fn process_chunk_file<P: AsRef<Path>>(
 
     println!("start load table...");
     let config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
-    let chtm = CHTable::from_range(config, hash_files, page_index, page_index + 1)?;
 
+    read_next_page(large_page, hash_files, page_index, config)?;
     // 计算持续时间
     let duration = start.elapsed();
     // 打印运行时间
@@ -239,11 +241,11 @@ fn process_chunk_file<P: AsRef<Path>>(
     process_batch(
         &mut reader,
         &config,
-        &chtm,
+        &large_page,
         args.chunk_dir.clone(),
         args.buffer_size,
         args.batch_size,
-        page_index,
+        // page_index,
         args.num_threads,
     )?;
 
@@ -257,8 +259,10 @@ pub fn run(args: Args) -> Result<()> {
     // 开始计时
     let start = Instant::now();
     println!("annotate start...");
+    let config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
+    let mut large_page = Page::with_capacity(0, config.hash_capacity);
     for chunk_file in &chunk_files {
-        process_chunk_file(&args, chunk_file, &hash_files)?;
+        process_chunk_file(&args, chunk_file, &hash_files, &mut large_page)?;
         let _ = std::fs::remove_file(chunk_file);
     }
 
