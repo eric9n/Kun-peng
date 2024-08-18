@@ -61,7 +61,7 @@ pub struct ClassifyArgs {
 
     /// File path for outputting normal Kraken output.
     #[clap(long = "output-dir", value_parser)]
-    pub kraken_output_dir: Option<PathBuf>,
+    pub output_dir: Option<PathBuf>,
 
     /// Enable paired-end processing.
     #[clap(short = 'P', long = "paired-end-processing", action)]

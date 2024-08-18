@@ -28,7 +28,7 @@ pub struct Args {
 
     /// File path for outputting normal Kraken output.
     #[clap(long = "output-dir", value_parser)]
-    pub kraken_output_dir: Option<PathBuf>,
+    pub output_dir: Option<PathBuf>,
 
     /// Enable paired-end processing.
     #[clap(short = 'P', long = "paired-end-processing", action)]
@@ -161,7 +161,7 @@ fn process_fastx_file<R>(
 where
     R: Reader,
 {
-    let mut writer: Box<dyn Write + Send> = match &args.kraken_output_dir {
+    let mut writer: Box<dyn Write + Send> = match &args.output_dir {
         Some(ref file_path) => {
             let filename = file_path.join(format!("output_{}.txt", file_index));
             let file = File::create(filename)?;
@@ -225,7 +225,7 @@ where
 
     let thread_sequences = seq_counter.load(Ordering::SeqCst);
     let thread_classified = classify_counter.load(Ordering::SeqCst);
-    if let Some(output) = &args.kraken_output_dir {
+    if let Some(output) = &args.output_dir {
         let filename = output.join(format!("output_{}.kreport2", file_index));
         report_kraken_style(
             filename,
@@ -248,7 +248,7 @@ fn process_files(
     chtable: &CHTable,
     taxonomy: &Taxonomy,
 ) -> Result<()> {
-    let (mut file_index, mut file_writer) = if let Some(out_dir) = &args.kraken_output_dir {
+    let (mut file_index, mut file_writer) = if let Some(out_dir) = &args.output_dir {
         let file_path = out_dir.join("sample_file.map");
         let file_writer = create_sample_file(&file_path);
         let file_index = get_lastest_file_index(&file_path)?;
@@ -295,7 +295,7 @@ fn process_files(
             total_seqs += thread_sequences;
             total_unclassified += thread_unclassified;
         }
-        if let Some(output) = &args.kraken_output_dir {
+        if let Some(output) = &args.output_dir {
             let filename = output.join("output.kreport2");
             report_kraken_style(
                 filename,

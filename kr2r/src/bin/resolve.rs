@@ -9,7 +9,7 @@ use kr2r::HitGroup;
 // use rayon::prelude::*;
 use seqkmer::{buffer_map_parallel, trim_pair_info, OptionPair};
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{create_dir_all, File};
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Result, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -63,7 +63,11 @@ pub struct Args {
 
     /// File path for outputting normal Kraken output.
     #[clap(long = "output-dir", value_parser)]
-    pub kraken_output_dir: Option<PathBuf>,
+    pub output_dir: Option<PathBuf>,
+
+    /// The number of threads to use.
+    #[clap(short = 'p', long = "num-threads", value_parser, default_value_t = num_cpus::get())]
+    pub num_threads: usize,
 
     // /// output file contains all unclassified sequence
     // #[clap(long, value_parser, default_value_t = false)]
@@ -128,7 +132,7 @@ fn process_batch<P: AsRef<Path>>(
 
         buffer_map_parallel(
             &hit_counts,
-            num_cpus::get(),
+            args.num_threads,
             |(k, rows)| {
                 if let Some(item) = id_map.get(&k) {
                     let mut rows = rows.to_owned();
@@ -168,7 +172,9 @@ fn process_batch<P: AsRef<Path>>(
             },
             |result| {
                 while let Some(Some(res)) = result.next() {
-                    writer.write_all(res.as_bytes()).unwrap();
+                    writer
+                        .write_all(res.as_bytes())
+                        .expect("write output content error");
                 }
             },
         )
@@ -194,6 +200,10 @@ pub fn run(args: Args) -> Result<()> {
     let mut total_seqs = 0;
     let mut total_unclassified = 0;
 
+    if let Some(output) = &args.output_dir {
+        create_dir_all(output)?;
+    }
+
     // 开始计时
     let start = Instant::now();
     println!("resolve start...");
@@ -202,7 +212,7 @@ pub fn run(args: Args) -> Result<()> {
         let sample_id_map = read_id_to_seq_map(&sample_id_files[i])?;
 
         let thread_sequences = sample_id_map.len();
-        let mut writer: Box<dyn Write + Send> = match &args.kraken_output_dir {
+        let mut writer: Box<dyn Write + Send> = match &args.output_dir {
             Some(ref file_path) => {
                 let filename = file_path.join(format!("output_{}.txt", i));
                 let file = File::create(filename)?;
@@ -235,7 +245,7 @@ pub fn run(args: Args) -> Result<()> {
                 .merge(&entry.value())
                 .unwrap();
         });
-        if let Some(output) = &args.kraken_output_dir {
+        if let Some(output) = &args.output_dir {
             let filename = output.join(format!("output_{}.kreport2", i));
             report_kraken_style(
                 filename,
@@ -252,7 +262,7 @@ pub fn run(args: Args) -> Result<()> {
         total_unclassified += thread_sequences - thread_classified;
     }
 
-    if let Some(output) = &args.kraken_output_dir {
+    if let Some(output) = &args.output_dir {
         if !sample_files.is_empty() {
             let min = &sample_files.keys().min().cloned().unwrap();
             let max = &sample_files.keys().max().cloned().unwrap();
