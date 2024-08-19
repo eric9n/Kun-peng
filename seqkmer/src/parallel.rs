@@ -7,6 +7,7 @@ use scoped_threadpool::Pool;
 use std::collections::HashMap;
 use std::io::Result;
 use std::sync::Arc;
+
 pub struct ParallelResult<P>
 where
     P: Send,
@@ -164,7 +165,7 @@ where
             let _ = func(&mut parallel_result);
         });
 
-        // pool_scope.join_all();
+        pool_scope.join_all();
     });
 
     Ok(())

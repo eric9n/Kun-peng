@@ -167,14 +167,17 @@ fn process_batch<P: AsRef<Path>>(
                     );
                     Some(output_line)
                 } else {
+                    eprintln!("can't find {} in sample_id map file", k);
                     None
                 }
             },
             |result| {
-                while let Some(Some(res)) = result.next() {
-                    writer
-                        .write_all(res.as_bytes())
-                        .expect("write output content error");
+                while let Some(output) = result.next() {
+                    if let Some(res) = output {
+                        writer
+                            .write_all(res.as_bytes())
+                            .expect("write output content error");
+                    }
                 }
             },
         )
