@@ -210,10 +210,11 @@ pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
                 });
             }
 
-            Some(k2_cell_list)
+            k2_cell_list
         },
         |record_sets| {
-            while let Some(Some(k2_cell_map)) = record_sets.next() {
+            while let Some(data) = record_sets.next() {
+                let k2_cell_map = data.unwrap();
                 for cell in k2_cell_map {
                     let partition_index = cell.0;
                     if let Some(writer) = writers.get_mut(partition_index) {

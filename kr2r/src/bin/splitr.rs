@@ -180,10 +180,11 @@ where
                     format!("{}\t{}\t{}\t{}\n", index, dna_id, seq_size_str, size_str).as_str(),
                 );
             }
-            Some((buffer, k2_slot_list))
+            (buffer, k2_slot_list)
         },
         |dataset| {
-            while let Some(Some((buffer, k2_slot_list))) = dataset.next() {
+            while let Some(data) = dataset.next() {
+                let (buffer, k2_slot_list) = data.unwrap();
                 write_data_to_file(buffer, k2_slot_list, writers, slot_size, sample_writer);
             }
         },

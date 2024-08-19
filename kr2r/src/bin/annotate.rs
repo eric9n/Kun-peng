@@ -185,10 +185,11 @@ where
                         .extend(value_bytes);
                 }
             }
-            Some(results)
+            results
         },
         |result| {
-            while let Some(Some(res)) = result.next() {
+            while let Some(data) = result.next() {
+                let res = data.unwrap();
                 let mut file_keys: Vec<_> = res.keys().cloned().collect();
                 file_keys.sort_unstable(); // 对 (file_index, seq_id_mod) 进行排序
 

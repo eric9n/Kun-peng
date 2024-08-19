@@ -103,10 +103,11 @@ fn process_sequence<P: AsRef<Path>>(
                     minimizer_set.extend(kmer_iter);
                 });
             }
-            Some(minimizer_set)
+            minimizer_set
         },
         |record_sets| {
-            while let Some(Some(m_set)) = record_sets.next() {
+            while let Some(data) = record_sets.next() {
+                let m_set = data.unwrap();
                 for minimizer in m_set {
                     hllp.insert(&minimizer);
                 }

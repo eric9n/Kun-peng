@@ -173,7 +173,7 @@ fn process_batch<P: AsRef<Path>>(
             },
             |result| {
                 while let Some(output) = result.next() {
-                    if let Some(res) = output {
+                    if let Some(res) = output.unwrap() {
                         writer
                             .write_all(res.as_bytes())
                             .expect("write output content error");

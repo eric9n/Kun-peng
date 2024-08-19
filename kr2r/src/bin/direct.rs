@@ -195,10 +195,11 @@ where
                 buffer.push_str(&output_line);
             }
 
-            Some(buffer)
+            buffer
         },
         |dataset| {
-            while let Some(Some(res)) = dataset.next() {
+            while let Some(data) = dataset.next() {
+                let res = data.unwrap();
                 writer
                     .write_all(res.as_bytes())
                     .expect("Failed to write date to file");

@@ -8,6 +8,14 @@ use std::collections::HashMap;
 use std::io::Result;
 use std::sync::Arc;
 
+pub struct ParallelItem<P>(P);
+
+impl<P> ParallelItem<P> {
+    pub fn unwrap(self) -> P {
+        self.0
+    }
+}
+
 pub struct ParallelResult<P>
 where
     P: Send,
@@ -20,8 +28,8 @@ where
     P: Send,
 {
     #[inline]
-    pub fn next(&mut self) -> Option<P> {
-        self.recv.recv().ok()
+    pub fn next(&mut self) -> Option<ParallelItem<P>> {
+        self.recv.recv().ok().map(ParallelItem)
     }
 }
 
@@ -50,13 +58,13 @@ where
     R: Reader,
     O: Send,
     Out: Send + Default,
-    W: Send + Sync + Fn(&mut Vec<Base<MinimizerIterator>>) -> Option<O>,
-    F: FnOnce(&mut ParallelResult<Option<O>>) -> Out + Send,
+    W: Send + Sync + Fn(&mut Vec<Base<MinimizerIterator>>) -> O,
+    F: FnOnce(&mut ParallelResult<O>) -> Out + Send,
 {
     assert!(n_threads > 2);
     let buffer_len = n_threads + 2;
     let (sender, receiver) = bounded::<Vec<Base<Vec<u8>>>>(buffer_len);
-    let (done_send, done_recv) = bounded::<Option<O>>(buffer_len);
+    let (done_send, done_recv) = bounded::<O>(buffer_len);
     let receiver = Arc::new(receiver); // 使用 Arc 来共享 receiver
     let done_send = Arc::new(done_send);
     let mut pool = Pool::new(n_threads as u32);
@@ -112,13 +120,13 @@ where
     R: std::io::Read + Send,
     O: Send,
     Out: Send + Default,
-    W: Send + Sync + Fn(Vec<D>) -> Option<O>,
-    F: FnOnce(&mut ParallelResult<Option<O>>) -> Out + Send,
+    W: Send + Sync + Fn(Vec<D>) -> O,
+    F: FnOnce(&mut ParallelResult<O>) -> Out + Send,
 {
     assert!(n_threads > 2);
     let buffer_len = n_threads + 2;
     let (sender, receiver) = bounded::<Vec<D>>(buffer_len);
-    let (done_send, done_recv) = bounded::<Option<O>>(buffer_len);
+    let (done_send, done_recv) = bounded::<O>(buffer_len);
     let receiver = Arc::new(receiver); // 使用 Arc 来共享 receiver
     let done_send = Arc::new(done_send);
     let mut pool = Pool::new(n_threads as u32);
@@ -181,13 +189,13 @@ where
     D: Send + Sized + Sync,
     O: Send,
     Out: Send + Default,
-    W: Send + Sync + Fn((&u32, &Vec<D>)) -> Option<O>,
-    F: FnOnce(&mut ParallelResult<Option<O>>) -> Out + Send,
+    W: Send + Sync + Fn((&u32, &Vec<D>)) -> O,
+    F: FnOnce(&mut ParallelResult<O>) -> Out + Send,
 {
     assert!(n_threads > 2);
     let buffer_len = n_threads + 2;
     let (sender, receiver) = bounded::<(&u32, &Vec<D>)>(buffer_len);
-    let (done_send, done_recv) = bounded::<Option<O>>(buffer_len);
+    let (done_send, done_recv) = bounded::<O>(buffer_len);
     let receiver = Arc::new(receiver); // 使用 Arc 来共享 receiver
     let done_send = Arc::new(done_send);
     let mut pool = Pool::new(n_threads as u32);
