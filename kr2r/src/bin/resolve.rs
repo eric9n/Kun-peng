@@ -24,7 +24,7 @@ pub fn read_id_to_seq_map<P: AsRef<Path>>(
 
     reader.lines().for_each(|line| {
         let line = line.expect("Could not read line");
-        let parts: Vec<&str> = line.trim().split_whitespace().collect();
+        let parts: Vec<&str> = line.trim().splitn(4, '\t').collect();
         if parts.len() >= 4 {
             // 解析序号为u32类型的键
             if let Ok(id) = parts[0].parse::<u32>() {

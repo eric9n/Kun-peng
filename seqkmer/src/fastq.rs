@@ -113,9 +113,7 @@ where
         let seq_id = unsafe {
             let s = std::str::from_utf8_unchecked(&reader.header[1..]);
             let first_space_index = s
-                .as_bytes()
-                .iter()
-                .position(|&c| c == b' ')
+                .find(|c: char| c.is_whitespace() || c == '\u{1}')
                 .unwrap_or(s.len());
 
             // 直接从原始切片创建第一个单词的切片

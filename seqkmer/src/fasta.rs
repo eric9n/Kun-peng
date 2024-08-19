@@ -77,9 +77,7 @@ where
 
             let s = std::str::from_utf8_unchecked(slice);
             let first_space_index = s
-                .as_bytes()
-                .iter()
-                .position(|&c| c == b' ')
+                .find(|c: char| c.is_whitespace() || c == '\u{1}')
                 .unwrap_or(s.len());
 
             // 直接从原始切片创建第一个单词的切片
@@ -214,10 +212,13 @@ where
 
             let s = std::str::from_utf8_unchecked(slice);
             let first_space_index = s
-                .as_bytes()
-                .iter()
-                .position(|&c| c == b' ')
+                .find(|c: char| c.is_whitespace() || c == '\u{1}')
                 .unwrap_or(s.len());
+            // let first_space_index = s
+            //     .as_bytes()
+            //     .iter()
+            //     .position(|&c| c == b' ')
+            //     .unwrap_or(s.len());
 
             // 直接从原始切片创建第一个单词的切片
             &s[..first_space_index]
