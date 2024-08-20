@@ -1,6 +1,6 @@
 [package]
 name = "kun_peng"
-version = "0.6.9"
+version = "0.6.10"
 edition = "2021"
 authors = ["eric9n@gmail.com"]
 description = "Kun-peng: an ultra-fast, low-memory footprint and accurate taxonomy classifier for all"
