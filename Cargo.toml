@@ -3,8 +3,11 @@ members = [
     "ncbi",
     "kr2r",
     "seqkmer"]
-
 resolver = "2"
+license = "MIT"
+repository = "https://github.com/eric9n/Kun-peng"
+keywords = ["bioinformatics", "metagenomics", "microbiome", "sequence-classification", "exposome", "kraken2"]
+readme = "README.md"
 
 [profile.release]
 lto = true

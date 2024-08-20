@@ -159,7 +159,7 @@ where
                 let mut init: Vec<(usize, Slot<u64>)> = Vec::new();
                 let header = &seq.header;
                 let index = header.reads_index;
-                let dna_id = header.id.clone();
+                let dna_id = header.id.trim();
                 let seq_id = (file_index << 32 | index) as u64;
 
                 seq.body.apply_mut(|m_iter| {
