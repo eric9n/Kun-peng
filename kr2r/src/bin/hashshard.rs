@@ -1,6 +1,6 @@
 use clap::Parser;
-use kr2r::args::parse_size;
-use kr2r::compact_hash::HashConfig;
+use kun_peng::args::parse_size;
+use kun_peng::compact_hash::HashConfig;
 // use memmap2::MmapOptions;
 use std::fs::{self, create_dir_all, File, OpenOptions};
 use std::io::BufWriter;
@@ -44,7 +44,7 @@ fn mmap_read_write<P: AsRef<Path>, Q: AsRef<Path>>(
 #[derive(Parser, Debug, Clone)]
 #[clap(
     version,
-    about = "Convert Kraken2 database files to Kun-peng database format for efficient processing and analysis."
+    about = "Convert Kraken2 database files to kun_peng-peng database format for efficient processing and analysis."
 )]
 pub struct Args {
     /// The database directory for the Kraken 2 index. contains index files(hash.k2d opts.k2d taxo.k2d)

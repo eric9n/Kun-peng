@@ -1,14 +1,14 @@
 // 使用时需要引用模块路径
 use clap::Parser;
-use kr2r::args::{parse_size, Build};
-use kr2r::compact_hash::HashConfig;
-use kr2r::db::{convert_fna_to_k2_format, get_bits_for_taxid};
-use kr2r::taxonomy::Taxonomy;
-use kr2r::utils::{
+use kun_peng::args::{parse_size, Build};
+use kun_peng::compact_hash::HashConfig;
+use kun_peng::db::{convert_fna_to_k2_format, get_bits_for_taxid};
+use kun_peng::taxonomy::Taxonomy;
+use kun_peng::utils::{
     create_partition_files, create_partition_writers, find_files, get_file_limit,
     read_id_to_taxon_map, set_fd_limit,
 };
-use kr2r::IndexOptions;
+use kun_peng::IndexOptions;
 use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]

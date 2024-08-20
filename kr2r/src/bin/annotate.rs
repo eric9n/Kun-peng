@@ -1,6 +1,6 @@
 use clap::Parser;
-use kr2r::compact_hash::{read_next_page, Compact, HashConfig, Page, Row, Slot};
-use kr2r::utils::{find_and_sort_files, open_file};
+use kun_peng::compact_hash::{read_next_page, Compact, HashConfig, Page, Row, Slot};
+use kun_peng::utils::{find_and_sort_files, open_file};
 use seqkmer::buffer_read_parallel;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};

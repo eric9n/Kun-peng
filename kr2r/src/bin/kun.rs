@@ -10,9 +10,9 @@ mod resolve;
 // mod seqid2taxid;
 mod splitr;
 
-use kr2r::args::ClassifyArgs;
-use kr2r::args::{parse_size, Build};
-use kr2r::utils::find_files;
+use kun_peng::args::ClassifyArgs;
+use kun_peng::args::{parse_size, Build};
+use kun_peng::utils::find_files;
 // use std::io::Result;
 use std::path::PathBuf;
 use std::time::Instant;

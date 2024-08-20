@@ -1,11 +1,11 @@
 use clap::Parser;
-use kr2r::classify::process_hitgroup;
-use kr2r::compact_hash::{HashConfig, Row};
-use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
-use kr2r::report::report_kraken_style;
-use kr2r::taxonomy::Taxonomy;
-use kr2r::utils::{find_and_trans_bin_files, find_and_trans_files, open_file};
-use kr2r::HitGroup;
+use kun_peng::classify::process_hitgroup;
+use kun_peng::compact_hash::{HashConfig, Row};
+use kun_peng::readcounts::{TaxonCounters, TaxonCountersDash};
+use kun_peng::report::report_kraken_style;
+use kun_peng::taxonomy::Taxonomy;
+use kun_peng::utils::{find_and_trans_bin_files, find_and_trans_files, open_file};
+use kun_peng::HitGroup;
 // use rayon::prelude::*;
 use seqkmer::{buffer_map_parallel, trim_pair_info, OptionPair};
 use std::collections::HashMap;
@@ -234,7 +234,9 @@ pub fn run(args: Args) -> Result<()> {
 
         let mut sample_taxon_counts: HashMap<
             u64,
-            kr2r::readcounts::ReadCounts<hyperloglogplus::HyperLogLogPlus<u64, kr2r::KBuildHasher>>,
+            kun_peng::readcounts::ReadCounts<
+                hyperloglogplus::HyperLogLogPlus<u64, kun_peng::KBuildHasher>,
+            >,
         > = HashMap::new();
         thread_taxon_counts.iter().for_each(|entry| {
             total_taxon_counts

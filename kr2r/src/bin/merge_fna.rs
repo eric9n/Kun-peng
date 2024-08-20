@@ -1,8 +1,8 @@
 use clap::Parser;
 use flate2::read::GzDecoder;
-use kr2r::args::parse_size;
-use kr2r::db::generate_taxonomy;
-use kr2r::utils::{find_files, open_file, read_id_to_taxon_map};
+use kun_peng::args::parse_size;
+use kun_peng::db::generate_taxonomy;
+use kun_peng::utils::{find_files, open_file, read_id_to_taxon_map};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File, OpenOptions};

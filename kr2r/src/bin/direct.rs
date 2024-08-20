@@ -1,11 +1,11 @@
 use clap::Parser;
-use kr2r::classify::process_hitgroup;
-use kr2r::compact_hash::{CHTable, Compact, HashConfig, Row};
-use kr2r::readcounts::{TaxonCounters, TaxonCountersDash};
-use kr2r::report::report_kraken_style;
-use kr2r::taxonomy::Taxonomy;
-use kr2r::utils::{create_sample_file, find_and_sort_files, get_lastest_file_index};
-use kr2r::{HitGroup, IndexOptions};
+use kun_peng::classify::process_hitgroup;
+use kun_peng::compact_hash::{CHTable, Compact, HashConfig, Row};
+use kun_peng::readcounts::{TaxonCounters, TaxonCountersDash};
+use kun_peng::report::report_kraken_style;
+use kun_peng::taxonomy::Taxonomy;
+use kun_peng::utils::{create_sample_file, find_and_sort_files, get_lastest_file_index};
+use kun_peng::{HitGroup, IndexOptions};
 use seqkmer::{read_parallel, Base, FastxReader, Meros, MinimizerIterator, OptionPair, Reader};
 use std::collections::HashMap;
 use std::fs::File;
@@ -209,7 +209,9 @@ where
 
     let mut sample_taxon_counts: HashMap<
         u64,
-        kr2r::readcounts::ReadCounts<hyperloglogplus::HyperLogLogPlus<u64, kr2r::KBuildHasher>>,
+        kun_peng::readcounts::ReadCounts<
+            hyperloglogplus::HyperLogLogPlus<u64, kun_peng::KBuildHasher>,
+        >,
     > = HashMap::new();
     cur_taxon_counts.iter().for_each(|entry| {
         total_taxon_counts

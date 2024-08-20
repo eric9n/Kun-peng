@@ -1,9 +1,9 @@
 // 使用时需要引用模块路径
 use clap::Parser;
-use kr2r::compact_hash::HashConfig;
-use kr2r::db::process_k2file;
-use kr2r::taxonomy::Taxonomy;
-use kr2r::utils::find_and_trans_files;
+use kun_peng::compact_hash::HashConfig;
+use kun_peng::db::process_k2file;
+use kun_peng::taxonomy::Taxonomy;
+use kun_peng::utils::find_and_trans_files;
 use std::fs::remove_file;
 use std::path::PathBuf;
 use std::time::Instant;

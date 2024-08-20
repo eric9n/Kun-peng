@@ -1,8 +1,8 @@
 use clap::{error::ErrorKind, Error, Parser};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
-use kr2r::args::KLMTArgs;
-use kr2r::utils::{find_files, format_bytes, open_file};
-use kr2r::KBuildHasher;
+use kun_peng::args::KLMTArgs;
+use kun_peng::utils::{find_files, format_bytes, open_file};
+use kun_peng::KBuildHasher;
 
 use seqkmer::{read_parallel, BufferFastaReader};
 use serde_json;
