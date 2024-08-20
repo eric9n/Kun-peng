@@ -1,6 +1,6 @@
 [package]
 name = "ncbi_dl"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 authors = ["eric9n@gmail.com"]
 license = "MIT"
