@@ -1,4 +1,4 @@
-# Kun-peng <img src="./docs/KunPeng.png" align="right" width="140"/>
+# Kun-peng <img src="./kr2r//docs/KunPeng.png" align="right" width="140"/>
 
 [![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.6.10-green.svg)](https://github.com/eric9n/Kun-peng/releases)
 
@@ -10,7 +10,7 @@ Importantly, the flexible structure of the reference index also allows the const
 
 The name "Kun-peng" is a massive mythical creature capable of transforming from a giant fish in the water (Kun) to a giant bird in the sky (Peng) from Chinese mythology, reflecting the flexible nature and capacity of the software to efficiently navigate the vast and complex landscapes of metagenomic data.
 
-![Workflow of Kun-peng](./docs/Picture1.png)
+![Workflow of Kun-peng](./kr2r/docs/Picture1.png)
 
 ## Get Started
 
