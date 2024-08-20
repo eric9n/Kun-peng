@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["eric9n@gmail.com"]
 license = "MIT"
 repository = "https://github.com/eric9n/Kun-peng"
-keywords = ["bioinformatics", "metagenomics", "microbiome", "sequence-classification", "exposome", "kraken2"]
+keywords = ["bioinformatics", "metagenomics", "microbiome", "ncbi"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
