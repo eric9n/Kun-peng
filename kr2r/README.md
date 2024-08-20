@@ -1,6 +1,4 @@
-# Kun-peng <img src="./docs/KunPeng.png" align="right" width="140"/>
-
-[![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.5.6-green.svg)](https://github.com/eric9n/kraken2-rust/releases)
+# Kun Peng
 
 We developed Kun-peng, an accurate and highly scalable low-memory tool for classifying metagenomic sequences.
 
@@ -9,8 +7,6 @@ Inspired by Kraken2's k-mer-based approach, Kun-peng incorporates an advanced sl
 Importantly, the flexible structure of the reference index also allows the construction and utilization of supermassive indices that were previously infeasible due to computational restraints. Supermassive indices, incorporating the growing genomic data from prokaryotes and eukaryotes, as well as metagenomic assemblies, are crucial in investigating the more diverse and complex environmental metagenomes, such as the exposome research.
 
 The name "Kun-peng" is a massive mythical creature capable of transforming from a giant fish in the water (Kun) to a giant bird in the sky (Peng) from Chinese mythology, reflecting the flexible nature and capacity of the software to efficiently navigate the vast and complex landscapes of metagenomic data.
-
-![Workflow of Kun-peng](./docs/Picture1.png)
 
 ## Get Started
 
@@ -21,10 +17,10 @@ Follow these steps to install Kun-peng and run the examples.
 If you prefer not to build from source, you can download the pre-built binaries for your platform from the GitHub [releases page](https://github.com/eric9n/kraken2-rust/releases).
 
 ``` bash
-mkdir kun_peng_v0.5.6
-tar -xvf kraken2-rust-v0.5.6-centos7.tar.gz -C kun_peng_v0.5.6
+mkdir kun_peng_v0.6.10
+tar -xvf Kun-peng-v0.6.10-centos7.tar.gz -C kun_peng_v0.6.10
 # Add environment variable
-echo 'export PATH=$PATH:~/biosoft/kun_peng_v0.5.6' >> ~/.bashrc
+echo 'export PATH=$PATH:~/biosoft/kun_peng_v0.6.10' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -35,8 +31,8 @@ We will use a very small virus database on the GitHub homepage as an example:
 1.  download database
 
 ``` sh
-git clone https://github.com/eric9n/kraken2-rust.git
-cd kraken2-rust
+git clone https://github.com/eric9n/kun_peng.git
+cd kun_peng
 ```
 
 2.  build database
@@ -89,8 +85,8 @@ Classify took: 92.519365ms
 First, clone this repository to your local machine:
 
 ``` sh
-git clone https://github.com/eric9n/kraken2-rust.git
-cd kraken2-rust
+git clone https://github.com/eric9n/kun_peng.git
+cd kun_peng
 ```
 
 Ensure that both projects are built. You can do this by running the following command from the root of the workspace:
@@ -124,54 +120,6 @@ kun_peng direct error: [any direct errors here]
 ```
 
 This output confirms that the `kun_peng` commands were executed successfully and the files were processed as expected.
-
-#### Run the `ncbi` Example
-
-Run the example script in the ncbi project to download the necessary files. Execute the following command from the root of the workspace:
-
-``` sh
-cargo run --release --example run_download --package ncbi
-```
-
-This will run the run_download.rs example located in the ncbi project's examples directory. The script will:
-
-1.  Ensure the necessary directories exist.
-2.  Download the required files using the ncbi binary with the following commands:
-
--   ./target/release/ncbi -d downloads gen -g archaea
--   ./target/release/ncbi -d downloads tax
-
-Example Output You should see output similar to the following:
-
-``` txt
-Executing command: /path/to/workspace/target/release/ncbi -d /path/to/workspace/downloads gen -g archaea
-NCBI binary output: [download output here]
-
-Executing command: /path/to/workspace/target/release/ncbi -d /path/to/workspace/downloads tax
-NCBI binary output: [download output here]
-```
-
-## ncbi tool
-
-The ncbi binary is used to download resources from the NCBI website. Here is the help manual for the ncbi binary:
-
-``` sh
-./target/release/ncbi -h
-ncbi download resource
-
-Usage: ncbi [OPTIONS] <COMMAND>
-
-Commands:
-  taxonomy  Download taxonomy files from NCBI (alias: tax)
-  genomes   Download genomes data from NCBI (alias: gen)
-  help      Print this message or the help of the given subcommand(s)
-
-Options:
-  -d, --download-dir <DOWNLOAD_DIR>  Directory to store downloaded files [default: lib]
-  -n, --num-threads <NUM_THREADS>    Number of threads to use for downloading [default: 20]
-  -h, --help                         Print help (see more with '--help')
-  -V, --version                      Print version
-```
 
 ## kun_peng tool
 
