@@ -1,11 +1,11 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use lazy_static::lazy_static;
-use ncbi::fna::write_to_fna;
-use ncbi::meta::{init_meta, save_meta};
-use ncbi::plas::download_plas_files;
-use ncbi::task;
-use ncbi::utils;
+use ncbi_dl::fna::write_to_fna;
+use ncbi_dl::meta::{init_meta, save_meta};
+use ncbi_dl::plas::download_plas_files;
+use ncbi_dl::task;
+use ncbi_dl::utils;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;

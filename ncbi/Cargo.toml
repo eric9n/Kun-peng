@@ -1,5 +1,5 @@
 [package]
-name = "ncbi"
+name = "ncbi_dl"
 version = "0.1.7"
 edition = "2021"
 authors = ["eric9n@gmail.com"]
