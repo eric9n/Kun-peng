@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 authors = ["eric9n@gmail.com"]
 description = "sequence kmer"
+license = "MIT"
+repository = "https://github.com/eric9n/Kun-peng"
+keywords = ["bioinformatics", "metagenomics", "microbiome", "sequence-classification", "exposome", "kraken2"]
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

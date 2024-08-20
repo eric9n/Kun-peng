@@ -8,6 +8,7 @@ license = "MIT"
 repository = "https://github.com/eric9n/Kun-peng"
 keywords = ["bioinformatics", "metagenomics", "microbiome", "sequence-classification", "exposome", "kraken2"]
 readme = "README.md"
+description = "Kun-peng: an ultra-fast, low-memory footprint and accurate taxonomy classifier for all"
 
 [profile.release]
 lto = true
