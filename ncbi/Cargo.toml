@@ -3,6 +3,10 @@ name = "ncbi"
 version = "0.1.7"
 edition = "2021"
 authors = ["eric9n@gmail.com"]
+license = "MIT"
+repository = "https://github.com/eric9n/Kun-peng"
+keywords = ["bioinformatics", "metagenomics", "microbiome", "sequence-classification", "exposome", "kraken2"]
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,7 +18,7 @@ futures = "0.3"
 regex = "1"
 clap = { version = "4.4.10", features = ["derive"] }
 futures-util = "0.3.30"
-reqwest-retry = "0.5"
+reqwest-retry = "0.6.1"
 reqwest-middleware = "0.3"
 lazy_static = "1.4"
 log = "0.4"
