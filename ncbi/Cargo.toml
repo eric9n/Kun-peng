@@ -11,7 +11,7 @@ description = "download ncbi genome file"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-reqwest = { version = "0.12.4", features = ["stream", "multipart", "gzip"] }
+reqwest = { version = "0.12.7", features = ["stream", "multipart", "gzip"] }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1.0"
 futures = "0.3"
