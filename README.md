@@ -429,4 +429,8 @@ ktImportText output_1_report.krona -o output_1_report.krona.html
 ```
 Results for the human gut sample from Kun_peng:
 <img src="./benchmark/Kun_peng_Min17.png" align="center"/>
+Results for the human gut sample from Kraken2:
+<img src="./benchmark/Kraken2_Min17.png" align="center"/>
+
+
 
