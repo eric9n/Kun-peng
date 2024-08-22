@@ -433,6 +433,12 @@ Results for the human gut sample from Kun_peng:
 Results for the human gut sample from Kraken2:
 <img src="./benchmark/Kraken2_Min17.png" align="center"/>
 
+
+Results for the OMZ sample from Kun_peng (classfied reads only):
+<img src="./benchmark/S138_Kun_peng_classified.png" align="center"/>
+Results for the OMZ sample from Kraken2 (classfied reads only):
+<img src="./benchmark/S138_kraken2_classified.png" align="center"/>
+
 Interactive results can be found in the benchmark folder (html files can be viewed in a browser). 
 
 
