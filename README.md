@@ -418,3 +418,15 @@ Sample Report Output Formats:
 4.  A rank code, indicating (U)nclassified, (R)oot, (D)omain, (K)ingdom, (P)hylum, (C)lass, (O)rder, (F)amily, (G)enus, or (S)pecies. Taxa that are not at any of these 10 ranks have a rank code that is formed by using the rank code of the closest ancestor rank with a number indicating the distance from that rank. E.g., “G2” is a rank code indicating a taxon is between genus and species and the grandparent taxon is at the genus rank.
 5.  NCBI taxonomic ID number
 6.  Indented scientific name
+
+## Benchmark
+We compare results from Kun_peng with Kraken2 using the same database [here](https://genome-idx.s3.amazonaws.com/kraken/k2_standard_20240605.tar.gz). Two datasets were used: 1. PacBio CCS long metagenomic reads from human gut sample (); 2. Illumina shotgun metagenomic reads from oxygen minimum zone sample (depth 302m) in th ocean (NCBI project number PRJNA1124864), which is a less studied system. The following scripts can be used to reproduce the plots below. 
+```bash
+### use scripts from KrakenTools
+python ./scripts/kreport2krona.py -r output_1_report.txt -o output_1_report.krona
+### install Krona software first: https://github.com/marbl/Krona
+ktImportText output_1_report.krona -o output_1_report.krona.html
+```
+Results for the human gut sample from Kun_peng:
+<img src="./benchmark/Kun_peng_Min17.png" align="center"/>
+
