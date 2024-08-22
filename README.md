@@ -420,10 +420,11 @@ Sample Report Output Formats:
 6.  Indented scientific name
 
 ## Benchmark
-We compare results from Kun_peng with Kraken2 using the same database [here](https://genome-idx.s3.amazonaws.com/kraken/k2_standard_20240605.tar.gz). Two datasets were used: 1. PacBio CCS long metagenomic reads from human gut sample (); 2. Illumina shotgun metagenomic reads from oxygen minimum zone sample (depth 302m) in th ocean (NCBI project number PRJNA1124864), which is a less studied system. The following scripts can be used to reproduce the plots below. 
+We compare results from Kun_peng with Kraken2 using the same database [here](https://genome-idx.s3.amazonaws.com/kraken/k2_standard_20240605.tar.gz). Two datasets were used: 1. PacBio CCS long metagenomic reads from human gut sample (1); 2. Illumina shotgun metagenomic reads from oxygen minimum zone sample (depth 302m) in the ocean (NCBI project number PRJNA1124864), which is a less studied system. The following scripts can be used to reproduce the plots below. 
 ```bash
 ### use scripts from KrakenTools
-python ./scripts/kreport2krona.py -r output_1_report.txt -o output_1_report.krona
+git clone https://github.com/jenniferlu717/KrakenTools.git
+python ./KrakenTools/kreport2krona.py -r output_1_report.txt -o output_1_report.krona
 ### install Krona software first: https://github.com/marbl/Krona
 ktImportText output_1_report.krona -o output_1_report.krona.html
 ```
@@ -432,5 +433,10 @@ Results for the human gut sample from Kun_peng:
 Results for the human gut sample from Kraken2:
 <img src="./benchmark/Kraken2_Min17.png" align="center"/>
 
+Interactive results can be found in the benchmark folder (html files can be viewed in a browser). 
 
+
+## References
+
+1. Karst, S.M., Ziels, R.M., Kirkegaard, R.H. et al. High-accuracy long-read amplicon sequences using unique molecular identifiers with Nanopore or PacBio sequencing. Nat Methods 18, 165–169 (2021). https://doi.org/10.1038/s41592-020-01041-y
 
