@@ -1,12 +1,12 @@
-## ncbi tool
+## ncbi_dl tool
 
-The ncbi binary is used to download resources from the NCBI website. Here is the help manual for the ncbi binary:
+The ncbi_dl binary is used to download resources from the NCBI website. Here is the help manual for the ncbi_dl binary:
 
 ``` sh
-./target/release/ncbi -h
-ncbi download resource
+./target/release/ncbi_dl -h
+ncbi_dl download resource
 
-Usage: ncbi [OPTIONS] <COMMAND>
+Usage: ncbi_dl [OPTIONS] <COMMAND>
 
 Commands:
   taxonomy  Download taxonomy files from NCBI (alias: tax)

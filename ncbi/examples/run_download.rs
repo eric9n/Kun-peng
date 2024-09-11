@@ -9,7 +9,7 @@ fn main() {
         .to_path_buf();
 
     // Run the NCBI binary to download files
-    let ncbi_binary = workspace_root.join("target/release/ncbi");
+    let ncbi_binary = workspace_root.join("target/release/ncbi_dl");
     let download_dir = workspace_root.join("downloads");
     // Ensure the download directory exists
     fs::create_dir_all(&download_dir).expect("Failed to create download directory");

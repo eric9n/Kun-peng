@@ -1,14 +1,11 @@
 [workspace]
-members = [
-    "ncbi",
-    "kr2r",
-    "seqkmer"]
+members = ["ncbi", "kr2r", "seqkmer"]
 resolver = "2"
 
 [profile.release]
 lto = true
-opt-level = "s" # 或者 "z"
+opt-level = "s"          # 或者 "z"
 debug-assertions = false
 # panic = 'abort'
 codegen-units = 1 # Compile crates one after another so the compiler can optimize better
-strip = true # Remove debug symbols
+strip = true      # Remove debug symbols
