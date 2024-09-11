@@ -1,4 +1,4 @@
-# Kun-peng <img src="./kr2r//docs/KunPeng.png" align="right" width="140"/>
+# Kun-peng <img src="./kr2r/docs/KunPeng.png" align="right" width="140"/>
 
 [![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.6.10-green.svg)](https://github.com/eric9n/Kun-peng/releases)
 
@@ -20,7 +20,7 @@ Follow these steps to install Kun-peng and run the examples.
 
 If you prefer not to build from source, you can download the pre-built binaries for your platform from the GitHub [releases page](https://github.com/eric9n/Kun-peng/releases).
 
-``` bash
+```bash
 mkdir kun_peng_v0.6.10
 tar -xvf Kun-peng-v0.6.10-centos7.tar.gz -C kun_peng_v0.6.10
 # Add environment variable
@@ -32,11 +32,11 @@ source ~/.bashrc
 
 We will use a very small virus database on the GitHub homepage as an example:
 
-1.  download database
+1.  clone the repository
 
 ``` sh
 git clone https://github.com/eric9n/Kun-peng.git
-cd kun_peng
+cd Kun-peng
 ```
 
 2.  build database
@@ -382,17 +382,17 @@ Options:
 
 Standard Kraken Output Format:
 
-1.  “C”/“U”: a one letter code indicating that the sequence was either classified or unclassified.
+1.  "C"/"U": a one letter code indicating that the sequence was either classified or unclassified.
 2.  The sequence ID, obtained from the FASTA/FASTQ header.
 3.  The taxonomy ID Kraken 2 used to label the sequence; this is 0 if the sequence is unclassified.
-4.  The length of the sequence in bp. In the case of paired read data, this will be a string containing the lengths of the two sequences in bp, separated by a pipe character, e.g. “98\|94”.
-5.  A space-delimited list indicating the LCA mapping of each k-mer in the sequence(s). For example, “562:13 561:4 A:31 0:1 562:3” would indicate that:
+4.  The length of the sequence in bp. In the case of paired read data, this will be a string containing the lengths of the two sequences in bp, separated by a pipe character, e.g. "98\|94".
+5.  A space-delimited list indicating the LCA mapping of each k-mer in the sequence(s). For example, "562:13 561:4 A:31 0:1 562:3" would indicate that:
     -   the first 13 k-mers mapped to taxonomy ID #562
     -   the next 4 k-mers mapped to taxonomy ID #561
     -   the next 31 k-mers contained an ambiguous nucleotide
     -   the next k-mer was not in the database
     -   the last 3 k-mers mapped to taxonomy ID #562
-    Note that paired read data will contain a “`|:|`” token in this list to indicate the end of one read and the beginning of another.
+    Note that paired read data will contain a "`|:|`" token in this list to indicate the end of one read and the beginning of another.
 
 -   test_out/output_1.kreport2：
 
@@ -415,6 +415,6 @@ Sample Report Output Formats:
 1.  Percentage of fragments covered by the clade rooted at this taxon
 2.  Number of fragments covered by the clade rooted at this taxon
 3.  Number of fragments assigned directly to this taxon
-4.  A rank code, indicating (U)nclassified, (R)oot, (D)omain, (K)ingdom, (P)hylum, (C)lass, (O)rder, (F)amily, (G)enus, or (S)pecies. Taxa that are not at any of these 10 ranks have a rank code that is formed by using the rank code of the closest ancestor rank with a number indicating the distance from that rank. E.g., “G2” is a rank code indicating a taxon is between genus and species and the grandparent taxon is at the genus rank.
+4.  A rank code, indicating (U)nclassified, (R)oot, (D)omain, (K)ingdom, (P)hylum, (C)lass, (O)rder, (F)amily, (G)enus, or (S)pecies. Taxa that are not at any of these 10 ranks have a rank code that is formed by using the rank code of the closest ancestor rank with a number indicating the distance from that rank. E.g., "G2" is a rank code indicating a taxon is between genus and species and the grandparent taxon is at the genus rank.
 5.  NCBI taxonomic ID number
 6.  Indented scientific name

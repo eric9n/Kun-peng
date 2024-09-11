@@ -31,11 +31,11 @@ source ~/.bashrc
 
 We will use a very small virus database on the GitHub homepage as an example:
 
-1.  download database
+1.  clone the repository
 
 ``` sh
 git clone https://github.com/eric9n/kun_peng.git
-cd kun_peng
+cd Kun-peng
 ```
 
 2.  build database
