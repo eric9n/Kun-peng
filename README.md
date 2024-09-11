@@ -1,4 +1,4 @@
-# Kun-peng <img src="https://github.com/user-attachments/assets/97342d2d-46ac-4aa5-9783-23cdc83ed853" align="right" width="140"/>
+# Kun-peng <img src="https://github.com/user-attachments/assets/97342d2d-46ac-4aa5-9783-23cdc83ed853" alt="Kun-peng Logo" style="float: right; width: 140px; margin-top: 0px">
 
 [![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.6.10-green.svg)](https://github.com/eric9n/Kun-peng/releases)
 
