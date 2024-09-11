@@ -1,6 +1,6 @@
 # Kun-peng  <img src="./kr2r/docs/KunPeng.png" alt="Kun-peng Logo" align="right" width="50"/>
 
-[![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.6.10-green.svg)](https://github.com/eric9n/Kun-peng/releases)
+[![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.6.11-green.svg)](https://github.com/eric9n/Kun-peng/releases)
 
 We developed Kun-peng, an accurate and highly scalable low-memory tool for classifying metagenomic sequences.
 
@@ -20,10 +20,10 @@ Follow these steps to install Kun-peng and run the examples.
 If you prefer not to build from source, you can download the pre-built binaries for your platform from the GitHub [releases page](https://github.com/eric9n/Kun-peng/releases).
 
 ```bash
-mkdir kun_peng_v0.6.10
-tar -xvf Kun-peng-v0.6.10-centos7.tar.gz -C kun_peng_v0.6.10
+mkdir kun_peng_v0.6.11
+tar -xvf Kun-peng-v0.6.11-centos7.tar.gz -C kun_peng_v0.6.11
 # Add environment variable
-echo 'export PATH=$PATH:~/biosoft/kun_peng_v0.6.10' >> ~/.bashrc
+echo 'export PATH=$PATH:~/biosoft/kun_peng_v0.6.11' >> ~/.bashrc
 source ~/.bashrc
 ```
 
