@@ -1,4 +1,4 @@
-# Kun-peng <img src="./docs/KunPeng.png" align="right" width="140"/>
+# Kun-peng <img src="./docs/KunPeng.png" align="center" width="140"/>
 
 [![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.6.10-green.svg)](https://github.com/eric9n/Kun-peng/releases)
 
