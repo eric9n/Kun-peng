@@ -149,7 +149,7 @@ pub fn get_file_limit() -> usize {
 }
 
 #[cfg(windows)]
-pub fn set_fd_limit(new_limit: u64) -> io::Result<()> {
+pub fn set_fd_limit(_new_limit: u64) -> io::Result<()> {
     Ok(())
 }
 
