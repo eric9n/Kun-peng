@@ -52,6 +52,11 @@ jobs:
           target: ${{ matrix.target }}
           override: true
 
+      - name: Update Cargo.lock
+        uses: actions-rs/cargo@v1
+        with:
+          command: update
+
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
