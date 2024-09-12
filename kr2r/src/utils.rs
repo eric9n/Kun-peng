@@ -32,7 +32,7 @@ pub fn read_id_to_taxon_map<P: AsRef<Path>>(filename: P) -> Result<HashMap<Strin
 /// Basic usage:
 ///
 /// ```
-/// # use kr2r::utils::expand_spaced_seed_mask; // Replace with the appropriate crate name
+/// # use kun_peng::utils::expand_spaced_seed_mask; // Replace with the appropriate crate name
 /// // Expanding 0b1010 (binary for 10) with a factor of 2
 /// assert_eq!(expand_spaced_seed_mask(0b1010, 2), 204);
 ///
@@ -43,7 +43,7 @@ pub fn read_id_to_taxon_map<P: AsRef<Path>>(filename: P) -> Result<HashMap<Strin
 /// When the bit expansion factor is zero or greater than 64:
 ///
 /// ```
-/// # use kr2r::utils::expand_spaced_seed_mask;
+/// # use kun_peng::utils::expand_spaced_seed_mask;
 /// // No expansion, factor is 0
 /// assert_eq!(expand_spaced_seed_mask(0b1010, 0), 0b1010);
 ///

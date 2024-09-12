@@ -128,7 +128,7 @@ const M2: u64 = 0xc4ceb9fe1a85ec53;
 /// # Examples
 ///
 /// ```
-/// # use kr2r::fmix64;
+/// # use seqkmer::fmix64;
 /// let key: u64 = 123;
 /// let hash = fmix64(key);
 /// assert_eq!(hash, 9208534749291869864);
