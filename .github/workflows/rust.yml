@@ -1,15 +1,17 @@
 name: "publish"
 
-on:
-  create:
-    tags:
-      - '*'
+# Commenting out the current trigger
+# on:
+#   create:
+#     tags:
+#       - '*'
+
 
 # This is the example from the readme.
 # On each push to the `release` branch it will create or update a GitHub release, build your app, and upload the artifacts to the release.
 env:
   CARGO_TERM_COLOR: always
-  BINARIES_LIST: 'ncbi_dl kun_peng'
+  BINARIES_LIST: 'kun_peng'
   PROJECT_PREFIX: 'Kun-peng-'
 
 jobs:

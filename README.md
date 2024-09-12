@@ -41,12 +41,54 @@ Follow these steps to install Kun-peng and run the examples.
 
 If you prefer not to build from source, you can download the pre-built binaries for your platform from the GitHub [releases page](https://github.com/eric9n/Kun-peng/releases).
 
+For Linux users (CentOS 7 compatible):
+
 ```bash
-mkdir kun_peng_v0.6.15
-tar -xvf Kun-peng-v0.6.15-centos7.tar.gz -C kun_peng_v0.6.15
-# Add environment variable
-echo 'export PATH=$PATH:~/biosoft/kun_peng_v0.6.15' >> ~/.bashrc
+# Replace X.Y.Z with the latest version number
+VERSION=vX.Y.Z
+mkdir kun_peng_$VERSION
+wget https://github.com/eric9n/Kun-peng/releases/download/$VERSION/kun_peng-$VERSION-centos7
+mv kun_peng-$VERSION-centos7 kun_peng_$VERSION/kun_peng
+chmod +x kun_peng_$VERSION/kun_peng
+# Add to PATH
+echo "export PATH=\$PATH:$PWD/kun_peng_$VERSION" >> ~/.bashrc
 source ~/.bashrc
+```
+
+For macOS users:
+
+```bash
+# Replace X.Y.Z with the latest version number
+VERSION=vX.Y.Z
+mkdir kun_peng_$VERSION
+# For Intel Macs
+wget https://github.com/eric9n/Kun-peng/releases/download/$VERSION/kun_peng-$VERSION-x86_64-apple-darwin
+mv kun_peng-$VERSION-x86_64-apple-darwin kun_peng_$VERSION/kun_peng
+# For Apple Silicon Macs
+# wget https://github.com/eric9n/Kun-peng/releases/download/$VERSION/kun_peng-$VERSION-aarch64-apple-darwin
+# mv kun_peng-$VERSION-aarch64-apple-darwin kun_peng_$VERSION/kun_peng
+chmod +x kun_peng_$VERSION/kun_peng
+# Add to PATH
+echo "export PATH=\$PATH:$PWD/kun_peng_$VERSION" >> ~/.zshrc  # or ~/.bash_profile for Bash
+source ~/.zshrc  # or source ~/.bash_profile for Bash
+```
+
+For Windows users:
+
+```powershell
+# Replace X.Y.Z with the latest version number
+$VERSION = "vX.Y.Z"
+New-Item -ItemType Directory -Force -Path kun_peng_$VERSION
+Invoke-WebRequest -Uri "https://github.com/eric9n/Kun-peng/releases/download/$VERSION/kun_peng-$VERSION-x86_64-pc-windows-msvc.exe" -OutFile "kun_peng_$VERSION\kun_peng.exe"
+# Add to PATH
+$env:Path += ";$PWD\kun_peng_$VERSION"
+[Environment]::SetEnvironmentVariable("Path", $env:Path, [EnvironmentVariableTarget]::User)
+```
+
+After installation, you can verify the installation by running:
+
+```bash
+kun_peng --version
 ```
 
 #### Run the `kun_peng` example
@@ -148,54 +190,31 @@ This output confirms that the `kun_peng` commands were executed successfully and
 
 ## ncbi_dl tool
 
+For detailed information and usage instructions for the ncbi_dl tool, please refer to the [ncbi_dl repository](https://github.com/eric9n/ncbi_dl.git).
 
-#### Run the `ncbi` Example
+The ncbi_dl tool is used to download resources from the NCBI website, including taxonomy files and genome data. It provides a convenient way to obtain the necessary data for building Kun-peng databases.
 
-Run the example script in the ncbi project to download the necessary files. Execute the following command from the root of the workspace:
+### Downloading Genome Databases
 
-``` sh
-cargo run --release --example run_download --package ncbi_dl
+To download genome databases using ncbi_dl, you can use the `genomes` (or `gen`) command. Here's a basic example:
+
+```sh
+ncbi_dl -d /path/to/download/directory gen -g bacteria
 ```
 
-This will run the run_download.rs example located in the ncbi project's examples directory. The script will:
+This command will download bacterial genomes to the specified directory. You can replace `bacteria` with other genome groups like `archaea`, `fungi`, `protozoa`, or `viral` depending on your needs.
 
-1.  Ensure the necessary directories exist.
-2.  Download the required files using the ncbi binary with the following commands:
+Some key options for the `genomes` command include:
 
--   ./target/release/ncbi_dl -d downloads gen -g archaea
--   ./target/release/ncbi_dl -d downloads tax
+- `-g, --groups <GROUPS>`: Specify which genome groups to download (e.g., bacteria, archaea, viral)
+- `-f, --file-types <FILE_TYPES>`: Choose which file types to download (default is genomic.fna.gz)
+- `-l, --assembly-level <ASSEMBLY_LEVEL>`: Set the assembly level (e.g., complete, chromosome, scaffold, contig)
 
-Example Output You should see output similar to the following:
+For a full list of options and more detailed usage instructions, please refer to the ncbi_dl repository documentation.
 
-``` txt
-Executing command: /path/to/workspace/target/release/ncbi_dl -d /path/to/workspace/downloads gen -g archaea
-NCBI binary output: [download output here]
+For installation, additional usage examples, and more detailed documentation, please visit the ncbi_dl repository linked above.
 
-Executing command: /path/to/workspace/target/release/ncbi_dl -d /path/to/workspace/downloads tax
-NCBI binary output: [download output here]
-```
-
-The ncbi_dl binary is used to download resources from the NCBI website. Here is the help manual for the ncbi_dl binary:
-
-``` sh
-./target/release/ncbi_dl -h
-ncbi_dl download resource
-
-Usage: ncbi_dl [OPTIONS] <COMMAND>
-
-Commands:
-  taxonomy  Download taxonomy files from NCBI (alias: tax)
-  genomes   Download genomes data from NCBI (alias: gen)
-  help      Print this message or the help of the given subcommand(s)
-
-Options:
-  -d, --download-dir <DOWNLOAD_DIR>  Directory to store downloaded files [default: lib]
-  -n, --num-threads <NUM_THREADS>    Number of threads to use for downloading [default: 20]
-  -h, --help                         Print help (see more with '--help')
-  -V, --version                      Print version
-```
-
-## kun_peng tool
+## kun_peng
 
 ``` sh
 Usage: kun_peng <COMMAND>

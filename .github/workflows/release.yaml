@@ -1,0 +1,231 @@
+name: Release
+on:
+  push:
+    tags:
+    - 'v[0-9]+.[0-9]+.[0-9]+'
+
+env:
+  PROJECT_NAME: kun_peng
+  REPO_NAME: ${{ github.repository }}
+  BREW_TAP: eric9n/homebrew-tap
+  DESC: "An ultra-fast, low-memory footprint and accurate taxonomy classifier for all"
+
+jobs:
+  dist:
+    permissions:
+      contents: write
+    name: Dist
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        build: [x86_64-linux, x86_64-macos, x86_64-windows, aarch64-macos]
+        include:
+        - build: x86_64-linux
+          os: ubuntu-latest
+          rust: stable
+          target: x86_64-unknown-linux-gnu
+        - build: x86_64-macos
+          os: macos-latest
+          rust: stable
+          target: x86_64-apple-darwin
+        - build: x86_64-windows
+          os: windows-latest
+          rust: stable
+          target: x86_64-pc-windows-msvc
+        - build: aarch64-macos
+          os: macos-latest
+          rust: stable
+          target: aarch64-apple-darwin
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Install ${{ matrix.rust }} toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          target: ${{ matrix.target }}
+          override: true
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ matrix.cross }}
+          command: test
+          args: --release --locked --target ${{ matrix.target }}
+
+      - name: Build release binary
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ matrix.cross }}
+          command: build
+          args: --release --locked --target ${{ matrix.target }}
+
+      - name: Build archive
+        shell: bash
+        run: |
+          mkdir dist
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp "target/${{ matrix.target }}/release/${{ env.PROJECT_NAME }}.exe" "dist/${{ env.PROJECT_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.exe"
+          else
+            cp "target/${{ matrix.target }}/release/${{ env.PROJECT_NAME }}" "dist/${{ env.PROJECT_NAME }}-${{ github.ref_name }}-${{ matrix.target }}"
+          fi
+
+      # Set up the GitHub CLI
+      - name: Install GitHub CLI (macOS)
+        run: |
+          brew install gh
+        if: matrix.os == 'macos-latest'
+
+      - name: Install GitHub CLI (Ubuntu)
+        run: |
+          sudo apt install -y gh
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Install GitHub CLI (Windows)
+        run: |
+          choco install gh
+        if: matrix.os == 'windows-latest'
+
+      # Log in to the GitHub CLI
+      - name: Login to GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Upload Release Asset
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            ASSET_NAME="${{ env.PROJECT_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.exe"
+          else
+            ASSET_NAME="${{ env.PROJECT_NAME }}-${{ github.ref_name }}-${{ matrix.target }}"
+          fi
+          gh release upload ${{ github.ref_name }} \
+            "./dist/$ASSET_NAME" \
+            --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+
+      - name: Set macOS artifact name
+        if: matrix.os == 'macos-latest' && matrix.target == 'x86_64-apple-darwin'
+        run: echo "macos_artifact=${{ env.PROJECT_NAME }}-${{ github.ref_name }}-${{ matrix.target }}" >> $GITHUB_OUTPUT
+        id: artifact_name
+
+      - name: Build on CentOS 7
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          docker run --name centos7-container -v $GITHUB_WORKSPACE:/github/workspace -w /github/workspace centos:7 \
+          /bin/bash -c "echo '[base]' > /etc/yum.repos.d/CentOS-Base.repo; \
+          echo 'name=CentOS-7 - Base' >> /etc/yum.repos.d/CentOS-Base.repo; \
+          echo 'baseurl=http://vault.centos.org/centos/7/os/x86_64/' >> /etc/yum.repos.d/CentOS-Base.repo; \
+          echo 'gpgcheck=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
+          echo 'enabled=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
+          echo 'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7' >> /etc/yum.repos.d/CentOS-Base.repo; \
+          yum update -y && yum install -y gcc make openssl openssl-devel && \
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && export PATH=\$HOME/.cargo/bin:\$PATH && cd /github/workspace && cargo build --release"
+
+          docker cp centos7-container:/github/workspace/target/release/${{ env.PROJECT_NAME }} ./dist/${{ env.PROJECT_NAME }}-${{ github.ref_name }}-centos7
+          docker rm centos7-container
+
+      - name: Upload CentOS 7 Release Asset
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          gh release upload ${{ github.ref_name }} \
+            "./dist/${{ env.PROJECT_NAME }}-${{ github.ref_name }}-centos7" \
+            --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-formula:
+    needs: dist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Extract version
+        id: extract-version
+        run: echo "tag-name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Set environment variables
+        run: |
+          echo "PROJECT_NAME=${{ env.PROJECT_NAME }}" >> $GITHUB_ENV
+          echo "REPO_NAME=${{ env.REPO_NAME }}" >> $GITHUB_ENV
+
+      - name: Verify release assets
+        run: |
+          VERSION=${{ steps.extract-version.outputs.tag-name }}
+          REPO=${{ env.REPO_NAME }}
+          PROJECT=${{ env.PROJECT_NAME }}
+          X86_64_URL="https://github.com/${REPO}/releases/download/${VERSION}/${PROJECT}-${VERSION}-x86_64-apple-darwin"
+          AARCH64_URL="https://github.com/${REPO}/releases/download/${VERSION}/${PROJECT}-${VERSION}-aarch64-apple-darwin"
+
+          if curl --output /dev/null --silent --head --fail "$X86_64_URL"; then
+            echo "x86_64 binary exists"
+          else
+            echo "x86_64 binary does not exist"
+            exit 1
+          fi
+
+          if curl --output /dev/null --silent --head --fail "$AARCH64_URL"; then
+            echo "aarch64 binary exists"
+          else
+            echo "aarch64 binary does not exist"
+            exit 1
+          fi
+
+      - name: Update Homebrew formula
+        env:
+          COMMITTER_TOKEN: ${{ secrets.COMMITTER_TOKEN }}
+        run: |
+          VERSION=${{ steps.extract-version.outputs.tag-name }}
+          REPO=${{ env.REPO_NAME }}
+          PROJECT=${{ env.PROJECT_NAME }}
+          DESC="${{ env.DESC }}"
+          X86_64_URL="https://github.com/${REPO}/releases/download/${VERSION}/${PROJECT}-${VERSION}-x86_64-apple-darwin"
+          AARCH64_URL="https://github.com/${REPO}/releases/download/${VERSION}/${PROJECT}-${VERSION}-aarch64-apple-darwin"
+
+          # 下载并更新formula
+          git clone https://github.com/${{ env.BREW_TAP }}.git homebrew-tap
+          cd homebrew-tap
+
+          cat > Formula/${PROJECT}.rb <<EOL
+          class $(echo $PROJECT | perl -pe 's/(^|_|-)(\w)/\U$2/g') < Formula
+            desc "${DESC}"
+            homepage "https://github.com/${REPO}"
+            version "${VERSION}"
+
+            on_macos do
+              if Hardware::CPU.intel?
+                url "${X86_64_URL}"
+                sha256 "$(curl -sL ${X86_64_URL} | shasum -a 256 | cut -d ' ' -f 1)"
+              else
+                url "${AARCH64_URL}"
+                sha256 "$(curl -sL ${AARCH64_URL} | shasum -a 256 | cut -d ' ' -f 1)"
+              end
+            end
+
+            def install
+              if Hardware::CPU.intel?
+                bin.install "${PROJECT}-#{version}-x86_64-apple-darwin" => "${PROJECT}"
+              else
+                bin.install "${PROJECT}-#{version}-aarch64-apple-darwin" => "${PROJECT}"
+              end
+            end
+
+            test do
+              system "#{bin}/${PROJECT}", "--version"
+            end
+          end
+
+          EOL
+
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add Formula/${PROJECT}.rb
+          git commit -m "Updating formula for ${PROJECT} to ${VERSION}"
+          git push https://${{ secrets.COMMITTER_TOKEN }}@github.com/${{ env.BREW_TAP }}.git main

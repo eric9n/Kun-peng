@@ -1,5 +1,5 @@
 [workspace]
-members = ["ncbi", "kr2r", "seqkmer"]
+members = ["kr2r", "seqkmer"]
 resolver = "2"
 
 [profile.release]
