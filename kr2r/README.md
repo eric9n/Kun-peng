@@ -2,14 +2,38 @@
 
 <img src="./docs/KunPeng.png" align="right" width="140"/>
 
-[![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.6.10-green.svg)](https://github.com/eric9n/Kun-peng/releases)
+[![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.6.15-green.svg)](https://github.com/eric9n/Kun-peng/releases)
 
 
-We developed Kun-peng, an accurate and highly scalable low-memory tool for classifying metagenomic sequences.
+Here, we introduce Kun-peng, an ultra-memory-efficient metagenomic classification tool (Fig. 1). Inspired by Kraken2's k-mer-based approach, Kun-peng employs algorithms for minimizer generation, hash table querying, and classification. The cornerstone of Kun-peng's memory efficiency lies in its unique ordered block design for reference database. This strategy dramatically reduces memory usage without compromising speed, enabling Kun-peng to be executed on both personal computers and HPCP for most databases. Moreover, Kun-peng incorporates an advanced sliding window algorithm for sequence classifications to reduce the false-positive rates. Finally, Kun-peng supports parallel processing algorithms to further bolster its speed. Kun-peng offers two classification modes: Memory-Efficient Mode (Kun-peng-M) and Full-Speed Mode (Kun-peng-F). Remarkably, Kun-peng-M achieves a comparable processing time to Kraken2 while using less than 10% of its memory. Kun-peng-F loads all the database blocks simultaneously, matching Kraken2's memory usage while surpassing its speed. Notably, Kun-peng is compatible with the reference database built by Kraken2 and the associated abundance estimate tool Bracken<sub>1</sub>, making the transition from Kraken2 effortless. The name "Kun-peng" was derived from Chinese mythology and refers to a creature transforming between a giant fish (Kun) and a giant bird (Peng), reflecting the software's flexibility in navigating complex metagenomic data landscapes.
 
-Comprehensive metagenomic sequence classification of diverse environmental samples faces significant computing memory challenges due to exponentially expanding genome databases. Inspired by Kraken2, we developed Kun-peng to classify metagenomic data with ultra-efficient resource management algorithms, faster processing, and higher accuracy. Specifically, Kun-peng divides the reference database into ordered 4GB blocks when building and querying the index. Kun-peng offers two classification modes: Memory-Efficient (Kun-peng-M) and Full-Speed (Kun-peng-F). Kun-peng-M requires only a few percentages of Kraken2’s memory to classify metagenomic data with comparable speed. Kun-peng-F loads all blocks of databases simultaneously for faster speed. For a reference database of 42,485 genomes (123G), Kun-peng-M uses only 4.5 ± 0.11 GB of memory, or 7.96 ± 0.19 % of that of Kraken2, while achieving 16.9 ± 10.0 % fewer false positives at the genus level. Kun-Peng-F requires only 67.2 ± 4.57 % of Kraken2’s processing time. Furthermore, Kun-peng’s unique database design allows the utilization of large-scale reference databases, which were impractical to use with Kraken2. For a 1.85TB database, Kun-peng required only 1.95% of the peak memory required by Kraken2 and dramatically increased the classification rates for complex samples from diverse environments, including air, water, soil, and various human body sites. In summary, Kun-peng offers an ultra-memory-efficient, fast, and accurate solution for pan-domain metagenomic classifications.
+<div style="text-align: center;">
+  <img src="./docs/Picture1.png" alt="Workflow of Kun-peng" style="width: 50%;">
+  <p><strong>Fig. 1. Overview of the algorithms of Kun-peng.</strong></p>
+</div>
 
-The name "Kun-peng" is a massive mythical creature capable of transforming from a giant fish in the water (Kun) to a giant bird in the sky (Peng) from Chinese mythology, reflecting the flexible nature and capacity of the software to efficiently navigate the vast and complex landscapes of metagenomic data.
+To assess Kun-peng's accuracy and performance, we used two datasets comprising 14 mock metagenomes <sup>2,3</sup>. We processed these data with Kraken2 <sup>4</sup> and Centrifuge <sup>5</sup>, both requiring relatively lower memory and supporting custom databases. The classification processes were executed with default parameters, generating reports of identified taxa and their abundance estimated by Bracken <sup>1</sup>. As most classifiers considered below 0.01% abundance false positives, we removed these taxa for simplicity <sup>6</sup>.
+
+Critical metrics for metagenomic classification include precision, recall, and the area under the precision-recall curve (AUPRC). After filtering the low-abundance species, these metrics were calculated at the genus or species level. All tools performed better at the genus level, with performance decreasing at the species level (Fig. 2a). At the genus level, Centrifuge's precision was 25.5 ± 12.4 % lower than Kun-peng's (Fig. 2a). At the species level, Kun-peng significantly outperformed Kraken2 and Centrifuge, showing 11.2 ± 8.08 % and 23.6 ± 12.3 % higher precision, respectively (Fig. 2a). We focused on the genus level due to higher overall performance. Kun-peng's increased precision resulted from significantly lower false positives compared to Kraken2 and Centrifuge, which showed 16.9 ± 10.0 % and 61.7 ± 40.2 % higher false positives, respectively (Fig. 2b).
+
+We constructed a standard database using the complete RefSeq genomes of archaeal, bacterial, and viral domains. The database contains 123GB of fasta sequences, generating a 56GB hash index for Kraken2 and Kun-peng and a 72GB database index for Centrifuge. Database construction time for Kun-peng was noticeably longer due to sub-hashing calculations (Fig. 2c). However, Kun-peng required only 4.6GB of peak memory, roughly 8.19% and 1.50% of Kraken2 and Centrifuge's peak memory, for database construction (Fig. 2c).
+
+Kun-peng offers two modes for taxonomy classification: Memory-Efficient Mode (Kun-peng-M) and Full-Speed Mode (Kun-peng-F), with identical classification results. Kun-peng-M matches Kraken2's processing time and uses 57.0 ± 2.25 % of Centrifuge's time (Fig. 2d). However, Kun-peng-M requires only 4.5 ± 1.1 GB peak memory, which is 7.96 ± 0.19 % and 6.31 ± 0.15 % of Kraken2 and Centrifuge's peak memory, respectively (Fig. 2d). Compared to Kraken2, the Kun-peng-F consumes the same memory but requires only of the 67.2 ± 4.57 % processing time. Compared to Centrifuge, Kun-peng-F uses 77.9 ± 0.22 % memory while requiring only 38.8 ± 4.25 % of its processing time (Fig. 2d). Remarkably, with an ultra-low memory requirement, Kun-peng-M can even operate on most personal computers when the standard reference database is used (Fig. 2e).
+
+<div style="text-align: center;">
+  <img src="./docs/Picture2.png" alt="Workflow of Kun-peng" style="width: 50%;">
+  <p><strong>Fig. 2. Performance benchmark of Kun-peng against other metagenomic classifiers.</strong></p>
+</div>
+
+References:
+
+1.	Lu, J., Breitwieser, F. P., Thielen, P. & Salzberg, S. L. Bracken: Estimating species abundance in metagenomics data. PeerJ Comput. Sci. 2017, 1–17 (2017).
+2.	Amos, G. C. A. et al. Developing standards for the microbiome field. Microbiome 8, 1–13 (2020).
+3.	Kralj, J., Vallone, P., Kralj, J., Hunter, M. & Jackson, S. Reference Material 8376 Microbial Pathogen DNA Standards for Detection and Identification NIST Special Publication 260-225 Reference Material 8376 Microbial Pathogen DNA Standards for Detection and Identification.
+4.	Wood, D. E., Lu, J. & Langmead, B. Improved metagenomic analysis with Kraken 2. Genome Biol. 20, (2019).
+5.	Kim, D., Song, L., Breitwieser, F. P. & Salzberg, S. L. Centrifuge: Rapid and sensitive classification of metagenomic sequences. Genome Res. 26, 1721–1729 (2016).
+6.	Ye, S. H., Siddle, K. J., Park, D. J. & Sabeti, P. C. Benchmarking Metagenomics Tools for Taxonomic Classification. Cell 178, 779–794 (2019).
+
 
 ## Get Started
 
@@ -20,10 +44,10 @@ Follow these steps to install Kun-peng and run the examples.
 If you prefer not to build from source, you can download the pre-built binaries for your platform from the GitHub [releases page](https://github.com/eric9n/kraken2-rust/releases).
 
 ``` bash
-mkdir kun_peng_v0.6.10
-tar -xvf Kun-peng-v0.6.10-centos7.tar.gz -C kun_peng_v0.6.10
+mkdir kun_peng_v0.6.15
+tar -xvf Kun-peng-v0.6.15-centos7.tar.gz -C kun_peng_v0.6.15
 # Add environment variable
-echo 'export PATH=$PATH:~/biosoft/kun_peng_v0.6.10' >> ~/.bashrc
+echo 'export PATH=$PATH:~/biosoft/kun_peng_v0.6.15' >> ~/.bashrc
 source ~/.bashrc
 ```
 

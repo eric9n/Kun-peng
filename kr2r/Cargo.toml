@@ -1,6 +1,6 @@
 [package]
 name = "kun_peng"
-version = "0.6.11"
+version = "0.6.15"
 edition = "2021"
 authors = ["eric9n@gmail.com"]
 description = "Kun-peng: an ultra-fast, low-memory footprint and accurate taxonomy classifier for all"
@@ -37,4 +37,4 @@ num_cpus = "1.13.1"
 [dev-dependencies]
 criterion = "0.5.1"
 twox-hash = "1.6.3"
-farmhash = {version = "1.1.5"}
+farmhash = { version = "1.1.5" }
