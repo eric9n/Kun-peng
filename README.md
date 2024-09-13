@@ -64,7 +64,7 @@ For macOS users:
 brew install eric9n/tap/kun_peng
 ```
 
-### Donwload binary
+### Binary
 
 ```bash
 # Replace X.Y.Z with the latest version number
