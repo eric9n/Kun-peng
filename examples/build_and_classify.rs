@@ -4,10 +4,7 @@ use std::process::Command;
 
 fn main() {
     // Define the paths and directories
-    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .to_path_buf();
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).to_path_buf();
     let kr2r_binary = workspace_root.join("target/release/kun_peng");
     let data_dir = workspace_root.join("data");
     let test_dir = workspace_root.join("test_database");

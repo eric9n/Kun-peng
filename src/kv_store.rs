@@ -29,9 +29,19 @@ pub fn fmix64(key: u64) -> u64 {
 const C1: u64 = 0x87c37b91114253d5;
 const C2: u64 = 0x4cf5ad432745937f;
 
-/// MurmurHash3 函数的优化 Rust 实现
-/// keys = u64.to_be_bytes();这个函数只能处理u64.
+/// Optimized Rust implementation of the MurmurHash3 function
+/// This function can only process u64 values (keys = u64.to_be_bytes()).
 /// Performs the MurmurHash3 hash computation on a given key.
+///
+/// # Examples
+///
+/// ```
+/// use kun_peng::murmur_hash3;
+///
+/// let key: u64 = 123;
+/// let hash = murmur_hash3(key);
+/// assert_ne!(hash, key); // The hash should be different from the input
+/// ```
 #[inline]
 pub fn murmur_hash3(key: u64) -> u64 {
     let k1 = key.wrapping_mul(C1).rotate_left(31).wrapping_mul(C2);
@@ -47,6 +57,17 @@ pub fn murmur_hash3(key: u64) -> u64 {
     h1
 }
 
+/// Computes the SeaHash for a given u64 key.
+///
+/// # Examples
+///
+/// ```
+/// use kun_peng::sea_hash;
+///
+/// let key: u64 = 123;
+/// let hash = sea_hash(key);
+/// assert_ne!(hash, key); // The hash should be different from the input
+/// ```
 #[inline]
 pub fn sea_hash(key: u64) -> u64 {
     let mut hasher = SeaHasher::default();
@@ -55,6 +76,18 @@ pub fn sea_hash(key: u64) -> u64 {
 }
 
 /// KHasher is designed to hash only u64 values.
+///
+/// # Examples
+///
+/// ```
+/// use std::hash::{Hasher, BuildHasher};
+/// use kun_peng::{KHasher, KBuildHasher};
+///
+/// let mut hasher = KBuildHasher.build_hasher();
+/// hasher.write_u64(123);
+/// let hash = hasher.finish();
+/// assert_eq!(hash, 123); // KHasher simply returns the input value
+/// ```
 ///
 /// # Safety
 /// This hasher assumes that the input slice to `write` is exactly 8 bytes long,

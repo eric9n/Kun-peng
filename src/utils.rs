@@ -4,7 +4,19 @@ use std::io::{self, BufRead, BufReader, BufWriter, Result};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-/// 读取 seqid2taxid.map 文件。为了裁剪 ncbi 的 taxonomy 树
+/// Reads the seqid2taxid.map file to create a mapping for trimming the NCBI taxonomy tree.
+///
+/// This function reads a file containing sequence IDs and their corresponding taxon IDs,
+/// and creates a HashMap mapping sequence IDs to taxon IDs.
+///
+/// # Arguments
+///
+/// * `filename` - A path-like object representing the file to be read.
+///
+/// # Returns
+///
+/// Returns a `Result` containing a `HashMap<String, u64>` where the keys are sequence IDs
+/// and the values are taxon IDs, or an error if the file cannot be read or parsed.
 pub fn read_id_to_taxon_map<P: AsRef<Path>>(filename: P) -> Result<HashMap<String, u64>> {
     let file = open_file(filename)?;
     let reader = BufReader::new(file);
@@ -51,7 +63,7 @@ pub fn read_id_to_taxon_map<P: AsRef<Path>>(filename: P) -> Result<HashMap<Strin
 /// assert_eq!(expand_spaced_seed_mask(0b1010, 65), 0b1010);
 /// ```
 pub fn expand_spaced_seed_mask(spaced_seed_mask: u64, bit_expansion_factor: u64) -> u64 {
-    // 检查 bit_expansion_factor 是否在有效范围内
+    // Check if bit_expansion_factor is within the valid range
     if bit_expansion_factor == 0 || bit_expansion_factor > 64 {
         return spaced_seed_mask;
     }
@@ -109,21 +121,34 @@ extern crate libc;
 #[cfg(unix)]
 use libc::{getrlimit, rlimit, setrlimit, RLIMIT_NOFILE};
 
+/// Get the current file descriptor limit for the process.
+///
+/// This function retrieves the soft limit on the number of open file descriptors
+/// allowed for the current process on Unix-like systems.
+///
+/// # Returns
+///
+/// Returns the current soft limit as a `usize`, or 0 if the limit couldn't be retrieved.
+///
+/// # Platform-specific behavior
+///
+/// This function is only available on Unix-like systems. On other platforms,
+/// it may return a default value or not be compiled.
 #[cfg(unix)]
 pub fn get_file_limit() -> usize {
     let mut limits = rlimit {
-        rlim_cur: 0, // 当前（软）限制
-        rlim_max: 0, // 最大（硬）限制
+        rlim_cur: 0, // Current (soft) limit
+        rlim_max: 0, // Maximum (hard) limit
     };
 
-    // 使用unsafe块调用getrlimit，因为这是一个外部C函数
+    // Use an unsafe block to call getrlimit, as it's an external C function
     let result = unsafe { getrlimit(RLIMIT_NOFILE, &mut limits) };
 
     if result == 0 {
-        // 如果成功，返回当前软限制转换为usize
+        // If successful, return the current soft limit converted to usize
         limits.rlim_cur as usize
     } else {
-        // 如果失败，输出错误并可能返回一个默认值或panic
+        // If failed, print an error and return 0
         eprintln!("Failed to get file limit");
         0
     }
@@ -166,11 +191,11 @@ pub fn create_partition_writers(partition_files: &Vec<PathBuf>) -> Vec<BufWriter
     partition_files
         .into_iter()
         .map(|item| {
-            // 尝试创建文件，如果失败则直接返回错误
+            // Try to create the file, return an error if failed
             let file = OpenOptions::new()
                 .write(true)
-                .append(true) // 确保以追加模式打开文件
-                .create(true) // 如果文件不存在，则创建
+                .append(true) // Ensure opening the file in append mode
+                .create(true) // Create the file if it doesn't exist
                 .open(item)
                 .unwrap();
             BufWriter::new(file)
@@ -181,8 +206,8 @@ pub fn create_partition_writers(partition_files: &Vec<PathBuf>) -> Vec<BufWriter
 pub fn create_sample_file<P: AsRef<Path>>(filename: P) -> BufWriter<File> {
     let file = OpenOptions::new()
         .write(true)
-        .append(true) // 确保以追加模式打开文件
-        .create(true) // 如果文件不存在，则创建
+        .append(true) // Ensure opening the file in append mode
+        .create(true) // Create the file if it doesn't exist
         .open(filename)
         .unwrap();
     BufWriter::new(file)
@@ -196,19 +221,19 @@ pub fn find_and_trans_bin_files(
     suffix: &str,
     check: bool,
 ) -> io::Result<Map<usize, Vec<PathBuf>>> {
-    // 改为聚合相同数字的文件路径
-    // 构建正则表达式以匹配文件名中的第一个数字
+    // Aggregate file paths with the same number
+    // Build a regular expression to match the first number in the filename
     let pattern = format!(r"{}_(\d+)_\d+{}", prefix, suffix);
     let re = Regex::new(&pattern).expect("Invalid regex pattern");
 
-    // 读取指定目录下的所有条目
+    // Read all entries in the specified directory
     let mut map_entries = Map::new();
     for entry in fs::read_dir(directory)? {
         let path = entry?.path();
 
         if path.is_file() {
             if let Some(file_name) = path.file_name().and_then(|name| name.to_str()) {
-                // 使用正则表达式匹配文件名，并提取第一个数字部分
+                // Use the regular expression to match the filename and extract the first number part
                 if let Some(cap) = re.captures(file_name) {
                     if let Some(m) = cap.get(1) {
                         if let Ok(num) = m.as_str().parse::<usize>() {
@@ -221,7 +246,7 @@ pub fn find_and_trans_bin_files(
     }
 
     if check {
-        // 检查数字是否从1开始连续
+        // Check if the numbers are continuous starting from 1
         let mut keys: Vec<_> = map_entries.keys().cloned().collect();
         keys.sort_unstable();
         for (i, &key) in keys.iter().enumerate() {
@@ -234,7 +259,7 @@ pub fn find_and_trans_bin_files(
         }
     }
 
-    // 返回聚合后的文件路径
+    // Return the aggregated file paths
     Ok(map_entries)
 }
 
@@ -244,11 +269,11 @@ pub fn find_and_trans_files(
     suffix: &str,
     check: bool,
 ) -> io::Result<Map<usize, PathBuf>> {
-    // 构建正则表达式以匹配文件名中的数字
+    // Build a regular expression to match the number in the filename
     let pattern = format!(r"{}_(\d+){}", prefix, suffix);
     let re = Regex::new(&pattern).unwrap();
 
-    // 读取指定目录下的所有条目
+    // Read all entries in the specified directory
     let entries = fs::read_dir(directory)?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
@@ -262,7 +287,7 @@ pub fn find_and_trans_files(
         })
         .collect::<Vec<PathBuf>>();
 
-    // 使用正则表达式提取数字，并将它们存入BTreeMap
+    // Extract numbers using the regular expression and store them in a BTreeMap
     let mut map_entries = Map::new();
     for path in entries {
         if let Some(fname) = path.file_name().and_then(|name| name.to_str()) {
@@ -277,7 +302,7 @@ pub fn find_and_trans_files(
     }
 
     if check {
-        // 检查数字是否从0开始连续
+        // Check if the numbers are continuous starting from 0
         let mut keys: Vec<_> = map_entries.keys().cloned().collect();
         keys.sort_unstable();
         for (i, key) in keys.iter().enumerate() {
@@ -290,22 +315,22 @@ pub fn find_and_trans_files(
         }
     }
 
-    // 返回排序后的文件路径
+    // Return the sorted file paths
     Ok(map_entries)
 }
 
-// 函数定义
+// Function definition
 pub fn find_and_sort_files(
     directory: &Path,
     prefix: &str,
     suffix: &str,
     check: bool,
 ) -> io::Result<Vec<PathBuf>> {
-    // 构建正则表达式以匹配文件名中的数字
+    // Build a regular expression to match the number in the filename
     let pattern = format!(r"{}_(\d+){}", prefix, suffix);
     let re = Regex::new(&pattern).unwrap();
 
-    // 读取指定目录下的所有条目
+    // Read all entries in the specified directory
     let entries = fs::read_dir(directory)?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
@@ -319,7 +344,7 @@ pub fn find_and_sort_files(
         })
         .collect::<Vec<PathBuf>>();
 
-    // 使用正则表达式提取数字并排序
+    // Extract numbers using the regular expression and sort
     let mut sorted_entries = entries
         .into_iter()
         .filter_map(|path| {
@@ -333,7 +358,7 @@ pub fn find_and_sort_files(
     sorted_entries.sort_by_key(|k| k.1);
 
     if check {
-        // 检查数字是否从0开始连续
+        // Check if the numbers are continuous starting from 0
         for (i, (_, num)) in sorted_entries.iter().enumerate() {
             let a_idx = i + 1;
             if a_idx != *num {
@@ -345,7 +370,7 @@ pub fn find_and_sort_files(
         }
     }
 
-    // 返回排序后的文件路径
+    // Return the sorted file paths
     Ok(sorted_entries
         .iter()
         .map(|(path, _)| path.clone())
@@ -362,18 +387,18 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
     })
 }
 
-/// 获取最新的文件序号
+/// Get the latest file index
 pub fn get_lastest_file_index(file_path: &PathBuf) -> Result<usize> {
     let file_content = fs::read_to_string(&file_path)?;
-    // 如果文件内容为空，则默认最大值为0
+    // If the file content is empty, default the maximum value to 0
     let index = if file_content.is_empty() {
         0
     } else {
         file_content
-            .lines() // 将内容按行分割
-            .filter_map(|line| line.split('\t').next()) // 获取每行的第一列
-            .filter_map(|num_str| num_str.parse::<usize>().ok()) // 尝试将第一列的字符串转换为整型
-            .max() // 找到最大值
+            .lines() // Split the content by lines
+            .filter_map(|line| line.split('\t').next()) // Get the first column of each line
+            .filter_map(|num_str| num_str.parse::<usize>().ok()) // Try to convert the first column string to integer
+            .max() // Find the maximum value
             .unwrap_or(1)
     };
     Ok(index)

@@ -6,6 +6,20 @@ use seqkmer::SpaceDist;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+/// Resolves the taxonomic classification based on hit counts and taxonomy.
+///
+/// This function determines the most likely taxonomic classification for a sequence
+/// based on the hit counts for different taxa and the taxonomic hierarchy.
+///
+/// # Arguments
+///
+/// * `hit_counts` - A HashMap containing the hit counts for each taxon.
+/// * `taxonomy` - The Taxonomy object representing the taxonomic hierarchy.
+/// * `required_score` - The minimum score required for a classification to be considered valid.
+///
+/// # Returns
+///
+/// Returns the taxon ID of the resolved classification.
 pub fn resolve_tree(
     hit_counts: &HashMap<u32, u64>,
     taxonomy: &Taxonomy,
@@ -49,6 +63,22 @@ pub fn resolve_tree(
     max_taxon
 }
 
+/// Processes hit statistics for a group of hits.
+///
+/// This function calculates various statistics for a group of hits, including
+/// updating hit counts, taxon counters, and computing space distribution.
+///
+/// # Arguments
+///
+/// * `hits` - The HitGroup to process.
+/// * `counts` - A mutable reference to a HashMap to store hit counts.
+/// * `value_mask` - A mask used for processing hit values.
+/// * `taxonomy` - The Taxonomy object representing the taxonomic hierarchy.
+/// * `cur_taxon_counts` - A mutable reference to TaxonCounters to update.
+///
+/// # Returns
+///
+/// Returns a String representing the space distribution of the hits.
 fn stat_hits<'a>(
     hits: &HitGroup,
     counts: &mut HashMap<u32, u64>,
@@ -77,6 +107,27 @@ fn stat_hits<'a>(
     space_dist.reduce_str(" |:| ", |str| str.to_string())
 }
 
+/// Processes a hit group to determine classification and gather statistics.
+///
+/// This function takes a hit group, processes it to determine the taxonomic
+/// classification, and collects various statistics about the hits.
+///
+/// # Arguments
+///
+/// * `hits` - The HitGroup to process.
+/// * `taxonomy` - The Taxonomy object representing the taxonomic hierarchy.
+/// * `classify_counter` - An atomic counter for tracking classifications.
+/// * `required_score` - The minimum score required for a classification to be considered valid.
+/// * `minimum_hit_groups` - The minimum number of hit groups required for a valid classification.
+/// * `value_mask` - A mask used for processing hit values.
+///
+/// # Returns
+///
+/// Returns a tuple containing:
+/// 1. A String indicating the classification result ("C" for classified, "U" for unclassified).
+/// 2. The external ID of the classified taxon.
+/// 3. A String representing the hit statistics.
+/// 4. The updated TaxonCounters.
 pub fn process_hitgroup(
     hits: &HitGroup,
     taxonomy: &Taxonomy,

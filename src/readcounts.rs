@@ -8,10 +8,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 type TaxId = u32;
 pub const TAXID_MAX: TaxId = TaxId::MAX;
-// 定义 taxon_counts_t 类型
 pub type TaxonCounts = HashMap<TaxId, u64>;
 
-// 定义一个错误类型
 #[derive(Debug)]
 pub struct UnionError;
 
@@ -75,19 +73,6 @@ where
     kmers: T,
 }
 
-// impl<T> Clone for ReadCounts<T>
-// where
-//     T: Unionable + Clone,
-// {
-//     fn clone(&self) -> Self {
-//         ReadCounts {
-//             n_reads: AtomicU64::new(self.n_reads.load(Ordering::Relaxed)),
-//             n_kmers: AtomicU64::new(self.n_kmers.load(Ordering::Relaxed)),
-//             kmers: self.kmers.clone(),
-//         }
-//     }
-// }
-
 impl<T> ReadCounts<T>
 where
     T: Unionable,
@@ -130,7 +115,6 @@ where
     }
 }
 
-// 定义 READCOUNTER 类型
 #[cfg(feature = "exact_counting")]
 pub type ReadCounter = ReadCounts<HashSet<u64>>;
 

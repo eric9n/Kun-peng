@@ -1,4 +1,3 @@
-// 使用时需要引用模块路径
 use crate::compact_hash::{Compact, HashConfig, Slot};
 // use crate::mmscanner::MinimizerScanner;
 use crate::taxonomy::{NCBITaxonomy, Taxonomy};
@@ -12,9 +11,20 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Result as IOResult, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
-// 定义每批次处理的 Cell 数量
+
+// Define the number of Cells processed per batch
 const BATCH_SIZE: usize = 81920;
 
+/// Sets a cell in the page with the given item, handling collisions and LCA calculations
+///
+/// # Arguments
+///
+/// * `taxonomy` - The taxonomy used for LCA calculations
+/// * `page` - The page of AtomicU32 cells
+/// * `item` - The Slot item to be set
+/// * `page_size` - The size of the page
+/// * `value_bits` - The number of bits used for the value
+/// * `value_mask` - The mask used to extract the value
 fn set_page_cell(
     taxonomy: &Taxonomy,
     page: &[AtomicU32],
@@ -39,7 +49,7 @@ fn set_page_cell(
                 let new_taxid = taxonomy.lca(item_taxid, current_taxid);
                 Some(u32::combined(compact_key, new_taxid, value_bits))
             } else {
-                None // 当前值不匹配，尝试下一个索引
+                None // Current value doesn't match, try the next index
             }
         });
 
@@ -54,13 +64,25 @@ fn set_page_cell(
     }
 }
 
+/// Writes the hash table to a file
+///
+/// # Arguments
+///
+/// * `page` - The page of AtomicU32 cells to write
+/// * `file_path` - The path to the output file
+/// * `page_index` - The index of the current page
+/// * `capacity` - The capacity of the page
+///
+/// # Returns
+///
+/// The number of non-zero items written to the file
 fn write_hashtable_to_file(
     page: &Vec<AtomicU32>,
     file_path: &PathBuf,
     page_index: u64,
     capacity: u64,
 ) -> IOResult<usize> {
-    // 打开文件用于写入
+    // Open the file for writing
     let file = File::create(file_path)?;
     let mut writer = BufWriter::new(file);
     let mut count = 0;
@@ -76,10 +98,24 @@ fn write_hashtable_to_file(
         writer.write_u32::<LittleEndian>(value)?;
     }
 
-    writer.flush()?; // 确保所有内容都被写入文件
+    writer.flush()?; // Ensure all content is written to the file
     Ok(count)
 }
 
+/// Processes a k2 file and updates the hash table
+///
+/// # Arguments
+///
+/// * `config` - The HashConfig for the process
+/// * `database` - The path to the database
+/// * `chunk_file` - The path to the chunk file
+/// * `taxonomy` - The taxonomy used for processing
+/// * `page_size` - The size of each page
+/// * `page_index` - The index of the current page
+///
+/// # Returns
+///
+/// The number of items processed
 pub fn process_k2file(
     config: HashConfig,
     database: &PathBuf,
@@ -111,9 +147,9 @@ pub fn process_k2file(
     while let Ok(bytes_read) = reader.read(&mut batch_buffer) {
         if bytes_read == 0 {
             break;
-        } // 文件末尾
+        } // End of file
 
-        // 处理读取的数据批次
+        // Process the read data batch
         let cells_in_batch = bytes_read / cell_size;
 
         let cells = unsafe {
@@ -130,7 +166,17 @@ pub fn process_k2file(
     Ok(size_count)
 }
 
-/// 生成taxonomy树文件
+/// Generates a taxonomy tree file
+///
+/// # Arguments
+///
+/// * `ncbi_taxonomy_directory` - The directory containing NCBI taxonomy files
+/// * `taxonomy_filename` - The output filename for the generated taxonomy
+/// * `id_map` - A map of string IDs to u64 IDs
+///
+/// # Returns
+///
+/// The generated Taxonomy
 pub fn generate_taxonomy(
     ncbi_taxonomy_directory: &PathBuf,
     taxonomy_filename: &PathBuf,
@@ -151,15 +197,24 @@ pub fn generate_taxonomy(
     Ok(taxo)
 }
 
-/// 获取需要存储最大内部taxid的bit数量
+/// Calculates the number of bits required to store the maximum internal taxid
+///
+/// # Arguments
+///
+/// * `requested_bits_for_taxid` - The requested number of bits for taxid storage
+/// * `node_count` - The number of nodes in the taxonomy
+///
+/// # Returns
+///
+/// The number of bits required for taxid storage
 pub fn get_bits_for_taxid(
     requested_bits_for_taxid: usize,
     node_count: f64,
 ) -> Result<usize, String> {
-    // 计算存储taxonomy节点数量所需的最小位数
+    // Calculate the minimum number of bits needed to store the taxonomy node count
     let bits_needed_for_value = (node_count.log2().ceil() as usize).max(1);
 
-    // 检查是否需要更多位来存储taxid
+    // Check if more bits are required for storing taxid
     if requested_bits_for_taxid > 0 && bits_needed_for_value > requested_bits_for_taxid as usize {
         return Err("more bits required for storing taxid".to_string());
     }
@@ -167,7 +222,18 @@ pub fn get_bits_for_taxid(
     Ok(bits_needed_for_value.max(requested_bits_for_taxid))
 }
 
-/// 将fna文件转换成k2格式的临时文件
+/// Converts an FNA file to the k2 format temporary file
+///
+/// # Arguments
+///
+/// * `fna_file` - The input FNA file path
+/// * `meros` - The Meros instance for k-mer processing
+/// * `taxonomy` - The taxonomy used for processing
+/// * `id_to_taxon_map` - A map of string IDs to taxon IDs
+/// * `hash_config` - The HashConfig for the process
+/// * `writers` - A vector of BufWriters for output
+/// * `chunk_size` - The size of each chunk
+/// * `threads` - The number of threads to use for processing
 pub fn convert_fna_to_k2_format<P: AsRef<Path>>(
     fna_file: P,
     meros: Meros,

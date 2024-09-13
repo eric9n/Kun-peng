@@ -5,7 +5,19 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result, Write};
 use std::path::Path;
 
-/// 解析 ncbi 文件的 taxonomy nodes 文件
+/// Parse the NCBI taxonomy nodes file
+///
+/// # Arguments
+///
+/// * `nodes_filename` - Path to the nodes file
+///
+/// # Returns
+///
+/// A tuple containing:
+/// - HashMap of node ID to parent ID
+/// - HashMap of parent ID to set of child IDs
+/// - HashMap of node ID to rank
+/// - HashSet of known ranks
 pub fn parse_nodes_file<P: AsRef<Path>>(
     nodes_filename: P,
 ) -> Result<(
@@ -59,7 +71,15 @@ pub fn parse_nodes_file<P: AsRef<Path>>(
     Ok((parent_map, child_map, rank_map, known_ranks))
 }
 
-/// 解析 ncbi 文件的 taxonomy names 文件
+/// Parse the NCBI taxonomy names file
+///
+/// # Arguments
+///
+/// * `names_filename` - Path to the names file
+///
+/// # Returns
+///
+/// A HashMap of node ID to scientific name
 pub fn parse_names_file<P: AsRef<Path>>(names_filename: P) -> Result<HashMap<u64, String>> {
     let names_file = open_file(names_filename)?;
     let reader = BufReader::new(names_file);
@@ -68,22 +88,22 @@ pub fn parse_names_file<P: AsRef<Path>>(names_filename: P) -> Result<HashMap<u64
 
     for line in reader.lines() {
         let line = line?;
-        // 忽略空行或注释行
+        // Ignore empty lines or comments
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
         let line = line.trim_end_matches(|c| c == '\t' || c == '|' || c == '\n');
-        // 分割行为字段
+        // Split the line into fields
         let fields: Vec<_> = line.split("\t|\t").collect();
         if fields.len() < 4 {
-            continue; // 如果不满足预期的字段数量，则跳过此行
+            continue; // Skip if the line doesn't have the expected number of fields
         }
-        // 解析节点 ID 和名称类型
+        // Parse node ID and name type
         let node_id = fields[0].parse::<u64>().unwrap_or(0);
         let name = fields[1].to_string();
         let name_type = fields[3].to_string();
 
-        // 仅当类型为 "scientific name" 时，将名称添加到 map 中
+        // Only add the name to the map if it's a "scientific name"
         if name_type == "scientific name" {
             name_map.insert(node_id, name);
         }
@@ -92,7 +112,7 @@ pub fn parse_names_file<P: AsRef<Path>>(names_filename: P) -> Result<HashMap<u64
     Ok(name_map)
 }
 
-/// 结构体定义
+/// Represents a node in the taxonomy
 #[derive(Debug)]
 pub struct TaxonomyNode {
     pub parent_id: u64,
@@ -118,7 +138,7 @@ impl Default for TaxonomyNode {
     }
 }
 
-// NCBITaxonomy 类型定义
+// NCBITaxonomy struct definition
 pub struct NCBITaxonomy {
     parent_map: HashMap<u64, u64>,
     name_map: HashMap<u64, String>,
@@ -129,14 +149,23 @@ pub struct NCBITaxonomy {
 }
 
 impl NCBITaxonomy {
-    // 构造函数等实现
+    /// Create a new NCBITaxonomy from NCBI taxonomy files
+    ///
+    /// # Arguments
+    ///
+    /// * `nodes_filename` - Path to the nodes file
+    /// * `names_filename` - Path to the names file
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the new NCBITaxonomy or an error
     pub fn from_ncbi<P: AsRef<Path>>(nodes_filename: P, names_filename: P) -> Result<Self> {
         let mut marked_nodes = HashSet::new();
         let (parent_map, child_map, rank_map, known_ranks) = parse_nodes_file(nodes_filename)?;
 
         let name_map = parse_names_file(names_filename)?;
 
-        marked_nodes.insert(1); // 标记根节点
+        marked_nodes.insert(1); // Mark the root node
 
         Ok(NCBITaxonomy {
             parent_map,
@@ -148,6 +177,11 @@ impl NCBITaxonomy {
         })
     }
 
+    /// Mark a node and all its ancestors in the taxonomy
+    ///
+    /// # Arguments
+    ///
+    /// * `taxid` - The ID of the node to mark
     pub fn mark_node(&mut self, taxid: u64) {
         let mut current_taxid = taxid;
         while !self.marked_nodes.contains(&current_taxid) {
@@ -160,6 +194,13 @@ impl NCBITaxonomy {
         }
     }
 
+    /// Get rank offset data for the taxonomy
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// - HashMap of rank to offset
+    /// - String containing all ranks
     pub fn get_rank_offset_data(&self) -> (HashMap<String, u64>, String) {
         let mut rank_data = String::new();
         let mut rank_offsets = HashMap::new();
@@ -176,9 +217,14 @@ impl NCBITaxonomy {
         (rank_offsets, rank_data)
     }
 
+    /// Convert the NCBITaxonomy to a Kraken-style Taxonomy
+    ///
+    /// # Returns
+    ///
+    /// A new Taxonomy object
     pub fn convert_to_kraken_taxonomy(&self) -> Taxonomy {
         let mut taxo = Taxonomy::default();
-        // 预分配内存
+        // Preallocate memory
         taxo.nodes.reserve(self.marked_nodes.len() + 1);
         taxo.nodes.push(TaxonomyNode::default());
 
@@ -232,13 +278,13 @@ impl NCBITaxonomy {
     }
 }
 
-// Taxonomy 类型定义
+// Taxonomy struct definition
 #[derive(Debug)]
 pub struct Taxonomy {
     pub path_cache: HashMap<u32, Vec<u32>>,
     pub nodes: Vec<TaxonomyNode>,
-    pub name_data: Vec<u8>, // 字符串数据以 Vec<u8> 存储
-    pub rank_data: Vec<u8>, // 字符串数据以 Vec<u8> 存储
+    pub name_data: Vec<u8>, // String data stored as Vec<u8>
+    pub rank_data: Vec<u8>, // String data stored as Vec<u8>
     external_to_internal_id_map: HashMap<u64, u32>,
 }
 
@@ -255,8 +301,17 @@ impl Default for Taxonomy {
 }
 
 impl Taxonomy {
-    const MAGIC: &'static [u8] = b"K2TAXDAT"; // 替换为实际的 magic bytes
+    const MAGIC: &'static [u8] = b"K2TAXDAT"; // Replace with actual magic bytes
 
+    /// Create a new Taxonomy from a file
+    ///
+    /// # Arguments
+    ///
+    /// * `filename` - Path to the taxonomy file
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the new Taxonomy or an error
     pub fn from_file<P: AsRef<Path> + Debug>(filename: P) -> Result<Taxonomy> {
         let mut file = open_file(&filename)?;
 
@@ -305,38 +360,40 @@ impl Taxonomy {
         Ok(taxo)
     }
 
-    pub fn _is_a_ancestor_of_b(&self, a: u32, b: u32) -> bool {
-        if a == 0 || b == 0 {
-            return false;
-        }
-
-        let mut current = b;
-
-        while current > a {
-            current = match self.nodes.get(current as usize) {
-                Some(node) => node.parent_id as u32,
-                None => return false,
-            };
-        }
-
-        current == a
-    }
-
+    /// Check if node A is an ancestor of node B
+    ///
+    /// # Arguments
+    ///
+    /// * `a` - The potential ancestor node ID
+    /// * `b` - The potential descendant node ID
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether A is an ancestor of B
     pub fn is_a_ancestor_of_b(&self, a: u32, b: u32) -> bool {
         if a == 0 || b == 0 {
             return false;
         }
 
-        // 尝试从path_cache中获取b的祖先路径
+        // Try to get the ancestor path of B from the path cache
         if let Some(path) = self.path_cache.get(&b) {
-            // 检查路径中是否包含a
+            // Check if the path contains A
             return path.contains(&a);
         }
 
         false
     }
 
-    // 查找两个节点的最低公共祖先
+    /// Find the lowest common ancestor of two nodes
+    ///
+    /// # Arguments
+    ///
+    /// * `a` - The first node ID
+    /// * `b` - The second node ID
+    ///
+    /// # Returns
+    ///
+    /// The ID of the lowest common ancestor
     pub fn lca(&self, a: u32, b: u32) -> u32 {
         if a == 0 || b == 0 || a == b {
             return if a != 0 { a } else { b };
@@ -355,39 +412,16 @@ impl Taxonomy {
             return 0;
         }
 
-        // 返回最后一个共同的祖先
+        // Return the last common ancestor
         *path_a.get(i - 1).unwrap_or(&0)
     }
 
-    pub fn lowest_common_ancestor(&self, mut a: u32, mut b: u32) -> u32 {
-        // 如果任何一个节点是 0，返回另一个节点
-        if a == 0 || b == 0 || a == b {
-            return if a != 0 { a } else { b };
-        }
-
-        // 遍历节点直到找到共同的祖先
-        while a != b {
-            if a > b {
-                a = self
-                    .nodes
-                    .get(a as usize)
-                    .map_or(0, |node| node.parent_id as u32);
-            } else {
-                b = self
-                    .nodes
-                    .get(b as usize)
-                    .map_or(0, |node| node.parent_id as u32);
-            }
-        }
-
-        a
-    }
-
+    /// Build the path cache for efficient ancestor lookups
     pub fn build_path_cache(&mut self) {
         let mut cache: HashMap<u32, Vec<u32>> = HashMap::new();
         let root_external_id = 1u64;
         if let Some(&root_internal_id) = self.external_to_internal_id_map.get(&root_external_id) {
-            // 开始从根节点遍历
+            // Start traversing from the root node
             self.build_path_for_node(root_internal_id, &mut cache, Vec::new());
         }
         self.path_cache = cache;
@@ -399,27 +433,40 @@ impl Taxonomy {
         path_cache: &mut HashMap<u32, Vec<u32>>,
         mut current_path: Vec<u32>,
     ) {
-        current_path.push(node_id); // 将当前节点添加到路径中
-                                    // 存储当前节点的路径
+        current_path.push(node_id); // Add the current node to the path
+                                    // Store the current node's path
         path_cache.insert(node_id, current_path.clone());
 
-        // 获取当前节点的信息
+        // Get the current node's information
         let node = &self.nodes[node_id as usize];
         let first_child_id = node.first_child as u32;
         let child_count = node.child_count as u32;
 
-        // 遍历所有子节点
+        // Traverse all children
         for i in 0..child_count {
-            let child_internal_id = first_child_id + i; // 这里假设子节点的ID是连续的
+            let child_internal_id = first_child_id + i; // Assume child IDs are consecutive
             self.build_path_for_node(child_internal_id, path_cache, current_path.clone());
         }
     }
 
+    /// Get the number of nodes in the taxonomy
+    ///
+    /// # Returns
+    ///
+    /// The number of nodes
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
 
-    // get_internal_id 函数的优化
+    /// Get the internal ID for a given external ID
+    ///
+    /// # Arguments
+    ///
+    /// * `external_id` - The external ID to look up
+    ///
+    /// # Returns
+    ///
+    /// The corresponding internal ID, or 0 if not found
     pub fn get_internal_id(&self, external_id: u64) -> u32 {
         *self
             .external_to_internal_id_map
@@ -427,6 +474,7 @@ impl Taxonomy {
             .unwrap_or(&0)
     }
 
+    /// Generate the mapping from external to internal IDs
     pub fn generate_external_to_internal_id_map(&mut self) {
         self.external_to_internal_id_map.clear();
         self.external_to_internal_id_map.insert(0, 0);
@@ -437,6 +485,15 @@ impl Taxonomy {
         }
     }
 
+    /// Write the taxonomy to disk
+    ///
+    /// # Arguments
+    ///
+    /// * `filename` - Path to write the taxonomy file
+    ///
+    /// # Returns
+    ///
+    /// A Result indicating success or failure
     pub fn write_to_disk<P: AsRef<Path>>(&self, filename: P) -> Result<()> {
         let mut file = File::create(filename)?;
 

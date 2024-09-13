@@ -1,4 +1,3 @@
-// 使用时需要引用模块路径
 use crate::utils::expand_spaced_seed_mask;
 use crate::{construct_seed_template, parse_binary};
 use clap::Parser;
@@ -168,6 +167,18 @@ impl KLMTArgs {
     }
 }
 
+/// Parse size string to usize
+///
+/// # Examples
+///
+/// ```
+/// use kun_peng::args::parse_size;
+///
+/// assert_eq!(parse_size("1G"), Ok(1_073_741_824));
+/// assert_eq!(parse_size("1M"), Ok(1_048_576));
+/// assert_eq!(parse_size("1K"), Ok(1_024));
+/// assert!(parse_size("1B").is_err());
+/// ```
 pub fn parse_size(s: &str) -> Result<usize, String> {
     let len = s.len();
     if len < 2 {

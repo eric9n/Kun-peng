@@ -1,19 +1,95 @@
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::cmp::Ordering as CmpOrdering;
+use std::fmt::{self, Debug};
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Read, Result, Write};
 use std::path::Path;
 
-/// 1101010101 => left: 11010, right: 10101;
+/// Trait for compact hash operations
 pub trait Compact: Default + PartialEq + Clone + Copy + Eq + Sized + Send + Sync + Debug {
+    /// Creates a compacted value from a hash key
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kun_peng::compact_hash::Compact;
+    ///
+    /// let compacted = u32::compacted(0x1234567890ABCDEF, 16);
+    /// assert_eq!(compacted, 0x1234);
+    /// ```
     fn compacted(hash_key: u64, value_bits: usize) -> Self;
+
+    /// Creates a hash value from a hash key and a value
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kun_peng::compact_hash::Compact;
+    ///
+    /// let hash_value = u32::hash_value(0x1234567890ABCDEF, 16, 0xABCD);
+    /// assert_eq!(hash_value, 0x1234ABCD);
+    /// ```
     fn hash_value(hash_key: u64, value_bits: usize, value: Self) -> Self;
 
+    /// Returns the left part of the value
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kun_peng::compact_hash::Compact;
+    ///
+    /// let value: u32 = 0x1234ABCD;
+    /// assert_eq!(value.left(16), 0x1234);
+    /// ```
     fn left(&self, value_bits: usize) -> Self;
+
+    /// Returns the right part of the value
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kun_peng::compact_hash::Compact;
+    ///
+    /// let value: u32 = 0x1234ABCD;
+    /// assert_eq!(value.right(0xFFFF), 0xABCD);
+    /// ```
     fn right(&self, value_mask: usize) -> Self;
+
+    /// Combines left and right parts into a single value
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kun_peng::compact_hash::Compact;
+    ///
+    /// let combined = u32::combined(0x1234, 0xABCD, 16);
+    /// assert_eq!(combined, 0x1234ABCD);
+    /// ```
     fn combined(left: Self, right: Self, value_bits: usize) -> Self;
+
+    /// Converts the value to u32
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kun_peng::compact_hash::Compact;
+    ///
+    /// let value: u32 = 0x1234ABCD;
+    /// assert_eq!(value.to_u32(), 0x1234ABCD);
+    /// ```
     fn to_u32(&self) -> u32;
+
+    /// Creates a value from u32
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kun_peng::compact_hash::Compact;
+    ///
+    /// let value = u32::from_u32(0x1234ABCD);
+    /// assert_eq!(value, 0x1234ABCD);
+    /// ```
     fn from_u32(value: u32) -> Self;
 }
 
@@ -82,6 +158,18 @@ pub struct Row {
 }
 
 impl Row {
+    /// Creates a new Row
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kun_peng::compact_hash::Row;
+    ///
+    /// let row = Row::new(0x1234, 1, 2);
+    /// assert_eq!(row.value, 0x1234);
+    /// assert_eq!(row.seq_id, 1);
+    /// assert_eq!(row.kmer_id, 2);
+    /// ```
     pub fn new(value: u32, seq_id: u32, kmer_id: u32) -> Self {
         Self {
             value,
@@ -96,14 +184,14 @@ impl Row {
     }
 }
 
-// 实现 PartialOrd，只比较 index 字段
+// Implement PartialOrd, comparing only the kmer_id field
 impl PartialOrd for Row {
     fn partial_cmp(&self, other: &Self) -> Option<CmpOrdering> {
         self.kmer_id.partial_cmp(&other.kmer_id)
     }
 }
 
-// 实现 Ord，只比较 index 字段
+// Implement Ord, comparing only the kmer_id field
 impl Ord for Row {
     fn cmp(&self, other: &Self) -> CmpOrdering {
         self.kmer_id.cmp(&other.kmer_id)
@@ -124,6 +212,17 @@ impl<B> Slot<B>
 where
     B: Compact,
 {
+    /// Creates a new Slot
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kun_peng::compact_hash::{Slot, Compact};
+    ///
+    /// let slot = Slot::<u32>::new(1, 0x1234);
+    /// assert_eq!(slot.idx, 1);
+    /// assert_eq!(slot.value, 0x1234);
+    /// ```
     pub fn new(idx: usize, value: B) -> Self {
         Self { idx, value }
     }
@@ -136,12 +235,22 @@ where
 }
 
 impl Slot<u64> {
-    pub fn get_seq_id(&self) -> u64 {
-        self.value.right(0xFFFFFFFF)
+    /// Returns the sequence ID (lower 32 bits) for a u64 Slot
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kun_peng::compact_hash::{Slot, Compact};
+    ///
+    /// let slot = Slot::<u64>::new(1, 0x1234567890ABCDEF);
+    /// assert_eq!(slot.get_seq_id(), 0x90ABCDEF);
+    /// ```
+    pub fn get_seq_id(&self) -> u32 {
+        self.value.right(0) as u32
     }
 }
 
-// 实现 PartialOrd，只比较 index 字段
+// Implement PartialOrd, comparing only the idx field
 impl<B> PartialOrd for Slot<B>
 where
     B: Compact,
@@ -151,7 +260,7 @@ where
     }
 }
 
-// 实现 Ord，只比较 index 字段
+// Implement Ord, comparing only the idx field
 impl<B> Ord for Slot<B>
 where
     B: Compact,
@@ -161,27 +270,25 @@ where
     }
 }
 
-use std::fmt::{self, Debug};
-
 #[derive(Clone, Copy)]
 pub struct HashConfig {
     // value_mask = ((1 << value_bits) - 1);
     pub value_mask: usize,
-    // 值的位数
+    // Number of bits for the value
     pub value_bits: usize,
-    // 哈希表的容量
+    // Capacity of the hash table
     pub capacity: usize,
-    // 哈希表中当前存储的元素数量。
+    // Current number of elements stored in the hash table
     pub size: usize,
-    // 分区数
+    // Number of partitions
     pub partition: usize,
-    // 分块大小
+    // Size of each hash chunk
     pub hash_capacity: usize,
-    // 数据库版本 0是kraken 2 database转换过来的
+    // Database version (0 is converted from Kraken 2 database)
     pub version: usize,
 }
 
-// 为HashConfig手动实现Debug trait
+// Manually implement Debug trait for HashConfig
 impl fmt::Debug for HashConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("HashConfig")
@@ -192,12 +299,22 @@ impl fmt::Debug for HashConfig {
             .field("size", &self.size)
             .field("value_bits", &self.value_bits)
             .field("value_mask", &self.value_mask)
-            // 注意，我们没有包括_phantom字段
             .finish()
     }
 }
 
 impl HashConfig {
+    /// Creates a new HashConfig
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kun_peng::compact_hash::HashConfig;
+    ///
+    /// let config = HashConfig::new(1, 1000, 16, 500, 10, 100);
+    /// assert_eq!(config.capacity, 1000);
+    /// assert_eq!(config.value_bits, 16);
+    /// ```
     pub fn new(
         version: usize,
         capacity: usize,
@@ -219,7 +336,7 @@ impl HashConfig {
     }
 
     pub fn write_to_file<P: AsRef<Path>>(&self, file_path: P) -> Result<()> {
-        // 打开文件用于写入
+        // Open the file for writing
         let file = File::create(file_path)?;
         let mut writer = BufWriter::new(file);
         writer.write_u64::<LittleEndian>(self.version as u64)?;
@@ -372,12 +489,12 @@ fn read_large_page_from_file<P: AsRef<Path>>(large_page: &mut Page, filename: P)
     let current_len = large_page.data.capacity();
 
     if capacity > current_len {
-        // 如果文件中的容量大于当前页的容量，则扩展内存
+        // If the capacity in the file is greater than the current page's capacity, extend the memory
         large_page.data.resize(capacity, 0);
     } else if capacity < current_len {
-        // 如果文件中的容量小于当前页的容量，则截断并清零多余的部分
+        // If the capacity in the file is smaller than the current page's capacity, truncate and zero out the excess
         large_page.data.truncate(capacity);
-        large_page.data.shrink_to_fit(); // 释放多余的内存
+        large_page.data.shrink_to_fit(); // Free up excess memory
     }
 
     read_page_data(&mut file, &mut large_page.data)?;

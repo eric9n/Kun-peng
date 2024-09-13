@@ -1,12 +1,12 @@
-# Kun-peng  <img src="./kr2r/docs/KunPeng.png" alt="Kun-peng Logo" align="right" width="50"/>
+# Kun-peng  <img src="./docs/KunPeng.png" alt="Kun-peng Logo" align="right" width="50"/>
 
-[![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.7.0-green.svg)](https://github.com/eric9n/Kun-peng/releases)
+[![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.7.1-green.svg)](https://github.com/eric9n/Kun-peng/releases)
 
 Here, we introduce Kun-peng, an ultra-memory-efficient metagenomic classification tool (Fig. 1). Inspired by Kraken2's k-mer-based approach, Kun-peng employs algorithms for minimizer generation, hash table querying, and classification. The cornerstone of Kun-peng's memory efficiency lies in its unique ordered block design for reference database. This strategy dramatically reduces memory usage without compromising speed, enabling Kun-peng to be executed on both personal computers and HPCP for most databases. Moreover, Kun-peng incorporates an advanced sliding window algorithm for sequence classifications to reduce the false-positive rates. Finally, Kun-peng supports parallel processing algorithms to further bolster its speed. Kun-peng offers two classification modes: Memory-Efficient Mode (Kun-peng-M) and Full-Speed Mode (Kun-peng-F). Remarkably, Kun-peng-M achieves a comparable processing time to Kraken2 while using less than 10% of its memory. Kun-peng-F loads all the database blocks simultaneously, matching Kraken2's memory usage while surpassing its speed. Notably, Kun-peng is compatible with the reference database built by Kraken2 and the associated abundance estimate tool Bracken<sub>1</sub>, making the transition from Kraken2 effortless. The name "Kun-peng" was derived from Chinese mythology and refers to a creature transforming between a giant fish (Kun) and a giant bird (Peng), reflecting the software's flexibility in navigating complex metagenomic data landscapes.
 
 
 <div style="text-align: center;">
-  <img src="./kr2r/docs/Picture1.png" alt="Workflow of Kun-peng" style="width: 50%;">
+  <img src="./docs/Picture1.png" alt="Workflow of Kun-peng" style="width: 50%;">
   <p><strong>Fig. 1. Overview of the algorithms of Kun-peng.</strong></p>
 </div>
 
@@ -19,7 +19,7 @@ We constructed a standard database using the complete RefSeq genomes of archaeal
 Kun-peng offers two modes for taxonomy classification: Memory-Efficient Mode (Kun-peng-M) and Full-Speed Mode (Kun-peng-F), with identical classification results. Kun-peng-M matches Kraken2's processing time and uses 57.0 ± 2.25 % of Centrifuge's time (Fig. 2d). However, Kun-peng-M requires only 4.5 ± 1.1 GB peak memory, which is 7.96 ± 0.19 % and 6.31 ± 0.15 % of Kraken2 and Centrifuge's peak memory, respectively (Fig. 2d). Compared to Kraken2, the Kun-peng-F consumes the same memory but requires only of the 67.2 ± 4.57 % processing time. Compared to Centrifuge, Kun-peng-F uses 77.9 ± 0.22 % memory while requiring only 38.8 ± 4.25 % of its processing time (Fig. 2d). Remarkably, with an ultra-low memory requirement, Kun-peng-M can even operate on most personal computers when the standard reference database is used (Fig. 2e).
 
 <div style="text-align: center;">
-  <img src="./kr2r/docs/Picture2.png" alt="Workflow of Kun-peng" style="width: 50%;">
+  <img src="./docs/Picture2.png" alt="Workflow of Kun-peng" style="width: 50%;">
   <p><strong>Fig. 2. Performance benchmark of Kun-peng against other metagenomic classifiers.</strong></p>
 </div>
 
@@ -56,6 +56,13 @@ source ~/.bashrc
 ```
 
 For macOS users:
+
+### Homebrew
+```bash
+brew install eric9n/tap/kun_peng
+```
+
+### Donwload binary
 
 ```bash
 # Replace X.Y.Z with the latest version number
@@ -169,7 +176,7 @@ This will build the kr2r and ncbi project in release mode.
 Next, run the example script that demonstrates how to use the `kun_peng` binary. Execute the following command from the root of the workspace:
 
 ``` sh
-cargo run --release --example build_and_classify --package kun_peng
+cargo run --release --example build_and_classify
 ```
 
 This will run the build_and_classify.rs example located in the kr2r project's examples directory.

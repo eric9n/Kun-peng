@@ -6,6 +6,16 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
 
+/// Calculates clade counts based on the taxonomy and call counts
+///
+/// # Arguments
+///
+/// * `taxonomy` - The taxonomy structure
+/// * `call_counts` - A HashMap of taxon IDs to their counts
+///
+/// # Returns
+///
+/// A HashMap of taxon IDs to their clade counts
 pub fn get_clade_counts(taxonomy: &Taxonomy, call_counts: &HashMap<u64, u64>) -> HashMap<u64, u64> {
     let mut clade_counts = HashMap::new();
 
@@ -20,6 +30,16 @@ pub fn get_clade_counts(taxonomy: &Taxonomy, call_counts: &HashMap<u64, u64>) ->
     clade_counts
 }
 
+/// Calculates clade counters based on the taxonomy and call counters
+///
+/// # Arguments
+///
+/// * `taxonomy` - The taxonomy structure
+/// * `call_counters` - TaxonCounters containing call counts for each taxon
+///
+/// # Returns
+///
+/// TaxonCounters containing clade counts for each taxon
 pub fn get_clade_counters(taxonomy: &Taxonomy, call_counters: &TaxonCounters) -> TaxonCounters {
     let mut clade_counters = TaxonCounters::new();
 
@@ -37,6 +57,16 @@ pub fn get_clade_counters(taxonomy: &Taxonomy, call_counters: &TaxonCounters) ->
     clade_counters
 }
 
+/// Extracts a string from a byte slice starting at the given offset
+///
+/// # Arguments
+///
+/// * `data` - The byte slice to extract from
+/// * `offset` - The starting offset in the byte slice
+///
+/// # Returns
+///
+/// A string slice extracted from the byte slice
 fn extract_string_from_offset(data: &[u8], offset: usize) -> &str {
     let end = data[offset..]
         .iter()
@@ -46,6 +76,17 @@ fn extract_string_from_offset(data: &[u8], offset: usize) -> &str {
     std::str::from_utf8(&data[offset..end]).unwrap_or("")
 }
 
+/// Prints a line in MPA-style report format
+///
+/// # Arguments
+///
+/// * `file` - The file to write to
+/// * `clade_count` - The count for the clade
+/// * `taxonomy_line` - The taxonomy line to print
+///
+/// # Returns
+///
+/// An io::Result indicating success or failure of the write operation
 fn print_mpa_style_report_line(
     file: &mut File,
     clade_count: u64,
@@ -54,11 +95,25 @@ fn print_mpa_style_report_line(
     writeln!(file, "{}\t{}", taxonomy_line, clade_count)
 }
 
+/// Performs a depth-first search to generate an MPA-style report
+///
+/// # Arguments
+///
+/// * `taxid` - The current taxon ID
+/// * `file` - The file to write the report to
+/// * `report_zeros` - Whether to report zero counts
+/// * `taxonomy` - The taxonomy structure
+/// * `clade_counts` - A HashMap of taxon IDs to their clade counts
+/// * `taxonomy_names` - A vector to store the taxonomy names
+///
+/// # Returns
+///
+/// An io::Result indicating success or failure of the operation
 fn mpa_report_dfs(
     taxid: u64,
     file: &mut File,
     report_zeros: bool,
-    taxonomy: &Taxonomy, // 假设你有一个 `Taxonomy` 结构
+    taxonomy: &Taxonomy,
     clade_counts: &HashMap<u64, u64>,
     taxonomy_names: &mut Vec<String>,
 ) -> io::Result<()> {
@@ -66,7 +121,7 @@ fn mpa_report_dfs(
         return Ok(());
     }
 
-    let node = &taxonomy.nodes[taxid as usize]; // 假设 nodes 是 Vec<TaxonomyNode>
+    let node = &taxonomy.nodes[taxid as usize];
     let rank = extract_string_from_offset(&taxonomy.rank_data, node.rank_offset as usize);
 
     let rank_code = match rank {
@@ -126,6 +181,18 @@ fn mpa_report_dfs(
     Ok(())
 }
 
+/// Generates an MPA-style report
+///
+/// # Arguments
+///
+/// * `filename` - The path to the output file
+/// * `report_zeros` - Whether to report zero counts
+/// * `taxonomy` - The taxonomy structure
+/// * `call_counters` - A HashMap of taxon IDs to their ReadCounters
+///
+/// # Returns
+///
+/// An io::Result indicating success or failure of the operation
 pub fn report_mpa_style<P: AsRef<Path>>(
     filename: P,
     report_zeros: bool,
@@ -152,6 +219,23 @@ pub fn report_mpa_style<P: AsRef<Path>>(
     )
 }
 
+/// Prints a line in Kraken-style report format
+///
+/// # Arguments
+///
+/// * `file` - The file to write to
+/// * `report_kmer_data` - Whether to report k-mer data
+/// * `total_seqs` - The total number of sequences
+/// * `clade_counter` - The ReadCounter for the clade
+/// * `taxon_counter` - The ReadCounter for the taxon
+/// * `rank_str` - The rank string
+/// * `taxid` - The taxon ID
+/// * `sci_name` - The scientific name
+/// * `depth` - The depth in the taxonomy tree
+///
+/// # Returns
+///
+/// An io::Result indicating success or failure of the write operation
 pub fn print_kraken_style_report_line(
     file: &mut File,
     report_kmer_data: bool,
@@ -192,6 +276,25 @@ pub fn print_kraken_style_report_line(
     writeln!(file, "{}", sci_name)
 }
 
+/// Performs a depth-first search to generate a Kraken-style report
+///
+/// # Arguments
+///
+/// * `taxid` - The current taxon ID
+/// * `file` - The file to write the report to
+/// * `report_zeros` - Whether to report zero counts
+/// * `report_kmer_data` - Whether to report k-mer data
+/// * `taxonomy` - The taxonomy structure
+/// * `clade_counters` - A mutable reference to TaxonCounters for clade counts
+/// * `call_counters` - A reference to TaxonCounters for call counts
+/// * `total_seqs` - The total number of sequences
+/// * `rank_code` - The current rank code
+/// * `rank_depth` - The current rank depth
+/// * `depth` - The current depth in the taxonomy tree
+///
+/// # Returns
+///
+/// An io::Result indicating success or failure of the operation
 pub fn kraken_report_dfs(
     taxid: u64,
     file: &mut File,
@@ -240,7 +343,6 @@ pub fn kraken_report_dfs(
         .next()
         .unwrap_or("");
 
-    // let mut clade_counter = clade_counters.get_mut(&taxid).unwrap();
     let mut clade_counter = clade_counters
         .entry(taxid)
         .or_insert_with(ReadCounter::default);
@@ -287,6 +389,21 @@ pub fn kraken_report_dfs(
     Ok(())
 }
 
+/// Generates a Kraken-style report
+///
+/// # Arguments
+///
+/// * `filename` - The path to the output file
+/// * `report_zeros` - Whether to report zero counts
+/// * `report_kmer_data` - Whether to report k-mer data
+/// * `taxonomy` - The taxonomy structure
+/// * `call_counters` - A HashMap of taxon IDs to their ReadCounters
+/// * `total_seqs` - The total number of sequences
+/// * `total_unclassified` - The total number of unclassified sequences
+///
+/// # Returns
+///
+/// An io::Result indicating success or failure of the operation
 pub fn report_kraken_style<P: AsRef<Path>>(
     filename: P,
     report_zeros: bool,
@@ -300,7 +417,7 @@ pub fn report_kraken_style<P: AsRef<Path>>(
 
     let mut file = File::create(filename)?;
 
-    // 处理未分类序列的特殊情况
+    // Handle the special case for unclassified sequences
     if total_unclassified != 0 || report_zeros {
         let mut rc = ReadCounter::new(total_unclassified, 0);
         let trc = ReadCounter::new(total_unclassified, 0);
@@ -317,7 +434,7 @@ pub fn report_kraken_style<P: AsRef<Path>>(
         )?;
     }
 
-    // 通过 DFS 遍历分类树
+    // Traverse the taxonomy tree using DFS
     kraken_report_dfs(
         1,
         &mut file,

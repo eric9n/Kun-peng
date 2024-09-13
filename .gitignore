@@ -19,3 +19,4 @@ out_dir/
 slurm.sh
 downloads/
 test_database/
+chunk/
