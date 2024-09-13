@@ -48,6 +48,8 @@ For Linux users (CentOS 7 compatible):
 VERSION=vX.Y.Z
 mkdir kun_peng_$VERSION
 wget https://github.com/eric9n/Kun-peng/releases/download/$VERSION/kun_peng-$VERSION-centos7
+# For linux x86_64
+# wget https://github.com/eric9n/Kun-peng/releases/download/$VERSION/kun_peng-$VERSION-x86_64-unknown-linux-gnu
 mv kun_peng-$VERSION-centos7 kun_peng_$VERSION/kun_peng
 chmod +x kun_peng_$VERSION/kun_peng
 # Add to PATH
