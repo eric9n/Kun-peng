@@ -17,6 +17,7 @@ use kun_peng::utils::find_files;
 use std::path::PathBuf;
 use std::time::Instant;
 
+#[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
