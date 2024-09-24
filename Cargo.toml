@@ -1,6 +1,6 @@
 [package]
 name = "kun_peng"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2021"
 authors = ["eric9n@gmail.com"]
 description = "Kun-peng: an ultra-fast, low-memory footprint and accurate taxonomy classifier for all"
@@ -33,6 +33,7 @@ regex = "1.5.4"
 flate2 = "1.0"
 dashmap = { version = "6.0.1", features = ["rayon"] }
 num_cpus = "1.13.1"
+jemallocator = "0.5.4"
 
 [dev-dependencies]
 criterion = "0.5.1"

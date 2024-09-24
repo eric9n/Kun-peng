@@ -17,6 +17,9 @@ use kun_peng::utils::find_files;
 use std::path::PathBuf;
 use std::time::Instant;
 
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about="build database", long_about = None)]
 struct BuildArgs {
