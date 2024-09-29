@@ -11,6 +11,8 @@ use std::io::{BufWriter, Write};
 use std::io::{Error, ErrorKind, Result};
 use std::path::PathBuf;
 use std::time::Instant;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 /// Command line arguments for the splitr program.
 ///
@@ -57,8 +59,57 @@ pub struct Args {
 
     /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
     /// Supports fasta or fastq format files (e.g., .fasta, .fastq) and gzip compressed files (e.g., .fasta.gz, .fastq.gz).
+    /// Can also be a single .txt file containing a list of input file paths, one per line.
     // #[clap(short = 'F', long = "files")]
-    pub input_files: Vec<String>,
+    pub input_files: Vec<PathBuf>,
+}
+
+impl Args {
+    /// Process input_files to handle the case of a single text file containing multiple file paths
+    pub fn process_input_files(mut self) -> Result<Self> {
+        if self.input_files.len() == 1 {
+            let file_path = &self.input_files[0];
+            if file_path.is_file() && file_path.extension().map_or(false, |ext| ext == "txt") {
+                let file = File::open(file_path)?;
+                let reader = BufReader::new(file);
+                let mut new_input_files = Vec::new();
+
+                for line in reader.lines() {
+                    let line = line?;
+                    let path = PathBuf::from(line.trim());
+                    new_input_files.push(path);
+                }
+
+                if !new_input_files.is_empty() {
+                    self.input_files = new_input_files;
+                } else {
+                    return Err(Error::new(ErrorKind::InvalidInput, "No input files found in the provided list."));
+                }
+            }
+        }
+
+        // Final check for all input files
+        let mut missing_files = Vec::new();
+        for file in &self.input_files {
+            if !file.exists() {
+                missing_files.push(file.clone());
+            }
+        }
+
+        if !missing_files.is_empty() {
+            let error_msg = format!("The following input files do not exist:\n{}", 
+                missing_files.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join("\n"));
+            return Err(Error::new(ErrorKind::NotFound, error_msg));
+        }
+
+        // Print the list of valid input files
+        println!("Input files:");
+        for (index, file) in self.input_files.iter().enumerate() {
+            println!("  {}: {}", index + 1, file.display());
+        }
+
+        Ok(self)
+    }
 }
 
 fn init_chunk_writers(
@@ -197,7 +248,7 @@ where
 /// 处理样本文件
 fn process_files<F>(args: &Args, hash_config: HashConfig, mut action: F) -> Result<()>
 where
-    F: FnMut(usize, OptionPair<String>) -> Result<()>,
+    F: FnMut(usize, OptionPair<PathBuf>) -> Result<()>,
 {
     let file_path = args.chunk_dir.join("sample_file.map");
     let mut file_writer = create_sample_file(&file_path);
@@ -222,7 +273,7 @@ where
             file_writer,
             "{}\t{}",
             file_index,
-            path_pair.reduce_str(",", |a| a.to_string())
+            path_pair.reduce_str(",", |a| a.to_str().unwrap().to_string())
         )?;
         file_writer.flush().unwrap();
 
@@ -233,7 +284,7 @@ where
 }
 
 pub fn run(args: Args) -> Result<()> {
-    // let args = Args::parse();
+    let args = args.process_input_files()?;
     let options_filename = &args.database.join("opts.k2d");
     let idx_opts = IndexOptions::read_index_options(options_filename)?;
 
