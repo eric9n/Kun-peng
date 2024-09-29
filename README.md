@@ -379,7 +379,8 @@ Integrates 'splitr', 'annotate', and 'resolve' into a unified workflow for seque
 Usage: kun_peng classify [OPTIONS] --db <DATABASE> --chunk-dir <CHUNK_DIR> [INPUT_FILES]...
 
 Arguments:
-  [INPUT_FILES]...  A list of input file paths (FASTA/FASTQ) to be processed by the classify program. Supports fasta or fastq format files (e.g., .fasta, .fastq) and gzip compressed files (e.g., .fasta.gz, .fastq.gz)
+  [INPUT_FILES]...  A list of input file paths (FASTA/FASTQ) to be processed by the classify program. Supports fasta or fastq format files (e.g., .fasta, .fastq) and gzip compressed files (e.g., .fasta.gz, .fastq.gz).
+  Can also be a single .txt file containing a list of input file paths, one per line.
 
 Options:
       --db <DATABASE>

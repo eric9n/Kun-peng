@@ -121,6 +121,7 @@ pub struct ClassifyArgs {
     // pub full_output: bool,
     /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
     /// Supports fasta or fastq format files (e.g., .fasta, .fastq) and gzip compressed files (e.g., .fasta.gz, .fastq.gz).
+    /// Can also be a single .txt file containing a list of input file paths, one per line.
     // #[clap(short = 'F', long = "files")]
     pub input_files: Vec<PathBuf>,
 }
