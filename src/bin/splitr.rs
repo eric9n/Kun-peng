@@ -60,13 +60,17 @@ pub struct Args {
     /// A list of input file paths (FASTA/FASTQ) to be processed by the classify program.
     /// Supports fasta or fastq format files (e.g., .fasta, .fastq) and gzip compressed files (e.g., .fasta.gz, .fastq.gz).
     /// Can also be a single .txt file containing a list of input file paths, one per line.
-    // #[clap(short = 'F', long = "files")]
+    #[clap(required = true)]
     pub input_files: Vec<PathBuf>,
 }
 
 impl Args {
     /// Process input_files to handle the case of a single text file containing multiple file paths
     pub fn process_input_files(mut self) -> Result<Self> {
+        if self.input_files.is_empty() {
+            return Err(Error::new(ErrorKind::InvalidInput, "No input files provided."));
+        }
+        
         if self.input_files.len() == 1 {
             let file_path = &self.input_files[0];
             if file_path.is_file() && file_path.extension().map_or(false, |ext| ext == "txt") {
