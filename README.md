@@ -451,3 +451,17 @@ Sample Report Output Formats:
 4.  A rank code, indicating (U)nclassified, (R)oot, (D)omain, (K)ingdom, (P)hylum, (C)lass, (O)rder, (F)amily, (G)enus, or (S)pecies. Taxa that are not at any of these 10 ranks have a rank code that is formed by using the rank code of the closest ancestor rank with a number indicating the distance from that rank. E.g., "G2" is a rank code indicating a taxon is between genus and species and the grandparent taxon is at the genus rank.
 5.  NCBI taxonomic ID number
 6.  Indented scientific name
+
+
+### Citation
+```bibtex
+@article{Chen2024KunPeng,
+  author = {Chen, Qiong and Zhang, Boliang and Peng, Chen and Huang, Jiajun and Shen, Xiaotao and Jiang, Chao},
+  title = {Kun-peng: an ultra-memory-efficient, fast, and accurate pan-domain taxonomic classifier for all},
+  journal = {bioRxiv},
+  year = {2024},
+  doi = {10.1101/2024.12.19.629356},
+  url = {https://www.biorxiv.org/content/10.1101/2024.12.19.629356v1},
+  note = {preprint}
+}
+```
