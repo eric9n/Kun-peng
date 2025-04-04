@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use Kun-peng in your research, please cite the following paper."
+
+title: "Kun-peng"
+authors:
+  - name: eric9n
+repository-code: "https://github.com/eric9n/Kun-peng"
+
+preferred-citation:
+  type: article
+  title: "Kun-peng: an ultra-memory-efficient, fast, and accurate pan-domain taxonomic classifier for all"
+  authors:
+    - family-names: "Chen"
+      given-names: "Qiong"
+    - family-names: "Zhang"
+      given-names: "Boliang"
+    - family-names: "Peng"
+      given-names: "Chen"
+    - family-names: "Huang"
+      given-names: "Jiajun"
+    - family-names: "Shen"
+      given-names: "Xiaotao"
+    - family-names: "Jiang"
+      given-names: "Chao"
+  doi: "10.1101/2024.12.19.629356"
+  journal: "bioRxiv"
+  url: "https://www.biorxiv.org/content/10.1101/2024.12.19.629356v1"
+  year: 2024
+  status: "preprint"
