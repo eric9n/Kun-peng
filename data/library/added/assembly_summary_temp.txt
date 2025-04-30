@@ -1,0 +1,2 @@
+# assembly_accession	bioproject	biosample	wgs_master	refseq_category	taxid	species_taxid	organism_name	infraspecific_name	isolate	version_status	assembly_level	release_type	genome_rep	seq_rel_date	asm_name	submitter	wgs_project	assembly_type	ftp_path	gbrs_paired_asm	paired_asm_comp
+na	na	na	na	na	1802	na	na	na	na	na	na	na	na	na	GCF_000864765.1_ViralProj15476_genomic	na	na	na	GCF_000864765.1_ViralProj15476_genomic	na	na
