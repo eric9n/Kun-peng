@@ -4,6 +4,7 @@
 readonly OUTPUT_FILENAME="assembly_summary_temp.txt"
 readonly PLACEHOLDER="na"
 readonly NUM_COLS=22 # Expected number of columns for NCBI assembly summary format
+readonly LIBRARY_DIR="library" # Subdirectory for library files
 
 # === Function for error logging and exit ===
 error_exit() {
@@ -11,9 +12,26 @@ error_exit() {
     exit "${2:-1}" # Default exit code 1
 }
 
+# === Function to validate directory structure ===
+validate_directory_structure() {
+    local db_root="$1"
+    
+    # Check if the database root directory exists
+    if [ ! -d "$db_root" ]; then
+        error_exit "Database root directory '$db_root' does not exist."
+    fi
+    
+    # Create library directory if it doesn't exist
+    local library_dir="$db_root/$LIBRARY_DIR"
+    if [ ! -d "$library_dir" ]; then
+        echo "Creating library directory '$library_dir'..."
+        mkdir -p "$library_dir" || error_exit "Cannot create library directory '$library_dir'."
+    fi
+}
+
 # === Usage instructions ===
 print_usage() {
-    echo "Usage: $0 <added_directory_containing_fna_and_or_fna_gz_files> <target_directory>"
+    echo "Usage: $0 <added_directory_containing_fna_and_or_fna_gz_files> <database_root_directory>"
     echo ""
     echo "Important Notes:"
     echo "1. The taxid extracted from FASTA headers must exist in the taxonomy database:"
@@ -34,8 +52,13 @@ print_usage() {
     echo "If your FASTA header starts with a different identifier (e.g., NC_045512.2),"
     echo "you need to modify it to use the correct taxid before processing."
     echo ""
+    echo "Directory Structure:"
+    echo "1. Specify the database root directory as the second parameter"
+    echo "2. The script will automatically create/use the 'library' subdirectory"
+    echo "3. Example: if you specify '/path/to/database', files will be placed in '/path/to/database/library/'"
+    echo ""
     echo "Example:"
-    echo "  $0 /path/source /path/to/target"
+    echo "  $0 /path/source /path/to/database"
     exit 1
 }
 
@@ -60,19 +83,18 @@ if [ -z "$1" ] || [ -z "$2" ]; then
 fi
 
 readonly ADDED_DIR="$1"
-readonly TARGET_DIR="$2"
+readonly DB_ROOT="$2"
 
 # === Directory validation ===
 if [ ! -d "$ADDED_DIR" ]; then
     error_exit "Directory '$ADDED_DIR' does not exist."
 fi
 
-if [ ! -d "$TARGET_DIR" ]; then
-    error_exit "Directory '$TARGET_DIR' does not exist."
-fi
+# Validate database root directory and create library directory
+validate_directory_structure "$DB_ROOT"
 
-# Create directories if they don't exist
-readonly TARGET_ADDED_DIR="$TARGET_DIR/added"
+# Set target directories
+readonly TARGET_ADDED_DIR="$DB_ROOT/$LIBRARY_DIR/added"
 readonly TARGET_TEMP_DIR="$TARGET_ADDED_DIR/temp"
 mkdir -p "$TARGET_ADDED_DIR" || error_exit "Cannot create directory '$TARGET_ADDED_DIR'."
 mkdir -p "$TARGET_TEMP_DIR" || error_exit "Cannot create directory '$TARGET_TEMP_DIR'."
