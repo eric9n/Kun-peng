@@ -255,12 +255,16 @@ fn process_chunk_file<P: AsRef<Path>>(
 
 pub fn run(args: Args) -> Result<()> {
     let chunk_files = find_and_sort_files(&args.chunk_dir, "sample", ".k2", true)?;
-    let hash_files = find_and_sort_files(&args.database, "hash", ".k2d", true)?;
+    let hash_files = find_and_sort_files(
+        &args.database, "hash", ".k2d", true,
+    )
+    .expect("Invalid or incomplete database: missing hash files.");
 
     // 开始计时
     let start = Instant::now();
     println!("annotate start...");
-    let config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))?;
+    let config = HashConfig::from_hash_header(&args.database.join("hash_config.k2d"))
+        .expect("Invalid or incomplete database: missing hash_config.k2d.");
     let mut large_page = Page::with_capacity(0, config.hash_capacity);
     for chunk_file in &chunk_files {
         process_chunk_file(&args, chunk_file, &hash_files, &mut large_page)?;
