@@ -76,4 +76,46 @@ fn main() {
             String::from_utf8_lossy(&direct_output.stderr)
         );
     }
+
+    // --- Test 3: ./target/release/kun_peng direct --db test_database data/test_interleaved.fastq ---
+    println!("\n--- Testing Interleaved FASTQ Classification ---");
+
+    let interleaved_fq = data_dir.join("test_interleaved.fastq");
+    if !interleaved_fq.exists() {
+        println!(
+            "kun_peng error: fastq file {} does not exists",
+            interleaved_fq.to_string_lossy().to_string()
+        );
+        // 考虑在这里 panic，如果文件不存在，测试就没有意义
+        // panic!("Test FASTQ file not found!"); 
+    }
+    let direct_fastq_args = vec![
+        "direct".to_string(),
+        "--db".to_string(),
+        test_dir.to_string_lossy().to_string(),
+        interleaved_fq.to_string_lossy().to_string(),
+    ];
+
+    let direct_fastq_command_str = format!(
+        "{} {}",
+        kr2r_binary.to_string_lossy(),
+        direct_fastq_args.join(" ")
+    );
+    println!("Executing command: {}", direct_fastq_command_str);
+
+    let direct_fastq_output = Command::new(&kr2r_binary)
+        .args(&direct_fastq_args)
+        .output()
+        .expect("Failed to run kun_peng direct command with interleaved FASTQ");
+    
+    println!(
+        "kun_peng direct (fastq) output: {}",
+        String::from_utf8_lossy(&direct_fastq_output.stdout)
+    );
+    if !direct_fastq_output.stderr.is_empty() {
+        println!(
+            "kun_peng direct (fastq) error: {}",
+            String::from_utf8_lossy(&direct_fastq_output.stderr)
+        );
+    }
 }
