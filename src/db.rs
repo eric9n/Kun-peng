@@ -53,13 +53,23 @@ fn set_page_cell(
             }
         });
 
-        if result.is_ok() || idx == first_idx {
-            break;
-        }
-
-        idx = (idx + 1) % page_size;
-        if idx == first_idx {
-            break;
+        match result {
+            Ok(_) => {
+                // `fetch_update` 成功 (我们写入了数据或LCA)
+                // 任务完成，退出循环
+                break;
+            }
+            Err(_) => {
+                // `fetch_update` 失败 (返回 None)，意味着 slot 被
+                // 另一个 *不同的 key* 占用了。我们必须进行线性探测。
+                idx = (idx + 1) % page_size;
+                if idx == first_idx {
+                    // 我们已经绕了完整的一圈，没有找到空位
+                    // TODO: 在这里添加哈希页已满的日志或错误处理
+                    break; // 放弃
+                }
+                // 继续下一次 `loop` 迭代，尝试新的 `idx`
+            }
         }
     }
 }

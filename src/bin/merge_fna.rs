@@ -144,47 +144,49 @@ fn process_gz_file(
     let mut reader = BufReader::new(decompressor);
 
     let mut line = String::new();
-    let mut map_buffer = String::new(); // Buffer for map writer
-    let mut fna_buffer = String::new(); // Buffer for fna writer
+    
+    // fna_buffer 用于存储一个 *完整* 的 FASTA 记录
+    let mut fna_buffer = String::new(); 
 
     while reader.read_line(&mut line)? != 0 {
         if let Some(caps) = fna_start.captures(&line) {
-            let seqid = &caps[1];
-            map_buffer.push_str(&format!("taxid|{}|{}\t{}\n", taxid, seqid, taxid));
+            // 找到了一个新的 FASTA 记录头 (>)
 
+            // 1. 写入 *上一个* 完整的 FASTA 记录 (如果它存在)
+            // SizedWriter 现在会接收一个以 ">taxid" 开头的完整记录，
+            // 它的文件分割逻辑可以正确运行了。
             if !fna_buffer.is_empty() {
                 fna_writer.write(fna_buffer.as_bytes())?;
                 fna_buffer.clear();
             }
 
+            // 2. 为 *新* 记录处理 map 和 fna 头
+            let seqid = &caps[1];
+            
+            // 直接写入 map_writer (它本身有缓冲)
+            map_writer.write_all(
+                format!("taxid|{}|{}\t{}\n", taxid, seqid, taxid).as_bytes()
+            )?;
+
+            // 开始在 fna_buffer 中累积 *新* 的 FASTA 记录
             fna_buffer.push_str(&format!(">taxid|{}|{}", taxid, &line[1..]));
         } else {
+            // 这是序列行，将它追加到当前的 fna_buffer
             fna_buffer.push_str(&line);
         }
 
-        // Write to the writers if the buffer size exceeds a certain threshold
-        if map_buffer.len() > 10000 {
-            map_writer.write_all(map_buffer.as_bytes())?;
-            map_buffer.clear();
-        }
-
-        if fna_buffer.len() > 10000 {
-            fna_writer.write(fna_buffer.as_bytes())?;
-            fna_buffer.clear();
-        }
+        // [已删除] 移除了基于 10000 字节大小的缓冲逻辑，
+        // 避免在 FASTA 记录中间将其切割。
 
         line.clear();
     }
 
-    // Write any remaining buffered content
-    if !map_buffer.is_empty() {
-        map_writer.write_all(map_buffer.as_bytes())?;
-    }
-
+    // 循环结束后，不要忘记写入最后一个累积的 FASTA 记录
     if !fna_buffer.is_empty() {
         fna_writer.write(fna_buffer.as_bytes())?;
     }
 
+    // 在函数末尾统一 flush 一次
     fna_writer.flush()?;
     map_writer.flush()?;
 
@@ -253,11 +255,8 @@ fn merge_fna_parallel(
         }
     }
 
-    // let fna_files = find_files(database, "library_", "fna");
     let seqid_files = find_files(database, "seqid2taxid_", "map");
-    // let library_fna_path = database.join("library.fna");
     let seqid2taxid_path = database.join("seqid2taxid.map");
-    // merge_files(&fna_files, &library_fna_path)?;
     merge_files(&seqid_files, &seqid2taxid_path)?;
     if is_empty.load(Ordering::Relaxed) {
         panic!("genimics fna files is empty! please check download dir");
@@ -293,7 +292,6 @@ fn merge_files(paths: &Vec<PathBuf>, output_path: &PathBuf) -> Result<()> {
     output.flush()?;
     Ok(())
 }
-
 pub fn run(args: Args) -> Result<()> {
     // 开始计时
     let start = Instant::now();
@@ -306,7 +304,7 @@ pub fn run(args: Args) -> Result<()> {
     create_dir_all(&dst_tax_dir)?;
 
     let library_dir = database.join("library");
-    create_dir_all(&library_dir)?;
+    // create_dir_all(&library_dir)?;
 
     let source_names_file = &download_dir.join("taxonomy").join("names.dmp");
     assert!(source_names_file.exists());
@@ -322,16 +320,22 @@ pub fn run(args: Args) -> Result<()> {
         std::fs::copy(source_nodes_file, dst_nodes_file)?;
     }
 
-    let library_fna_path = database.join("library.fna");
     let seqid2taxid_path = database.join("seqid2taxid.map");
-    if library_fna_path.exists() && seqid2taxid_path.exists() {
-        println!("library.fna and seqid2taxid.map exists!");
-        return Ok(());
+    if seqid2taxid_path.exists() {
+        if let Ok(mut entries) = std::fs::read_dir(&library_dir) {
+            if entries.next().is_some() {
+                // 如果 library 目录至少有一个文件，我们就认为构建已完成
+                println!("Build appears complete (seqid2taxid.map, taxo.k2d, and library files exist). Skipping.");
+                return Ok(());
+            }
+        }
     }
 
-    if library_fna_path.exists() {
-        std::fs::remove_file(library_fna_path)?;
+    if library_dir.exists() {
+        std::fs::remove_dir_all(&library_dir)?;
     }
+
+    create_dir_all(&library_dir)?; // 重新创建干净的目录
     if seqid2taxid_path.exists() {
         std::fs::remove_file(seqid2taxid_path)?;
     }

@@ -1,4 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
+#[cfg(target_endian = "little")]
+use bytemuck::cast_slice_mut;
 use std::cmp::Ordering as CmpOrdering;
 use std::fmt::{self, Debug};
 use std::fs::File;
@@ -416,33 +418,50 @@ impl HashConfig {
 fn read_first_block_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {
     let mut file = std::fs::File::open(filename)?;
 
-    // Read the index and capacity
-    let mut buffer = [0u8; 16];
-    file.read_exact(&mut buffer)?;
-    let index = LittleEndian::read_u64(&buffer[0..8]) as usize;
-    let capacity = LittleEndian::read_u64(&buffer[8..16]) as usize;
+    let mut header = [0u8; 16];
+    file.read_exact(&mut header)?;
+    let index    = LittleEndian::read_u64(&header[0..8])  as usize;
+    let capacity = LittleEndian::read_u64(&header[8..16]) as usize;
 
-    let mut first_zero_end = capacity;
-    let chunk_size = 1024 * 4;
-    let mut found_zero = false;
+    let chunk_elems = 4096;
     let mut data = vec![0u32; capacity];
-    let mut read_pos = 0;
 
-    while read_pos < capacity {
-        let end = usize::min(read_pos + chunk_size, capacity);
-        let bytes_to_read = (end - read_pos) * std::mem::size_of::<u32>();
-        let mut chunk = vec![0u8; bytes_to_read];
-        file.read_exact(&mut chunk)?;
-        let chunk_u32 =
-            unsafe { std::slice::from_raw_parts(chunk.as_ptr() as *const u32, end - read_pos) };
-        data[read_pos..end].copy_from_slice(chunk_u32);
+    let mut read_pos = 0usize;
+    let mut found_zero = false;
+    let mut first_zero_end = capacity;
 
-        if let Some(pos) = chunk_u32.iter().position(|&x| x == 0) {
-            first_zero_end = read_pos + pos + 1;
-            found_zero = true;
-            break;
+    #[cfg(target_endian = "little")]
+    {
+        while read_pos < capacity {
+            let to_read_elems = (capacity - read_pos).min(chunk_elems);
+            let bytes = cast_slice_mut::<u32, u8>(&mut data[read_pos..read_pos+to_read_elems]);
+            file.read_exact(bytes)?;
+
+            if let Some(pos) = data[read_pos..read_pos+to_read_elems].iter().position(|&x| x == 0) {
+                first_zero_end = read_pos + pos + 1;
+                found_zero = true;
+                break;
+            }
+            read_pos += to_read_elems;
         }
-        read_pos = end;
+    }
+
+    #[cfg(not(target_endian = "little"))]
+    {
+        // 回退到方案 A 的安全端序路径
+        let mut tmp = vec![0u8; chunk_elems * 4];
+        while read_pos < capacity {
+            let to_read_elems = (capacity - read_pos).min(chunk_elems);
+            let to_read_bytes = to_read_elems * 4;
+            file.read_exact(&mut tmp[..to_read_bytes])?;
+            LittleEndian::read_u32_into(&tmp[..to_read_bytes], &mut data[read_pos..read_pos+to_read_elems]);
+            if let Some(pos) = data[read_pos..read_pos+to_read_elems].iter().position(|&x| x == 0) {
+                first_zero_end = read_pos + pos + 1;
+                found_zero = true;
+                break;
+            }
+            read_pos += to_read_elems;
+        }
     }
 
     if !found_zero {
@@ -461,15 +480,41 @@ fn read_page_metadata(file: &mut File) -> Result<(usize, usize)> {
     Ok((index, capacity))
 }
 
+// fn read_page_data(file: &mut File, data: &mut [u32]) -> Result<()> {
+//     let data_bytes = unsafe {
+//         std::slice::from_raw_parts_mut(
+//             data.as_mut_ptr() as *mut u8,
+//             data.len() * std::mem::size_of::<u32>(),
+//         )
+//     };
+//     file.read_exact(data_bytes)?;
+//     Ok(())
+// }
+
 fn read_page_data(file: &mut File, data: &mut [u32]) -> Result<()> {
-    let data_bytes = unsafe {
-        std::slice::from_raw_parts_mut(
-            data.as_mut_ptr() as *mut u8,
-            data.len() * std::mem::size_of::<u32>(),
-        )
-    };
-    file.read_exact(data_bytes)?;
-    Ok(())
+    #[cfg(target_endian = "little")]
+    {
+        // 零拷贝，安全，无端序转换（文件即小端）
+        let bytes = cast_slice_mut::<u32, u8>(data);
+        file.read_exact(bytes)?;
+        return Ok(());
+    }
+
+    #[cfg(not(target_endian = "little"))]
+    {
+        // 非小端平台回退到端序转换路径（方案 A）
+        const CHUNK: usize = 4096;
+        let mut buf = vec![0u8; CHUNK * 4];
+        let mut filled = 0usize;
+        while filled < data.len() {
+            let n = (data.len() - filled).min(CHUNK);
+            let bytes = &mut buf[..n * 4];
+            file.read_exact(bytes)?;
+            LittleEndian::read_u32_into(bytes, &mut data[filled..filled + n]);
+            filled += n;
+        }
+        return Ok(());
+    }
 }
 
 fn read_page_from_file<P: AsRef<Path>>(filename: P) -> Result<Page> {

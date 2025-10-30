@@ -122,7 +122,6 @@ fn process_record(
         .fold(|rows, m_iter, offset| process_seq(rows, m_iter, &hash_config, chtable, offset));
 
     let hits = HitGroup::new(rows, marker.range());
-
     let seq_len_str = marker.fmt_seq_size();
 
     let required_score = hits.required_score(args.confidence_threshold);
