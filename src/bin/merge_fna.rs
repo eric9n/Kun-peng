@@ -171,22 +171,19 @@ fn process_gz_file(
             // 开始在 fna_buffer 中累积 *新* 的 FASTA 记录
             fna_buffer.push_str(&format!(">taxid|{}|{}", taxid, &line[1..]));
         } else {
-            // 这是序列行，将它追加到当前的 fna_buffer
+            // This is a sequence line, append it to the current fna_buffer
             fna_buffer.push_str(&line);
         }
-
-        // [已删除] 移除了基于 10000 字节大小的缓冲逻辑，
-        // 避免在 FASTA 记录中间将其切割。
 
         line.clear();
     }
 
-    // 循环结束后，不要忘记写入最后一个累积的 FASTA 记录
+    // After the loop ends, don't forget to write out the last accumulated FASTA record
     if !fna_buffer.is_empty() {
         fna_writer.write(fna_buffer.as_bytes())?;
     }
 
-    // 在函数末尾统一 flush 一次
+    // Flush once at the end of the function
     fna_writer.flush()?;
     map_writer.flush()?;
 

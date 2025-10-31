@@ -7,13 +7,12 @@ mod estimate_capacity;
 mod hashshard;
 mod merge_fna;
 mod resolve;
-// mod seqid2taxid;
 mod splitr;
+mod add_library;
 
 use kun_peng::args::ClassifyArgs;
 use kun_peng::args::{parse_size, Build};
 use kun_peng::utils::find_files;
-// use std::io::Result;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -22,7 +21,10 @@ use std::time::Instant;
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author, version, about="build database", long_about = None)]
+#[clap(author, version, about="Run the complete database build process", long_about = "Run the complete database build process.
+This is an all-in-one command that automatically executes all steps for 'merge_fna' (merge downloaded library files) and 'build_db' (estimate, chunk, build hash tables).
+If you already have a 'library/' directory and only want to build the hash tables, use the 'build_db' command instead."
+)]
 struct BuildArgs {
     // /// database hash chunk directory and other files
     // #[clap(long)]
@@ -56,6 +58,41 @@ struct BuildArgs {
     /// library fna temp file max size
     #[arg(long = "max-file-size", value_parser = parse_size, default_value = "2G")]
     pub max_file_size: usize,
+}
+
+#[derive(Parser, Debug, Clone)]
+#[clap(author, version, about="Run the final database construction steps (estimate, chunk, build)", long_about = "Build-only: Run estimate, chunk, and build steps on an existing library dir.")]
+struct BuildDBArgs {
+    #[clap(flatten)]
+    pub build: Build,
+
+    /// Manually set the precise hash table capacity (number of slots).
+    #[arg(
+        short = 'c',
+        long,
+        value_name = "EXACT_SLOT_COUNT",
+        long_help = "Manually set the precise hash table capacity (number of slots).
+If this value is set, the time-consuming 'estimate_capacity' step will be skipped.
+
+WARNING: This is a critical performance parameter.
+- A value that is too low will cause the build to fail or result in a high load factor, which severely degrades classification speed.
+- A value that is too high will build successfully but will waste significant memory and disk space.
+
+It is highly recommended to run the 'estimate_capacity' command first to determine a safe and optimal value."
+    )]
+    pub required_capacity: Option<usize>,
+
+    /// estimate capacity from cache if exists
+    #[arg(long, default_value_t = true)]
+    cache: bool,
+
+    /// Set maximum qualifying hash code
+    #[clap(long, default_value = "4")]
+    max_n: usize,
+
+    /// Proportion of the hash table to be populated
+    #[clap(long, long, default_value_t = 0.7)]
+    load_factor: f64,
 }
 
 #[derive(Parser, Debug)]
@@ -138,11 +175,34 @@ impl From<BuildArgs> for merge_fna::Args {
     }
 }
 
+impl From<BuildDBArgs> for estimate_capacity::Args {
+    fn from(item: BuildDBArgs) -> Self {
+        Self {
+            database: item.build.database,
+            klmt: item.build.klmt,
+            cache: item.cache,
+            n: item.max_n,
+            load_factor: item.load_factor,
+            threads: item.build.threads,
+        }
+    }
+}
+
+impl From<BuildDBArgs> for chunk_db::Args {
+    fn from(item: BuildDBArgs) -> Self {
+        Self {
+            build: item.build,
+            hash_capacity: parse_size("1G").unwrap(),
+        }
+    }
+}
+
+
 #[derive(Subcommand, Debug)]
 enum Commands {
     Estimate(estimate_capacity::Args),
-    // Seqid2taxid(seqid2taxid::Args),
     Build(BuildArgs),
+    BuildDB(BuildDBArgs),
     Hashshard(hashshard::Args),
     Splitr(splitr::Args),
     Annotate(annotate::Args),
@@ -150,6 +210,7 @@ enum Commands {
     Classify(ClassifyArgs),
     Direct(direct::Args),
     MergeFna(merge_fna::Args),
+    AddLibrary(add_library::Args),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -162,11 +223,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Estimate(cmd_args) => {
             estimate_capacity::run(cmd_args);
         }
+        Commands::AddLibrary(cmd_args) => {
+            add_library::run(cmd_args)?;
+        }
         Commands::Build(cmd_args) => {
             let fna_args = merge_fna::Args::from(cmd_args.clone());
             merge_fna::run(fna_args)?;
             let ec_args = estimate_capacity::Args::from(cmd_args.clone());
             let required_capacity = estimate_capacity::run(ec_args);
+
+            let build_args = chunk_db::Args::from(cmd_args.clone());
+            let database = &build_args.build.database.clone();
+            chunk_db::run(build_args, required_capacity)?;
+            build_k2_db::run(database)?;
+        }
+        Commands::BuildDB(cmd_args) => {
+            println!("Running: BuildDB (Building from existing library)");
+            let required_capacity = match cmd_args.required_capacity {
+                Some(cap) => {
+                    println!("Using user-provided capacity: {}", cap);
+                    cap
+                }
+                None => {
+                    println!("Estimating capacity...");
+                    let ec_args = estimate_capacity::Args::from(cmd_args.clone());
+                    estimate_capacity::run(ec_args)
+                }
+            };
 
             let build_args = chunk_db::Args::from(cmd_args.clone());
             let database = &build_args.build.database.clone();

@@ -93,6 +93,7 @@ struct ChunkArgs {
     #[clap(flatten)]
     db_args: Args,
 
+    /// Manually set the required hash table capacity.
     #[arg(short = 'c', long, required = true)]
     pub required_capacity: usize,
 }

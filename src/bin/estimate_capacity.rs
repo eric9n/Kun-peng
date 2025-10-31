@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 #[derive(Parser, Debug, Clone)]
 #[clap(
     version,
-    about = "estimate capacity",
-    long_about = "Estimates the size of the Kraken 2 hash table."
+    about = "Estimate the required hash table capacity",
+    long_about = "Estimates the size of the hash table required for the database."
 )]
 pub struct Args {
     /// build database directory or file
