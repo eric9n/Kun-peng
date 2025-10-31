@@ -35,13 +35,13 @@ Pick the path that matches your situation. Each path links to a detailed demo.
   1) Convert: `kun_peng hashshard --db /path/to/kraken_db --hash-capacity 1G`
   2) Classify: `mkdir -p temp_chunk test_out && kun_peng classify --db /path/to/kraken_db --chunk-dir temp_chunk --output-dir test_out <reads>`
      or direct mode: `kun_peng direct --db /path/to/kraken_db <reads>`
-  - Details: docs/hashshard-demo.md and docs/classify-demo.md
+  - Details: [docs/hashshard-demo.md](docs/hashshard-demo.md) and [docs/classify-demo.md](docs/classify-demo.md)
 
 For more step-by-step guidance, see:
 
-- Detailed Database Build Demo: docs/build-db-demo.md
-- Detailed Classification Demo: docs/classify-demo.md
-- Kraken 2 Conversion Demo: docs/hashshard-demo.md
+- Detailed Database Build Demo: [docs/build-db-demo.md](docs/build-db-demo.md)
+- Detailed Classification Demo: [docs/classify-demo.md](docs/classify-demo.md)
+- Kraken 2 Conversion Demo: [docs/hashshard-demo.md](docs/hashshard-demo.md)
 
 
 ## Get Started
