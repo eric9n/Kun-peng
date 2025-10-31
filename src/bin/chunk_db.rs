@@ -2,7 +2,7 @@
 use clap::Parser;
 use kun_peng::args::{parse_size, Build};
 use kun_peng::compact_hash::HashConfig;
-use kun_peng::db::{convert_fna_to_k2_format, get_bits_for_taxid};
+use kun_peng::db::{convert_fna_to_k2_format, get_bits_for_taxid, generate_taxonomy};
 use kun_peng::taxonomy::Taxonomy;
 use kun_peng::utils::{
     create_partition_files, create_partition_writers, find_files, get_file_limit,
@@ -27,10 +27,23 @@ pub fn run(args: Args, required_capacity: usize) -> Result<(), Box<dyn std::erro
     let meros = args.build.klmt.as_meros();
     let k2d_dir = &args.build.database;
 
-    let id_to_taxon_map_filename = args.build.database.join("seqid2taxid.map");
+    let id_to_taxon_map_filename = k2d_dir.join("seqid2taxid.map");
     let id_to_taxon_map = read_id_to_taxon_map(&id_to_taxon_map_filename)?;
 
     let taxonomy_filename = k2d_dir.join("taxo.k2d");
+    let ncbi_taxonomy_directory = k2d_dir.join("taxonomy");
+
+    let names_file = ncbi_taxonomy_directory.join("names.dmp");
+    let nodes_file = ncbi_taxonomy_directory.join("nodes.dmp");
+    assert!(names_file.exists(), "names.dmp not found in taxonomy directory");
+    assert!(nodes_file.exists(), "nodes.dmp not found in taxonomy directory");
+
+    let _ = generate_taxonomy(
+        &ncbi_taxonomy_directory,
+        &taxonomy_filename,
+        &id_to_taxon_map,
+    )?;
+
     let taxonomy = Taxonomy::from_file(taxonomy_filename)?;
 
     let value_bits = get_bits_for_taxid(

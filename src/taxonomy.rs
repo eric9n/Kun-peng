@@ -324,17 +324,33 @@ impl Taxonomy {
             ));
         }
 
-        let mut buffer = [0; 24];
-        file.read_exact(&mut buffer)?;
-        let (node_count, name_data_len, rank_data_len) =
-            unsafe { std::mem::transmute::<[u8; 24], (u64, u64, u64)>(buffer) };
+        let mut header = [0u8; 24];
+        file.read_exact(&mut header)?;
+        let node_count = u64::from_le_bytes(header[0..8].try_into().unwrap());
+        let name_data_len = u64::from_le_bytes(header[8..16].try_into().unwrap());
+        let rank_data_len = u64::from_le_bytes(header[16..24].try_into().unwrap());
 
         let mut nodes = Vec::with_capacity(node_count as usize);
         for _ in 0..node_count {
-            let mut buffer = [0; 56];
+            let mut buffer = [0u8; 56];
             file.read_exact(&mut buffer)?;
-            let node = unsafe { std::mem::transmute::<[u8; 56], TaxonomyNode>(buffer) };
-            nodes.push(node);
+            let parent_id = u64::from_le_bytes(buffer[0..8].try_into().unwrap());
+            let first_child = u64::from_le_bytes(buffer[8..16].try_into().unwrap());
+            let child_count = u64::from_le_bytes(buffer[16..24].try_into().unwrap());
+            let name_offset = u64::from_le_bytes(buffer[24..32].try_into().unwrap());
+            let rank_offset = u64::from_le_bytes(buffer[32..40].try_into().unwrap());
+            let external_id = u64::from_le_bytes(buffer[40..48].try_into().unwrap());
+            let godparent_id = u64::from_le_bytes(buffer[48..56].try_into().unwrap());
+
+            nodes.push(TaxonomyNode {
+                parent_id,
+                first_child,
+                child_count,
+                name_offset,
+                rank_offset,
+                external_id,
+                godparent_id,
+            });
         }
 
         let mut name_data = vec![0; name_data_len as usize];

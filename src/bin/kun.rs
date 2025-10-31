@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 mod annotate;
-mod build_k2_db;
+mod build_db;
 mod chunk_db;
 mod direct;
 mod estimate_capacity;
@@ -22,8 +22,8 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about="Run the complete database build process", long_about = "Run the complete database build process.
-This is an all-in-one command that automatically executes all steps for 'merge_fna' (merge downloaded library files) and 'build_db' (estimate, chunk, build hash tables).
-If you already have a 'library/' directory and only want to build the hash tables, use the 'build_db' command instead."
+This is an all-in-one command that automatically executes all steps for 'merge_fna' (merge downloaded library files) and 'build-db' (estimate, chunk, build hash tables).
+If you already have a 'library/' directory and only want to build the hash tables, use the 'build-db' command instead."
 )]
 struct BuildArgs {
     // /// database hash chunk directory and other files
@@ -52,7 +52,7 @@ struct BuildArgs {
     /// Proportion of the hash table to be populated
     /// (build task only; def: 0.7, must be
     ///    between 0 and 1).
-    #[clap(long, long, default_value_t = 0.7)]
+    #[clap(long, default_value_t = 0.7)]
     load_factor: f64,
 
     /// library fna temp file max size
@@ -91,7 +91,7 @@ It is highly recommended to run the 'estimate_capacity' command first to determi
     max_n: usize,
 
     /// Proportion of the hash table to be populated
-    #[clap(long, long, default_value_t = 0.7)]
+    #[clap(long, default_value_t = 0.7)]
     load_factor: f64,
 }
 
@@ -235,7 +235,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let build_args = chunk_db::Args::from(cmd_args.clone());
             let database = &build_args.build.database.clone();
             chunk_db::run(build_args, required_capacity)?;
-            build_k2_db::run(database)?;
+            build_db::run(database)?;
         }
         Commands::BuildDB(cmd_args) => {
             println!("Running: BuildDB (Building from existing library)");
@@ -254,7 +254,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let build_args = chunk_db::Args::from(cmd_args.clone());
             let database = &build_args.build.database.clone();
             chunk_db::run(build_args, required_capacity)?;
-            build_k2_db::run(database)?;
+            build_db::run(database)?;
         }
         Commands::Hashshard(cmd_args) => {
             hashshard::run(cmd_args)?;

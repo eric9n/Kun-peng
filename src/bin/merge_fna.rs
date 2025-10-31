@@ -1,8 +1,7 @@
 use clap::Parser;
 use flate2::read::GzDecoder;
 use kun_peng::args::parse_size;
-use kun_peng::db::generate_taxonomy;
-use kun_peng::utils::{find_files, open_file, read_id_to_taxon_map};
+use kun_peng::utils::{find_files, open_file};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File, OpenOptions};
@@ -345,18 +344,6 @@ pub fn run(args: Args) -> Result<()> {
         *max_file_size as u64,
     )?;
 
-    let id_to_taxon_map_filename = args.database.join("seqid2taxid.map");
-    let id_to_taxon_map = read_id_to_taxon_map(&id_to_taxon_map_filename)?;
-    let k2d_dir = &args.database;
-    let taxonomy_filename = k2d_dir.join("taxo.k2d");
-
-    let ncbi_taxonomy_directory = &args.database.join("taxonomy");
-
-    let _ = generate_taxonomy(
-        &ncbi_taxonomy_directory,
-        &taxonomy_filename,
-        &id_to_taxon_map,
-    )?;
     // 计算持续时间
     let duration = start.elapsed();
     println!("merge fna took: {:?}", duration);

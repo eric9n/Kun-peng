@@ -37,7 +37,7 @@ pub struct Args {
     /// Proportion of the hash table to be populated
     /// (build task only; def: 0.7, must be
     ///    between 0 and 1).
-    #[clap(long, long, default_value_t = 0.7)]
+    #[clap(long, default_value_t = 0.7)]
     pub load_factor: f64,
 
     /// Number of threads

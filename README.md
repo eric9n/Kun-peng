@@ -16,9 +16,48 @@ Comprehensive metagenomic sequence classification of diverse environmental sampl
 
 
 
+## Quick Start
+
+Pick the path that matches your situation. Each path links to a detailed demo.
+
+- Option A — Build from downloads (one command), then classify
+  1) `kun_peng build --download-dir data/ --db test_database`
+  2) `mkdir -p temp_chunk test_out && kun_peng classify --db test_database --chunk-dir temp_chunk --output-dir test_out data/COVID_19.fa`
+  - Details: docs/build-db-demo.md and docs/classify-demo.md
+
+- Option B — You already have or curate a library
+  1) Prepare library: `kun_peng merge-fna --download-dir data/ --db test_database` or `kun_peng add-library --db test_database -i /path/to/fastas`
+  2) Build-only: `kun_peng build-db --db test_database`
+  3) Classify: `mkdir -p temp_chunk test_out && kun_peng classify --db test_database --chunk-dir temp_chunk --output-dir test_out <reads>`
+  - Details: docs/build-db-demo.md and docs/classify-demo.md
+
+- Option C — You have a Kraken 2 database
+  1) Convert: `kun_peng hashshard --db /path/to/kraken_db --hash-capacity 1G`
+  2) Classify: `mkdir -p temp_chunk test_out && kun_peng classify --db /path/to/kraken_db --chunk-dir temp_chunk --output-dir test_out <reads>`
+     or direct mode: `kun_peng direct --db /path/to/kraken_db <reads>`
+  - Details: docs/hashshard-demo.md and docs/classify-demo.md
+
+For more step-by-step guidance, see:
+
+- Detailed Database Build Demo: docs/build-db-demo.md
+- Detailed Classification Demo: docs/classify-demo.md
+- Kraken 2 Conversion Demo: docs/hashshard-demo.md
+
+
 ## Get Started
 
 Follow these steps to install Kun-peng and run the examples.
+
+If you only need commands to run today, start with Quick Start above. The sections below cover installation methods and reference help for each subcommand.
+
+## Common Pitfalls
+
+- Use a clean `--chunk-dir` for `classify`. The directory must not contain `sample_*.k2`, `sample_id*.map`, or `sample_*.bin`, otherwise the command will error.
+- After adding FASTA with `add-library`, always run `build-db` to rebuild hash tables. Stale `hash_*.k2d` will yield incorrect results.
+- Direct mode needs RAM ≥ sum of `hash_*.k2d`. Run `bash cal_memory.sh <db>` to estimate. If insufficient, use the integrated `classify` workflow instead.
+- `hashshard` aborts if `hash_config.k2d` already exists in the target directory. Use a fresh directory or remove/backup the existing file.
+- Choosing `--hash-capacity` (hashshard): shard file size ≈ capacity × 4 bytes. Example: `1G` capacity → ~4 GiB per shard. More, smaller shards can improve I/O parallelism with modest file count overhead.
+- Keep `--load-factor` reasonable (default 0.7). Very high values may hurt build success or classification speed; very low values waste disk/memory.
 
 ### Method 1: Download Pre-built Binaries (Recommended)
 
@@ -214,6 +253,8 @@ Usage: kun_peng <COMMAND>
 Commands:
   estimate   estimate capacity
   build      build `k2d` files
+  build-db   Run the final database construction steps (estimate, chunk, build)
+  add-library Add new FASTA files to an existing Kun-Peng database library
   hashshard  Convert Kraken2 database files to Kun-peng database format for efficient processing and analysis.
   splitr     Split fast(q/a) file into ranges
   annotate   annotate a set of sequences
@@ -269,9 +310,83 @@ Options:
           Print version
 ```
 
+### build-db (Build Only)
+
+Build from an existing `library/` directory. This runs the final steps only: estimate capacity (unless `-c` is provided), chunk, and build hash tables.
+
+``` sh
+./target/release/kun_peng build-db -h
+Run the final database construction steps (estimate, chunk, build)
+
+Usage: kun_peng build-db [OPTIONS] --db <DATABASE>
+
+Options:
+      --db <DATABASE>                          ncbi library fna database directory
+  -k, --k-mer <K_MER>                          Set length of k-mers, k must be positive integer, k cannot be less than l [default: 35]
+  -l, --l-mer <L_MER>                          Set length of minimizers, 1 <= l <= 31 [default: 31]
+      --minimizer-spaces <MINIMIZER_SPACES>    Number of characters in minimizer that are ignored in comparisons [default: 7]
+  -T, --toggle-mask <TOGGLE_MASK>              Minimizer ordering toggle mask [default: 16392584516609989165]
+      --min-clear-hash-value <MIN_CLEAR_HASH_VALUE>
+  -r, --requested-bits-for-taxid <REQUESTED_BITS_FOR_TAXID>
+                                               Bit storage requested for taxid 0 <= r < 31 [default: 0]
+  -p, --threads <THREADS>                      Number of threads [default: 8]
+  -c, --required-capacity <EXACT_SLOT_COUNT>   Manually set the precise hash table capacity (number of slots)
+      --cache                                  Estimate capacity from cache if exists
+      --max-n <MAX_N>                          Set maximum qualifying hash code [default: 4]
+      --load-factor <LOAD_FACTOR>              Proportion of the hash table to be populated [default: 0.7]
+  -h, --help                                   Print help
+  -V, --version                                Print version
+```
+
+Note: If you already have a populated `library/` under your database directory (e.g., after running `merge-fna` or manually preparing it), prefer:
+
+``` sh
+kun_peng build-db --db test_database
+```
+
+Example: Prepare library, then build-db
+
+``` sh
+# 1) Merge downloaded genomes into library files
+kun_peng merge-fna --download-dir data/ --db test_database --max-file-size 2G
+
+# 2) Build only the final database artifacts (estimate, chunk, build)
+kun_peng build-db --db test_database
+```
+
+### add-library (Add FASTA)
+
+Add new FASTA files (or directories of FASTA/FASTA.GZ) into an existing database. This updates `library/*.fna` sharded files and appends new entries to `seqid2taxid.map`. After adding, run `build-db` to rebuild hash tables.
+
+``` sh
+./target/release/kun_peng add-library -h
+Add new FASTA files to an existing Kun-Peng database library
+
+Usage: kun_peng add-library [OPTIONS] --db <DATABASE> --input-library <INPUT_LIBRARY>...
+
+Options:
+      --db <DATABASE>                          Main database directory (must contain existing library/ and taxonomy/ dirs)
+  -i, --input-library <INPUT_LIBRARY>...       Input files or directories (containing .fa, .fna, .fasta, .fsa, *.gz files)
+      --max-file-size <MAX_FILE_SIZE>          library fna temp file max size [default: 2G]
+  -h, --help                                   Print help
+  -V, --version                                Print version
+```
+
+Quick example:
+
+``` sh
+# Add a folder of FASTA files into an existing database
+kun_peng add-library --db test_database -i /path/to/new_fastas/
+
+# Rebuild index after adding
+kun_peng build-db --db test_database
+```
+
 ### Convert Kraken2 database
 
-This tool converts Kraken2 database files into Kun-peng database format for more efficient processing and analysis. By specifying the database directory and the hash file capacity, users can control the size of the resulting database index files.
+Converts an existing Kraken 2 database (containing `hash.k2d`, `opts.k2d`, and `taxo.k2d`) into Kun-peng’s sharded hash format. This enables Kun-peng’s memory- and I/O-efficient classification workflows without rebuilding from source FASTA.
+
+See step-by-step demo: docs/hashshard-demo.md
 
 ```sh
 ./target/release/kun_peng hashshard -h

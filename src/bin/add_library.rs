@@ -1,7 +1,6 @@
 use clap::Parser;
 use flate2::bufread::MultiGzDecoder; // 支持 .gz 和 .fna
 use kun_peng::args::parse_size;
-use kun_peng::db::generate_taxonomy;
 use kun_peng::utils::{find_files, read_id_to_taxon_map};
 use rayon::prelude::*;
 use regex::Regex;
@@ -379,15 +378,8 @@ pub fn run(args: Args) -> Result<()> {
     let max_file_size = &args.max_file_size;
 
     // 1. 准备目录
-    let dst_tax_dir = database.join("taxonomy");
-    create_dir_all(&dst_tax_dir)?;
     let library_dir = database.join("library");
     create_dir_all(&library_dir)?; 
-
-    let names_file = dst_tax_dir.join("names.dmp");
-    let nodes_file = dst_tax_dir.join("nodes.dmp");
-    assert!(names_file.exists(), "names.dmp not found in taxonomy directory");
-    assert!(nodes_file.exists(), "nodes.dmp not found in taxonomy directory");
 
     // 3. 哈希校验和文件过滤
     let log_path = library_dir.join("added.md5");
@@ -531,20 +523,6 @@ pub fn run(args: Args) -> Result<()> {
         println!("Appended new entries to seqid2taxid.map");
     }
 
-    // 8. 重新生成分类法
-    println!("Regenerating taxonomy (taxo.k2d)...");
-    let id_to_taxon_map_filename = args.database.join("seqid2taxid.map");
-    let id_to_taxon_map = read_id_to_taxon_map(&id_to_taxon_map_filename)?;
-    
-    let taxonomy_filename = args.database.join("taxo.k2d");
-    let ncbi_taxonomy_directory = &dst_tax_dir;
-
-    let _ = generate_taxonomy(
-        &ncbi_taxonomy_directory,
-        &taxonomy_filename,
-        &id_to_taxon_map,
-    )?;
-
     // 9. 成功后，将新哈希值写入日志 (TSV 格式)
     // --- 只有在前面所有步骤都成功后 (没有 Err) 才会执行到这里 ---
     println!("Updating processed file log: {}", log_path.display());
@@ -560,6 +538,20 @@ pub fn run(args: Args) -> Result<()> {
         writeln!(log_writer, "{}\t{}", path.display(), hash)?;
     }
     log_writer.flush()?;
+
+    // --- 10. 检查是否存在旧的哈希表并发出警告 ---
+    println!("\nChecking for existing hash tables...");
+    let hash_files = find_files(database, "hash_", ".k2d");
+    if !hash_files.is_empty() {
+        // 使用 eprintln! 将警告发送到标准错误流
+        eprintln!("\n---------------------------------------------------------------");
+        eprintln!("  [!] WARNING: DATABASE IS NOW OUT-OF-DATE");
+        eprintln!("\n  You have successfully added new sequences and regenerated the taxonomy (taxo.k2d).");
+        eprintln!("  However, old hash table files (e.g., 'hash_*.k2d') were detected.");
+        eprintln!("  These old hash files are now STALE and will produce incorrect results.");
+        eprintln!("\n  ==> You MUST run the 'build-db' command to rebuild the hash tables <==\n");
+        eprintln!("---------------------------------------------------------------");
+    }
 
     let duration = start.elapsed();
     println!("Finished adding {} new files in: {:?}", files_to_process.len(), duration);

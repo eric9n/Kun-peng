@@ -1,121 +1,73 @@
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
+#[path = "common/mod.rs"]
+mod common;
 
-fn main() {
-    // Define the paths and directories
-    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).to_path_buf();
-    let kr2r_binary = workspace_root.join("target/release/kun_peng");
+use std::io;
+
+fn main() -> io::Result<()> {
+    let workspace_root = common::workspace_root();
     let data_dir = workspace_root.join("data");
-    let test_dir = workspace_root.join("test_database");
+    let database_dir = workspace_root.join("test_database");
 
-    // Ensure the necessary directories exist
-    fs::create_dir_all(&data_dir).expect("Failed to create download directory");
-    fs::create_dir_all(&test_dir).expect("Failed to create database directory");
+    common::ensure_dir(&data_dir)?;
+    common::ensure_dir(&database_dir)?;
 
-    // Command 1: ./target/release/kun_peng build --download-dir data/ --db test_database
+    println!("Running full build + direct classification smoke tests\n");
+
+    // Step 1: build database (idempotent if it already exists)
     let build_args = vec![
         "build".to_string(),
         "--download-dir".to_string(),
-        data_dir.to_string_lossy().to_string(),
+        common::path_to_string(&data_dir),
         "--db".to_string(),
-        test_dir.to_string_lossy().to_string(),
+        common::path_to_string(&database_dir),
     ];
+    let build_output = common::run_kun_peng(&build_args)?;
+    common::report_command("kun_peng build", &build_output);
+    common::require_success("kun_peng build", &build_output)?;
 
-    let build_command_str = format!("{} {}", kr2r_binary.to_string_lossy(), build_args.join(" "));
-    println!("Executing command: {}", build_command_str);
-
-    let build_output = Command::new(&kr2r_binary)
-        .args(&build_args)
-        .output()
-        .expect("Failed to run kun_peng build command");
-    println!(
-        "kun_peng build output: {}",
-        String::from_utf8_lossy(&build_output.stdout)
-    );
-    if !build_output.stderr.is_empty() {
-        println!(
-            "kun_peng build error: {}",
-            String::from_utf8_lossy(&build_output.stderr)
-        );
+    // Step 2: direct classification on a FASTA genome
+    let covid_fasta = data_dir.join("COVID_19.fa");
+    if !covid_fasta.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "Example FASTA `{}` is missing — run the download step first.",
+                covid_fasta.display()
+            ),
+        ));
     }
 
-    // Command 2: ./target/release/kun_peng direct --db test_database data/COVID_19.fa
-    let covid_fa = data_dir.join("COVID_19.fa");
-    if !covid_fa.exists() {
-        println!(
-            "kun_peng error: fasta file {} does not exists",
-            covid_fa.to_string_lossy().to_string()
-        );
-    }
-    let direct_args = vec![
+    let covid_args = vec![
         "direct".to_string(),
         "--db".to_string(),
-        test_dir.to_string_lossy().to_string(),
-        covid_fa.to_string_lossy().to_string(),
+        common::path_to_string(&database_dir),
+        common::path_to_string(&covid_fasta),
     ];
+    let covid_output = common::run_kun_peng(&covid_args)?;
+    common::report_command("kun_peng direct (COVID-19)", &covid_output);
+    common::require_success("kun_peng direct (COVID-19)", &covid_output)?;
 
-    let direct_command_str = format!(
-        "{} {}",
-        kr2r_binary.to_string_lossy(),
-        direct_args.join(" ")
-    );
-    println!("Executing command: {}", direct_command_str);
-
-    let direct_output = Command::new(&kr2r_binary)
-        .args(&direct_args)
-        .output()
-        .expect("Failed to run kun_peng direct command");
-    println!(
-        "kun_peng direct output: {}",
-        String::from_utf8_lossy(&direct_output.stdout)
-    );
-    if !direct_output.stderr.is_empty() {
-        println!(
-            "kun_peng direct error: {}",
-            String::from_utf8_lossy(&direct_output.stderr)
-        );
+    // Step 3: direct classification on an interleaved FASTQ file
+    let interleaved_fastq = data_dir.join("test_interleaved.fastq");
+    if !interleaved_fastq.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "Example FASTQ `{}` is missing — run the download step first.",
+                interleaved_fastq.display()
+            ),
+        ));
     }
 
-    // --- Test 3: ./target/release/kun_peng direct --db test_database data/test_interleaved.fastq ---
-    println!("\n--- Testing Interleaved FASTQ Classification ---");
-
-    let interleaved_fq = data_dir.join("test_interleaved.fastq");
-    if !interleaved_fq.exists() {
-        println!(
-            "kun_peng error: fastq file {} does not exists",
-            interleaved_fq.to_string_lossy().to_string()
-        );
-        // 考虑在这里 panic，如果文件不存在，测试就没有意义
-        // panic!("Test FASTQ file not found!"); 
-    }
-    let direct_fastq_args = vec![
+    let interleaved_args = vec![
         "direct".to_string(),
         "--db".to_string(),
-        test_dir.to_string_lossy().to_string(),
-        interleaved_fq.to_string_lossy().to_string(),
+        common::path_to_string(&database_dir),
+        common::path_to_string(&interleaved_fastq),
     ];
+    let interleaved_output = common::run_kun_peng(&interleaved_args)?;
+    common::report_command("kun_peng direct (interleaved FASTQ)", &interleaved_output);
+    common::require_success("kun_peng direct (interleaved FASTQ)", &interleaved_output)?;
 
-    let direct_fastq_command_str = format!(
-        "{} {}",
-        kr2r_binary.to_string_lossy(),
-        direct_fastq_args.join(" ")
-    );
-    println!("Executing command: {}", direct_fastq_command_str);
-
-    let direct_fastq_output = Command::new(&kr2r_binary)
-        .args(&direct_fastq_args)
-        .output()
-        .expect("Failed to run kun_peng direct command with interleaved FASTQ");
-    
-    println!(
-        "kun_peng direct (fastq) output: {}",
-        String::from_utf8_lossy(&direct_fastq_output.stdout)
-    );
-    if !direct_fastq_output.stderr.is_empty() {
-        println!(
-            "kun_peng direct (fastq) error: {}",
-            String::from_utf8_lossy(&direct_fastq_output.stderr)
-        );
-    }
+    Ok(())
 }
