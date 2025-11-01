@@ -2,7 +2,7 @@ name: Release
 on:
   push:
     tags:
-    - 'v[0-9]+.[0-9]+.[0-9]+'
+    - 'v*.*.*'
 
 env:
   PROJECT_NAME: kun_peng
@@ -40,66 +40,35 @@ jobs:
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: true
 
       - name: Install ${{ matrix.rust }} toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          target: ${{ matrix.target }}
-          override: true
-
-      - name: Update Cargo.lock
-        uses: actions-rs/cargo@v1
-        with:
-          command: update
+          targets: ${{ matrix.target }}
 
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: ${{ matrix.cross }}
-          command: test
-          args: --release --locked --target ${{ matrix.target }}
+        if: matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-gnu'
+        run: cargo test --release --locked
+        shell: bash
 
       - name: Build release binary
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: ${{ matrix.cross }}
-          command: build
-          args: --release --locked --target ${{ matrix.target }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
+        shell: bash
 
       - name: Build archive
         shell: bash
         run: |
-          mkdir dist
+          mkdir -p dist
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             cp "target/${{ matrix.target }}/release/${{ env.PROJECT_NAME }}.exe" "dist/${{ env.PROJECT_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.exe"
           else
             cp "target/${{ matrix.target }}/release/${{ env.PROJECT_NAME }}" "dist/${{ env.PROJECT_NAME }}-${{ github.ref_name }}-${{ matrix.target }}"
+            chmod +x "dist/${{ env.PROJECT_NAME }}-${{ github.ref_name }}-${{ matrix.target }}"
           fi
-
-      # Set up the GitHub CLI
-      - name: Install GitHub CLI (macOS)
-        run: |
-          brew install gh
-        if: matrix.os == 'macos-latest'
-
-      - name: Install GitHub CLI (Ubuntu)
-        run: |
-          sudo apt install -y gh
-        if: matrix.os == 'ubuntu-latest'
-
-      - name: Install GitHub CLI (Windows)
-        run: |
-          choco install gh
-        if: matrix.os == 'windows-latest'
-
-      # Log in to the GitHub CLI
-      - name: Login to GitHub CLI
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Upload Release Asset
         run: |
@@ -115,26 +84,28 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
 
-      - name: Set macOS artifact name
-        if: matrix.os == 'macos-latest' && matrix.target == 'x86_64-apple-darwin'
-        run: echo "macos_artifact=${{ env.PROJECT_NAME }}-${{ github.ref_name }}-${{ matrix.target }}" >> $GITHUB_OUTPUT
-        id: artifact_name
-
       - name: Build on CentOS 7
         if: matrix.os == 'ubuntu-latest'
         run: |
-          docker run --name centos7-container -v $GITHUB_WORKSPACE:/github/workspace -w /github/workspace centos:7 \
-          /bin/bash -c "echo '[base]' > /etc/yum.repos.d/CentOS-Base.repo; \
-          echo 'name=CentOS-7 - Base' >> /etc/yum.repos.d/CentOS-Base.repo; \
-          echo 'baseurl=http://vault.centos.org/centos/7/os/x86_64/' >> /etc/yum.repos.d/CentOS-Base.repo; \
-          echo 'gpgcheck=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
-          echo 'enabled=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
-          echo 'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7' >> /etc/yum.repos.d/CentOS-Base.repo; \
-          yum update -y && yum install -y gcc make openssl openssl-devel && \
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && export PATH=\$HOME/.cargo/bin:\$PATH && cd /github/workspace && cargo build --release"
-
-          docker cp centos7-container:/github/workspace/target/release/${{ env.PROJECT_NAME }} ./dist/${{ env.PROJECT_NAME }}-${{ github.ref_name }}-centos7
-          docker rm centos7-container
+          set -euo pipefail
+          mkdir -p dist
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/github/workspace" \
+            -w /github/workspace \
+            centos:7 \
+            /bin/bash -c "echo '[base]' > /etc/yum.repos.d/CentOS-Base.repo; \
+            echo 'name=CentOS-7 - Base' >> /etc/yum.repos.d/CentOS-Base.repo; \
+            echo 'baseurl=http://vault.centos.org/centos/7/os/x86_64/' >> /etc/yum.repos.d/CentOS-Base.repo; \
+            echo 'gpgcheck=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
+            echo 'enabled=1' >> /etc/yum.repos.d/CentOS-Base.repo; \
+            echo 'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7' >> /etc/yum.repos.d/CentOS-Base.repo; \
+            yum update -y && yum install -y gcc make openssl openssl-devel && \
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
+            export PATH=\$HOME/.cargo/bin:\$PATH && \
+            cd /github/workspace && \
+            cargo build --release"
+          cp "target/release/${{ env.PROJECT_NAME }}" "dist/${{ env.PROJECT_NAME }}-${{ github.ref_name }}-centos7"
+        shell: bash
 
       - name: Upload CentOS 7 Release Asset
         if: matrix.os == 'ubuntu-latest'
@@ -144,22 +115,23 @@ jobs:
             --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
 
   update-formula:
     needs: dist
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Extract version
         id: extract-version
-        run: echo "tag-name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: echo "tag-name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
       - name: Set environment variables
         run: |
-          echo "PROJECT_NAME=${{ env.PROJECT_NAME }}" >> $GITHUB_ENV
-          echo "REPO_NAME=${{ env.REPO_NAME }}" >> $GITHUB_ENV
+          echo "PROJECT_NAME=${{ env.PROJECT_NAME }}" >> "$GITHUB_ENV"
+          echo "REPO_NAME=${{ env.REPO_NAME }}" >> "$GITHUB_ENV"
 
       - name: Verify release assets
         run: |

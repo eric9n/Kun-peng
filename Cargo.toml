@@ -1,6 +1,6 @@
 [package]
 name = "kun_peng"
-version = "0.7.10"
+version = "0.7.11"
 edition = "2021"
 authors = ["eric9n@gmail.com"]
 description = "Kun-peng: an ultra-fast, low-memory footprint and accurate taxonomy classifier for all"
@@ -19,7 +19,7 @@ double_hashing = []
 exact_counting = []
 
 [dependencies]
-seqkmer = "0.1.4"
+seqkmer = "0.1.5"
 clap = { version = "4.4.10", features = ["derive"] }
 hyperloglogplus = { version = "0.4.1", features = ["const-loop"] }
 seahash = "4.1.0"
