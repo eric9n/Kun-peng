@@ -107,7 +107,6 @@ impl From<ClassifyArgs> for splitr::Args {
         Self {
             database: item.database,
             paired_end_processing: item.paired_end_processing,
-            single_file_pairs: item.single_file_pairs,
             minimum_quality_score: item.minimum_quality_score,
             num_threads: item.num_threads,
             chunk_dir: item.chunk_dir,

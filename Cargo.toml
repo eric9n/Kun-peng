@@ -19,7 +19,7 @@ double_hashing = []
 exact_counting = []
 
 [dependencies]
-seqkmer = "0.1.3"
+seqkmer = "0.1.4"
 clap = { version = "4.4.10", features = ["derive"] }
 hyperloglogplus = { version = "0.4.1", features = ["const-loop"] }
 seahash = "4.1.0"

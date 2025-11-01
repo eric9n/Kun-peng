@@ -34,10 +34,6 @@ pub struct Args {
     #[clap(short = 'P', long = "paired-end-processing", action)]
     pub paired_end_processing: bool,
 
-    /// Process pairs with mates in the same file.
-    #[clap(short = 'S', long = "single-file-pairs", action)]
-    pub single_file_pairs: bool,
-
     /// Minimum quality score for FASTQ data.
     #[clap(
         short = 'Q',
@@ -313,7 +309,7 @@ fn process_files(
         Ok(())
     };
 
-    if args.paired_end_processing && !args.single_file_pairs {
+    if args.paired_end_processing {
         // 处理成对的文件
         let files = args.input_files.chunks(2).collect();
         process_funcs(files)?;
@@ -329,7 +325,7 @@ pub fn run(args: Args) -> Result<()> {
     let options_filename = &args.database.join("opts.k2d");
     let idx_opts = IndexOptions::read_index_options(options_filename)?;
 
-    if args.paired_end_processing && !args.single_file_pairs && args.input_files.len() % 2 != 0 {
+    if args.paired_end_processing && args.input_files.len() % 2 != 0 {
         // 验证文件列表是否为偶数个
         return Err(Error::new(
             ErrorKind::InvalidInput,

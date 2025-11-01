@@ -28,6 +28,7 @@ Notes
 - `--output-dir` stores the Kraken-style outputs.
 - Input supports FASTA/FASTQ and their `.gz` variants. You can pass multiple files.
 - You can also pass a single `.txt` file that lists inputs (one path per line).
+- Interleaved FASTQ files are detected automatically; no extra flags are required.
 
 Useful options
 - `-p, --num-threads <N>`: number of threads (default: system CPUs)
@@ -36,7 +37,7 @@ Useful options
 - `-T, --confidence-threshold <FLOAT>`: confidence threshold for reporting
 - `-g, --minimum-hit-groups <N>`: minimum hit groups for a call (default: 2)
 - `-P, --paired-end-processing`: enable paired-end mode
-- `-S, --single-file-pairs`: indicates mates are in the same file
+
 
 Paired-end examples
 ```bash
@@ -44,9 +45,9 @@ Paired-end examples
 kun_peng classify --db test_database --chunk-dir temp_chunk --output-dir test_out \
   -P read1.fq.gz read2.fq.gz
 
-# Single file containing interleaved pairs
+# Single file containing interleaved pairs (auto-detected; no -P needed)
 kun_peng classify --db test_database --chunk-dir temp_chunk --output-dir test_out \
-  -P -S interleaved_pairs.fq.gz
+  interleaved_pairs.fq.gz
 ```
 
 ## B. Direct Loading Mode (High-Memory, Max Speed)

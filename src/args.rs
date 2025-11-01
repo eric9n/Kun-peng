@@ -66,10 +66,6 @@ pub struct ClassifyArgs {
     #[clap(short = 'P', long = "paired-end-processing", action)]
     pub paired_end_processing: bool,
 
-    /// Process pairs with mates in the same file.
-    #[clap(short = 'S', long = "single-file-pairs", action)]
-    pub single_file_pairs: bool,
-
     /// Minimum quality score for FASTQ data.
     #[clap(
         short = 'Q',

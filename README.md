@@ -439,8 +439,6 @@ Options:
           database hash chunk directory and other files
   -P, --paired-end-processing
           Enable paired-end processing
-  -S, --single-file-pairs
-          Process pairs with mates in the same file
   -Q, --minimum-quality-score <MINIMUM_QUALITY_SCORE>
           Minimum quality score for FASTQ data [default: 0]
   -T, --confidence-threshold <CONFIDENCE_THRESHOLD>
@@ -489,8 +487,6 @@ Options:
           File path for outputting normal Kraken output
   -P, --paired-end-processing
           Enable paired-end processing
-  -S, --single-file-pairs
-          Process pairs with mates in the same file
   -Q, --minimum-quality-score <MINIMUM_QUALITY_SCORE>
           Minimum quality score for FASTQ data [default: 0]
   -p, --num-threads <NUM_THREADS>

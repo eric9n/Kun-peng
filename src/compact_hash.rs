@@ -480,17 +480,6 @@ fn read_page_metadata(file: &mut File) -> Result<(usize, usize)> {
     Ok((index, capacity))
 }
 
-// fn read_page_data(file: &mut File, data: &mut [u32]) -> Result<()> {
-//     let data_bytes = unsafe {
-//         std::slice::from_raw_parts_mut(
-//             data.as_mut_ptr() as *mut u8,
-//             data.len() * std::mem::size_of::<u32>(),
-//         )
-//     };
-//     file.read_exact(data_bytes)?;
-//     Ok(())
-// }
-
 fn read_page_data(file: &mut File, data: &mut [u32]) -> Result<()> {
     #[cfg(target_endian = "little")]
     {
