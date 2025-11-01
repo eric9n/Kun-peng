@@ -159,6 +159,16 @@ mkdir test_out
 kun_peng classify --db test_database --chunk-dir temp_chunk --output-dir test_out data/COVID_19.fa
 ```
 
+## Development
+
+Set up the repository's Git hooks so pushing requires an up-to-date `Cargo.lock`:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The provided `pre-push` hook runs `cargo check --locked` and aborts the push if the lock file is out of sync with `Cargo.toml`.
+
 ```
 hash_config HashConfig { value_mask: 31, value_bits: 5, capacity: 31818, size: 13051, hash_capacity: 1073741824 }
 splitr start...

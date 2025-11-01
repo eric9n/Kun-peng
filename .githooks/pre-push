@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [ -f "Cargo.lock" ]; then
+  echo "[pre-push] Running cargo check --locked..."
+  cargo check --locked
+else
+  echo "[pre-push] Skipped cargo check --locked (Cargo.lock not found)."
+fi
+
