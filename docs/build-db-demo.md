@@ -19,7 +19,7 @@ If your binary is not on PATH, replace `kun_peng` with `./target/release/kun_pen
 Runs the full pipeline: merge-fna → estimate → chunk → build.
 
 ```bash
-kun_peng build --download-dir data/ --db test_database
+kun_peng build --download-dir data/ --db test_database --hash-capacity 1G
 ```
 
 Notes:
@@ -28,6 +28,7 @@ Notes:
   - Create/update `seqid2taxid.map`, `taxonomy/`, `taxo.k2d`
   - Estimate hash capacity, generate chunk files, and build `hash_*.k2d`
 - Useful options:
+  - `--hash-capacity 1G` sets the number of hash slots (defaults to `1G`, producing ~4 GiB hash shards); raise or lower to fit your memory/disk budget.
   - `--max-file-size 2G` controls library shard size
   - `-k 35 -l 31 --minimizer-spaces 7` control KLMT parameters
   - `--load-factor 0.7`, `--max-n 4` control capacity estimation details
@@ -59,14 +60,16 @@ Choose one of the following:
 
 - Automatic estimation:
   ```bash
-  kun_peng build-db --db test_database
+  kun_peng build-db --db test_database --hash-capacity 1G
   ```
 
 - Skip estimation with a manually chosen capacity (advanced users only):
   ```bash
-  kun_peng build-db --db test_database -c <EXACT_SLOT_COUNT>
+  kun_peng build-db --db test_database --hash-capacity 1G -c <EXACT_SLOT_COUNT>
   ```
   Caution: an undersized value may fail to build or result in a high load factor (hurting speed); an oversized value wastes disk and memory.
+
+`--hash-capacity` works the same way here as in the all-in-one `build` command: leave it at `1G` for ~4 GiB hash shards, or pick the size that best matches your storage and load-time constraints.
 
 KLMT, threads, and load factor options are the same as in section A.
 
@@ -116,23 +119,26 @@ kun_peng direct --db test_database data/COVID_19.fa
 
 - If you run `add-library`, always rebuild with:
   ```bash
-  kun_peng build-db --db test_database
+  kun_peng build-db --db test_database --hash-capacity 1G
   ```
 - `--cache` reuses capacity estimation caches (enabled by default).
 - Tune performance and resource usage with:
   - `-p <threads>` number of threads
   - `--max-file-size` shard size for library files (I/O parallelism)
+  - `--hash-capacity` to control hash shard sizing (~4× the numeric capacity in bytes)
 - About `-c <EXACT_SLOT_COUNT>`: use only if you understand capacity sizing and load factor tradeoffs.
 
 ## Minimal Path From Zero to Classification
 
 ```bash
 # 1) One‑command build
-kun_peng build --download-dir data/ --db test_database
+kun_peng build --download-dir data/ --db test_database --hash-capacity 1G
 
 # 2) Classification
 mkdir -p temp_chunk test_out
 kun_peng classify --db test_database --chunk-dir temp_chunk --output-dir test_out data/COVID_19.fa
 ```
+
+Adjust `--hash-capacity` in both commands if you need smaller or larger hash shards.
 
 Next: Detailed Classification Demo (docs/classify-demo.md)

@@ -21,13 +21,15 @@ Comprehensive metagenomic sequence classification of diverse environmental sampl
 Pick the path that matches your situation. Each path links to a detailed demo.
 
 - Option A — Build from downloads (one command), then classify
-  1) `kun_peng build --download-dir data/ --db test_database`
+  1) `kun_peng build --download-dir data/ --db test_database --hash-capacity 1G`
+     - Adjust `--hash-capacity` to set the hash shard size (defaults to `1G`, which creates ~4 GiB hash files).
   2) `mkdir -p temp_chunk test_out && kun_peng classify --db test_database --chunk-dir temp_chunk --output-dir test_out data/COVID_19.fa`
   - Details: docs/build-db-demo.md and docs/classify-demo.md
 
 - Option B — You already have or curate a library
   1) Prepare library: `kun_peng merge-fna --download-dir data/ --db test_database` or `kun_peng add-library --db test_database -i /path/to/fastas`
-  2) Build-only: `kun_peng build-db --db test_database`
+  2) Build-only: `kun_peng build-db --db test_database --hash-capacity 1G`
+     - Use the same `--hash-capacity` guidance as Option A to control shard sizes.
   3) Classify: `mkdir -p temp_chunk test_out && kun_peng classify --db test_database --chunk-dir temp_chunk --output-dir test_out <reads>`
   - Details: docs/build-db-demo.md and docs/classify-demo.md
 
@@ -136,8 +138,10 @@ cd Kun-peng
 2.  build database
 
 ``` sh
-kun_peng build --download-dir data/ --db test_database
+kun_peng build --download-dir data/ --db test_database --hash-capacity 1G
 ```
+
+The `--hash-capacity` flag controls the number of hash slots (and therefore shard sizes); leave it at `1G` for ~4 GiB hash files or pick a higher/lower value to fit your deployment.
 
 ```
 merge fna start...
@@ -218,7 +222,7 @@ This will run the build_and_classify.rs example located in the kr2r project's ex
 Example Output You should see output similar to the following:
 
 ``` txt
-Executing command: /path/to/workspace/target/release/kun_peng build --download-dir data/ --db test_database
+Executing command: /path/to/workspace/target/release/kun_peng build --download-dir data/ --db test_database --hash-capacity 1G
 kun_peng build output: [build output here]
 kun_peng build error: [any build errors here]
 
@@ -314,6 +318,12 @@ Options:
           Set maximum qualifying hash code [default: 4]
       --load-factor <LOAD_FACTOR>
           Proportion of the hash table to be populated (build task only; def: 0.7, must be between 0 and 1) [default: 0.7]
+      --hash-capacity <HASH_CAPACITY>
+          Specifies the hash file capacity.
+          Acceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').
+          Note: The specified capacity affects the index size, with a factor of 4 applied.
+          For example, specifying '1G' results in an index size of '4G'.
+          Default: 1G (capacity 1G = file size 4G) [default: 1G]
   -h, --help
           Print help
   -V, --version
@@ -344,6 +354,11 @@ Options:
       --cache                                  Estimate capacity from cache if exists
       --max-n <MAX_N>                          Set maximum qualifying hash code [default: 4]
       --load-factor <LOAD_FACTOR>              Proportion of the hash table to be populated [default: 0.7]
+      --hash-capacity <HASH_CAPACITY>          Specifies the hash file capacity.
+                                               Acceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').
+                                               Note: The specified capacity affects the index size, with a factor of 4 applied.
+                                               For example, specifying '1G' results in an index size of '4G'.
+                                               Default: 1G (capacity 1G = file size 4G) [default: 1G]
   -h, --help                                   Print help
   -V, --version                                Print version
 ```
@@ -351,7 +366,7 @@ Options:
 Note: If you already have a populated `library/` under your database directory (e.g., after running `merge-fna` or manually preparing it), prefer:
 
 ``` sh
-kun_peng build-db --db test_database
+kun_peng build-db --db test_database --hash-capacity 1G
 ```
 
 Example: Prepare library, then build-db
@@ -361,7 +376,7 @@ Example: Prepare library, then build-db
 kun_peng merge-fna --download-dir data/ --db test_database --max-file-size 2G
 
 # 2) Build only the final database artifacts (estimate, chunk, build)
-kun_peng build-db --db test_database
+kun_peng build-db --db test_database --hash-capacity 1G
 ```
 
 ### add-library (Add FASTA)
@@ -389,7 +404,7 @@ Quick example:
 kun_peng add-library --db test_database -i /path/to/new_fastas/
 
 # Rebuild index after adding
-kun_peng build-db --db test_database
+kun_peng build-db --db test_database --hash-capacity 1G
 ```
 
 ### Convert Kraken2 database

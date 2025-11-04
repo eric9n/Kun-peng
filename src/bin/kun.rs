@@ -58,6 +58,9 @@ struct BuildArgs {
     /// library fna temp file max size
     #[arg(long = "max-file-size", value_parser = parse_size, default_value = "2G")]
     pub max_file_size: usize,
+
+    #[clap(long, value_parser = parse_size, default_value = "1G", help = "Specifies the hash file capacity.\nAcceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').\nNote: The specified capacity affects the index size, with a factor of 4 applied.\nFor example, specifying '1G' results in an index size of '4G'.\nDefault: 1G (capacity 1G = file size 4G)")]
+    pub hash_capacity: usize,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -93,6 +96,9 @@ It is highly recommended to run the 'estimate_capacity' command first to determi
     /// Proportion of the hash table to be populated
     #[clap(long, default_value_t = 0.7)]
     load_factor: f64,
+
+    #[clap(long, value_parser = parse_size, default_value = "1G", help = "Specifies the hash file capacity.\nAcceptable formats include numeric values followed by 'K', 'M', or 'G' (e.g., '1.5G', '250M', '1024K').\nNote: The specified capacity affects the index size, with a factor of 4 applied.\nFor example, specifying '1G' results in an index size of '4G'.\nDefault: 1G (capacity 1G = file size 4G)")]
+    pub hash_capacity: usize,
 }
 
 #[derive(Parser, Debug)]
@@ -159,7 +165,7 @@ impl From<BuildArgs> for chunk_db::Args {
     fn from(item: BuildArgs) -> Self {
         Self {
             build: item.build,
-            hash_capacity: parse_size("1G").unwrap(),
+            hash_capacity: item.hash_capacity,
         }
     }
 }
@@ -191,7 +197,7 @@ impl From<BuildDBArgs> for chunk_db::Args {
     fn from(item: BuildDBArgs) -> Self {
         Self {
             build: item.build,
-            hash_capacity: parse_size("1G").unwrap(),
+            hash_capacity: item.hash_capacity,
         }
     }
 }
