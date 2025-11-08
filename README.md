@@ -14,7 +14,31 @@ Comprehensive metagenomic sequence classification of diverse environmental sampl
   <p><strong>Fig. 2. Comprehensive performance evaluation of Kun-peng against state-of-the-art metagenomic classifiers on mock communities.</strong></p>
 </div>
 
+## Principle and Method
 
+Kun-peng is built around a simple idea: **store massive reference libraries once, then classify samples by streaming only the hash shards that matter**. Each read is reduced to spaced minimizers (long k-mers combined with shorter minimizer seeds and user-defined spacing) and matched against ordered hash shards that default to ~4 GB but can be resized via `--hash-capacity`, so peak RAM remains in the single-digit GB range even when the database scales to multi-terabyte collections covering hundreds of thousands of genomes. The engine inherits Kraken’s minimizer taxonomy logic and then tightens disk layout, memory scheduling, and streaming behavior to make those ideas practical for much larger pan-domain databases.
+
+### Design Highlights
+- **Block-ordered hash layout**: every `hash_*.k2d` shard is ~4 GB and tracked by `hash_config.k2d`. Build steps can fan out across threads, while classification maps minimizers to specific shards and loads only what is needed.
+- **KLMT minimizer encoding**: defaults such as `-k 35 -l 31 --minimizer-spaces 7` capture long-range context with far fewer entries than raw k-mers, keeping disk/RAM budgets predictable without losing specificity.
+- **Composable subcommands**: the build side (`merge-fna/add-library → estimate → chunk → build-db`) and classify side (`splitr → annotate → resolve`) are exposed as standalone steps, simplifying debugging, benchmarking, or swapping components.
+- **Drop-in outputs**: Kun-peng writes Kraken-compatible tables and `kreport2` summaries so existing visualization or QC workflows require no changes.
+
+### Database Build Flow (`kun_peng build` / `build-db`)
+1. **Gather reference genomes** – `merge-fna` or `add-library` normalizes NCBI downloads and user FASTA files into `library/*.fna`, appending taxids to `seqid2taxid.map`.
+2. **Estimate capacity** – `estimate` scans the KLMT minimizer stream to choose a safe hash-slot count and load factor, preventing oversized shards or hash collisions.
+3. **Chunk the minimizer stream** – `chunk` writes intermediate files sized for the target shard, keeping I/O parallel and deterministic.
+4. **Emit reusable artifacts** – `build-db` converts each chunk into `hash_*.k2d`, plus shared metadata (`hash_config.k2d`, `taxo.k2d`, `opts.k2d`). The resulting folder is a portable Kun-peng database.
+
+### Classification Flow (`kun_peng classify`)
+1. **`splitr` streaming**  
+   Reads (FA/FASTQ, optionally `.gz`) are broken into manageable chunks, and their KLMT minimizers land in `temp_chunk/` so oversized datasets stay streamable.
+2. **`annotate` on-demand lookups**  
+   Each chunk triggers loading only the hash shards referenced by its minimizers. Taxid hits are accumulated and optionally batched across threads to minimize disk churn.
+3. **`resolve` taxonomy reasoning**  
+   The hit vectors move through the taxonomy tree (`taxo.k2d`) to compute LCAs plus confidence filtering, respecting minimum hit groups when required.
+4. **Report generation**  
+   Kun-peng prints Kraken-style `output_*.txt` files and `*.kreport2`, which can be fed directly into downstream comparison or visualization tools.
 
 ## Quick Start
 
