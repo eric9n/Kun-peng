@@ -394,7 +394,7 @@ kun_peng build-db --db test_database --hash-capacity 1G
 
 ### add-library (Add FASTA)
 
-Add new FASTA files (or directories of FASTA/FASTA.GZ) into an existing database. This updates `library/*.fna` sharded files and appends new entries to `seqid2taxid.map`. After adding, run `build-db` to rebuild hash tables.
+Add new FASTA files (or directories of FASTA/FASTA.GZ) into a database directory (empty or existing). It will create/extend the `library/*.fna` shards and append entries to `seqid2taxid.map`. After populating the library, run `build-db` to (re)generate the hash tables.
 
 ``` sh
 ./target/release/kun_peng add-library -h
