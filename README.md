@@ -576,6 +576,22 @@ Standard Kraken Output Format:
     -   the last 3 k-mers mapped to taxonomy ID #562
     Note that paired read data will contain a "`|:|`" token in this list to indicate the end of one read and the beginning of another.
 
+Append taxonomy names (from `taxonomy/names.dmp`) to `output_1.txt`:
+
+```bash
+awk -F'\t\\|\\t' '
+  NR==FNR {names[$1]=$2; next}
+  {taxid=$3; name=(taxid in names)?names[taxid]:"NA"; print $0 "\t" name}
+' test_database/taxonomy/names.dmp test_out/output_1.txt > test_out/output_name_1.txt
+```
+
+Example (`test_out/output_name_1.txt`):
+
+```
+C	read_001	10239	150	10239:20 0:5		Viruses
+U	read_002	0	151	0:30	NA
+```
+
 -   test_out/output_1.kreport2：
 
 ```
