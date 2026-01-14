@@ -583,10 +583,25 @@ For example, "562:13 561:4 A:31 0:1 562:3" would indicate that:
 Append taxonomy names (from `taxonomy/names.dmp`) to `output_1.txt`:
 
 ```bash
-awk -F'\t\\|\\t' '
-  NR==FNR {names[$1]=$2; next}
-  {taxid=$3; name=(taxid in names)?names[taxid]:"NA"; print $0 "\t" name}
-' test_database/taxonomy/names.dmp test_out/output_1.txt > test_out/output_name_1.txt
+# Append taxonomy names from output_1.kreport2 to output_1.txt
+# kreport2 columns: percent, clade_reads, taxon_reads, rank_code, taxid, name...
+awk '
+BEGIN{OFS="\t"}
+NR==FNR{
+  # taxid is column 5; name starts from column 6 (may include leading spaces / indentation)
+  taxid = $5
+  name  = $6
+  for(i=7;i<=NF;i++) name = name " " $i
+  sub(/^[[:space:]]+/, "", name)
+
+  if (taxid ~ /^[0-9]+$/ && name != "") names[taxid] = name
+  next
+}
+{
+  taxid = $3
+  print $0, (taxid in names ? names[taxid] : "NA")
+}
+' test_out/output_1.kreport2 test_out/output_1.txt > test_out/output_name_1.txt
 ```
 
 Example (`test_out/output_name_1.txt`):
