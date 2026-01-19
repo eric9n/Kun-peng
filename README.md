@@ -584,19 +584,8 @@ For example, "562:13 561:4 A:31 0:1 562:3" would indicate that:
 
 ```bash
 
-bash append_taxonomy_names.sh test_out/output_1.kreport2 test_out/output_1.txt test_out/output_name_1.txt
+bash append_taxonomy_names.sh
 ```
-
-Parameters
-- <kreport2_file>: The standard 6-column Kraken2 report file.
-
-Requirement: TaxID must be in the 5th column; Taxonomy Name must start from the 6th column.
-
-- <input_file>: Your classification result file (e.g., output_1.txt).
-
-Requirement: The TaxID to be matched must be in the 3rd column.
-
-- <output_file>: The target file path where the annotated results will be saved.
 
 Example (`test_out/output_name_1.txt`):
 
