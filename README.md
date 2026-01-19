@@ -580,29 +580,23 @@ For example, "562:13 561:4 A:31 0:1 562:3" would indicate that:
     -   the last 3 k-mers mapped to taxonomy ID #562
     Note that paired read data will contain a "`|:|`" token in this list to indicate the end of one read and the beginning of another.
 
-#### Append taxonomy names to `output_1.txt`:
+#### Append taxonomy names to `output_*.txt`:
 
 ```bash
-# Append taxonomy names from output_1.kreport2 to output_1.txt
-# kreport2 columns: percent, clade_reads, taxon_reads, rank_code, taxid, name...
-awk '
-BEGIN{OFS="\t"}
-NR==FNR{
-  # taxid is column 5; name starts from column 6 (may include leading spaces / indentation)
-  taxid = $5
-  name  = $6
-  for(i=7;i<=NF;i++) name = name " " $i
-  sub(/^[[:space:]]+/, "", name)
 
-  if (taxid ~ /^[0-9]+$/ && name != "") names[taxid] = name
-  next
-}
-{
-  taxid = $3
-  print $0, (taxid in names ? names[taxid] : "NA")
-}
-' test_out/output_1.kreport2 test_out/output_1.txt > test_out/output_name_1.txt
+bash append_taxonomy_names.sh test_out/output_1.kreport2 test_out/output_1.txt test_out/output_name_1.txt
 ```
+
+Parameters
+- <kreport2_file>: The standard 6-column Kraken2 report file.
+
+Requirement: TaxID must be in the 5th column; Taxonomy Name must start from the 6th column.
+
+- <input_file>: Your classification result file (e.g., output_1.txt).
+
+Requirement: The TaxID to be matched must be in the 3rd column.
+
+- <output_file>: The target file path where the annotated results will be saved.
 
 Example (`test_out/output_name_1.txt`):
 
