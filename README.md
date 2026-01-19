@@ -580,7 +580,7 @@ For example, "562:13 561:4 A:31 0:1 562:3" would indicate that:
     -   the last 3 k-mers mapped to taxonomy ID #562
     Note that paired read data will contain a "`|:|`" token in this list to indicate the end of one read and the beginning of another.
 
-Append taxonomy names to `output_1.txt`:
+#### Append taxonomy names to `output_1.txt`:
 
 ```bash
 # Append taxonomy names from output_1.kreport2 to output_1.txt
