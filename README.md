@@ -1,6 +1,8 @@
 # Kun-peng  <img src="./docs/KunPeng.png" alt="Kun-peng Logo" align="right" width="50"/>
 
-[![](https://img.shields.io/badge/doi-waiting-yellow.svg)]() [![](https://img.shields.io/badge/release%20version-0.7.5-green.svg)](https://github.com/eric9n/Kun-peng/releases)
+[![](https://img.shields.io/badge/doi-10.1093%2Fbib%2Fbbag119-blue.svg)](https://doi.org/10.1093/bib/bbag119) [![](https://img.shields.io/badge/release%20version-0.7.12-green.svg)](https://github.com/eric9n/Kun-peng/releases)
+
+![Kun-peng overview](./docs/Picture0.png)
 
 
 ## Principle and Method
@@ -622,13 +624,16 @@ Sample Report Output Formats:
 
 ### Citation
 ```bibtex
-@article{Chen2024KunPeng,
-  author = {Chen, Qiong and Zhang, Boliang and Peng, Chen and Huang, Jiajun and Shen, Xiaotao and Jiang, Chao},
-  title = {Kun-peng: an ultra-memory-efficient, fast, and accurate pan-domain taxonomic classifier for all},
-  journal = {bioRxiv},
-  year = {2024},
-  doi = {10.1101/2024.12.19.629356},
-  url = {https://www.biorxiv.org/content/10.1101/2024.12.19.629356v1},
-  note = {preprint}
+@article{Chen2026KunPeng,
+  author = {Chen, Qiong and Zhang, Boliang and Peng, Chen and Huang, Jiajun and Liu, Zhen and Shen, Xiaotao and Jiang, Chao},
+  title = {Kun-peng enables scalable and accurate pan-domain metagenomic classification},
+  journal = {Briefings in Bioinformatics},
+  volume = {27},
+  number = {2},
+  year = {2026},
+  month = mar,
+  doi = {10.1093/bib/bbag119},
+  url = {https://academic.oup.com/bib/article/27/2/bbag119/8525000},
+  publisher = {Oxford University Press}
 }
 ```

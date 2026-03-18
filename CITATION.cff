@@ -8,7 +8,7 @@ repository-code: "https://github.com/eric9n/Kun-peng"
 
 preferred-citation:
   type: article
-  title: "Kun-peng: an ultra-memory-efficient, fast, and accurate pan-domain taxonomic classifier for all"
+  title: "Kun-peng enables scalable and accurate pan-domain metagenomic classification"
   authors:
     - family-names: "Chen"
       given-names: "Qiong"
@@ -18,12 +18,17 @@ preferred-citation:
       given-names: "Chen"
     - family-names: "Huang"
       given-names: "Jiajun"
+    - family-names: "Liu"
+      given-names: "Zhen"
     - family-names: "Shen"
       given-names: "Xiaotao"
     - family-names: "Jiang"
       given-names: "Chao"
-  doi: "10.1101/2024.12.19.629356"
-  journal: "bioRxiv"
-  url: "https://www.biorxiv.org/content/10.1101/2024.12.19.629356v1"
-  year: 2024
-  status: "preprint"
+  doi: "10.1093/bib/bbag119"
+  journal: "Briefings in Bioinformatics"
+  url: "https://academic.oup.com/bib/article/27/2/bbag119/8525000"
+  volume: 27
+  issue: 2
+  year: 2026
+  month: 3
+  publisher: "Oxford University Press"
