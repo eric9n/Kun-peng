@@ -4,9 +4,11 @@ This guide shows multiple ways to build a Kun-peng database from NCBI downloads 
 
 See also: Detailed Classification Demo (docs/classify-demo.md)
 
-## Assumptions
+## Before You Start
 
 - You have the `kun_peng` binary available (either installed or built at `./target/release/kun_peng`).
+- `kun_peng build` does not download taxonomy or genome data for you. For section A, `data/` must already contain the required downloads prepared by your own NCBI download workflow.
+- If you only have local FASTA files, start with section B and make sure each FASTA header carries a taxid such as `taxid|123` or `kraken:taxid|123`.
 - Example directories in this demo:
   - Download directory: `data/`
   - Database directory: `test_database`
@@ -35,9 +37,15 @@ Notes:
 
 Expected log highlights: “merge fna start…”, “estimate start…”, “chunk db took: …”, “build k2 db took: …”.
 
+Success looks like:
+- `test_database/` contains `seqid2taxid.map`, `taxo.k2d`, `opts.k2d`, `hash_config.k2d`, and one or more `hash_*.k2d` files
+- a quick `ls -lh test_database` shows the new database artifacts
+
 ## B. Build Only From an Existing Library
 
 Use this when you already have `test_database/library/*.fna` and `seqid2taxid.map`, or you want to add more sequences and then rebuild the index.
+
+If you only have your own FASTA files, start with Option 2 below. The FASTA headers must include a parseable taxid such as `taxid|123` or `kraken:taxid|123`, and you must run `build-db` after the files are added.
 
 ### Step B1: Prepare/Update the Library
 
@@ -127,6 +135,13 @@ kun_peng direct --db test_database data/COVID_19.fa
   - `--max-file-size` shard size for library files (I/O parallelism)
   - `--hash-capacity` to control hash shard sizing (~4× the numeric capacity in bytes)
 - About `-c <EXACT_SLOT_COUNT>`: use only if you understand capacity sizing and load factor tradeoffs.
+
+## Common First-Run Issues
+
+- `kun_peng build --download-dir data/ ...` expects `data/` to already contain the required downloads. It does not fetch taxonomy or genomes by itself.
+- `add-library` will fail if a FASTA header does not contain a taxid such as `taxid|123`.
+- If you used `add-library`, do not classify until `build-db` has finished rebuilding the hash tables.
+- Use `-c <EXACT_SLOT_COUNT>` only if you already know the correct sizing. Otherwise let `build-db` estimate it automatically.
 
 ## Minimal Path From Zero to Classification
 

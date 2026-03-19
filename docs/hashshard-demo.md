@@ -15,6 +15,14 @@ This demo shows how to convert an existing Kraken 2 database directory into Kun-
   - `taxo.k2d`
 - The `kun_peng` binary available (PATH or `./target/release/kun_peng`).
 
+Before conversion, a quick check should show the original Kraken 2 files:
+
+```bash
+ls -lh /path/to/kraken_db
+```
+
+At minimum, confirm that `hash.k2d`, `opts.k2d`, and `taxo.k2d` are present.
+
 ## Basic Conversion
 
 ```bash
@@ -35,6 +43,11 @@ What happens
 Important
 - If `hash_config.k2d` already exists in the target directory, the command will abort to avoid accidental overwrites. Use a fresh directory or remove/backup existing `hash_config.k2d` before running.
 
+Success looks like:
+- the original Kraken 2 files are still present
+- `hash_config.k2d` now exists
+- one or more `hash_*.k2d` shard files now exist
+
 ## Choosing `--hash-capacity`
 
 - Capacity is the number of slots per shard (not bytes). File size per shard is roughly `capacity × 4 bytes`.
@@ -49,6 +62,10 @@ Important
 ls -lh "$DB"
 # Expect: hash_config.k2d, hash_*.k2d, opts.k2d, taxo.k2d
 ```
+
+Before/after summary:
+- Before conversion: `hash.k2d`, `opts.k2d`, `taxo.k2d`
+- After conversion: the same directory also contains `hash_config.k2d` and `hash_*.k2d`
 
 ## Classifying with the Converted Database
 
@@ -66,7 +83,7 @@ kun_peng direct --db "$DB" data/COVID_19.fa
 
 ## Tips and Pitfalls
 
-- If you see an error about `hash_config.k2d` existing, move or remove it, or choose another output directory.
+- If you see an error about `hash_config.k2d` already existing, stop and use a fresh directory or back up the old file before trying again.
 - `--hash-capacity` affects how many shard files are created (total slots ÷ capacity). Tune it to balance shard size and file count.
 - After conversion, you can use all Kun-peng classify modes without rebuilding from source sequences.
 
@@ -74,4 +91,3 @@ kun_peng direct --db "$DB" data/COVID_19.fa
 
 - Database Build Demo: docs/build-db-demo.md
 - Classification Demo: docs/classify-demo.md
-

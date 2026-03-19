@@ -23,6 +23,11 @@ kun_peng classify \
   data/COVID_19.fa
 ```
 
+Success looks like:
+- `test_out/` contains `output_*.txt` and `*.kreport2`
+- the terminal prints timing logs for `splitr`, `annotate`, and `resolve`
+- opening `output_*.txt` shows Kraken-style classified or unclassified read lines
+
 Notes
 - `--chunk-dir` must be an empty or clean directory. It must not contain files like `sample_*.k2`, `sample_id*.map`, or `sample_*.bin`.
 - `--output-dir` stores the Kraken-style outputs.
@@ -66,6 +71,10 @@ When to use
 - You want maximum throughput.
 - Your machine has enough RAM for the full database.
 
+Success looks like:
+- classification completes without chunking steps
+- the requested output files appear if you passed `--output-dir`
+
 ## Outputs
 
 With the integrated workflow (`classify`), you will find in `--output-dir`:
@@ -78,6 +87,13 @@ With the integrated workflow (`classify`), you will find in `--output-dir`:
 - `*.kreport2`: A hierarchical report with percentage, clade counts, direct counts, rank code, taxid, and name.
 
 Timing logs show durations for splitr/annotate/resolve, helpful for performance checks.
+
+## Common First-Run Issues
+
+- Always use a clean `--chunk-dir`; leftover files from an older run will cause an error before classification starts.
+- If you recently changed the database with `add-library`, rerun `build-db` before classifying.
+- If `direct` mode needs too much RAM, switch to the integrated `classify` workflow instead.
+- If you pass paired reads as separate files, include `-P`.
 
 ## Tips and Common Issues
 
