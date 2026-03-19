@@ -7,14 +7,16 @@
 
 Kun-peng is a metagenomic classifier designed for large reference collections. It keeps memory usage practical by splitting the database into hash shards and loading only the shards needed for the current reads.
 
-The project follows Kraken-style taxonomy assignment while optimizing storage layout, streaming, and I/O behavior for much larger databases.
+## How It Works
+
+Kun-peng stores reference data as sharded hash tables and loads only the shards needed for the current reads, which keeps memory usage much lower than fully loaded workflows. It follows Kraken-style minimizer-based taxonomy assignment while optimizing storage layout and streaming for large pan-domain databases.
 
 ## Why Kun-peng
 
-- Sharded hash tables keep peak RAM in the single-digit GB range for many workflows.
-- Large reference libraries can be built once and reused across many classification runs.
-- Outputs are compatible with Kraken-style reports and downstream tooling.
-- The pipeline can run end-to-end or as separate build/classification steps for debugging and benchmarking.
+- Sharded hash layout keeps memory usage low by loading only the hash shards needed for the current reads.
+- Minimizer-based indexing keeps disk and memory usage practical for large reference collections without relying on fully loaded workflows.
+- The workflow is modular: database construction and classification can run end-to-end or as separate steps for debugging and benchmarking.
+- Outputs are Kraken-compatible, including `kreport2`, so existing downstream tooling can usually be reused directly.
 
 ## Workflow Overview
 
