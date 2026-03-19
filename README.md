@@ -88,6 +88,16 @@ Before you start:
 - you want to build a new database in `test_database/`
 - you have an example input such as `data/COVID_19.fa`
 
+If you still need to prepare `data/`, you can use [`ncbi_dl`](https://github.com/eric9n/ncbi_dl) to download taxonomy and genomes:
+
+```bash
+brew install eric9n/tap/ncbi_dl
+ncbi_dl -d data tax
+ncbi_dl -d data gen -g <group>
+```
+
+For example, choose `<group>` according to your use case, such as `viral`, `bacteria`, or `archaea`.
+
 ```bash
 kun_peng build --download-dir data/ --db test_database --hash-capacity 1G
 
