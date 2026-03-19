@@ -78,6 +78,16 @@ Choose the path that matches your situation.
 
 ### A. Build from downloaded genomes, then classify
 
+Use this if:
+
+- `data/` already contains the required taxonomy and genome downloads
+
+Before you start:
+
+- `kun_peng` is installed or available at `./target/release/kun_peng`
+- you want to build a new database in `test_database/`
+- you have an example input such as `data/COVID_19.fa`
+
 ```bash
 kun_peng build --download-dir data/ --db test_database --hash-capacity 1G
 
@@ -89,7 +99,10 @@ kun_peng classify \
   data/COVID_19.fa
 ```
 
-Use this when `data/` already contains the taxonomy/genome downloads needed for the build.
+Success looks like:
+
+- `test_database/` contains `hash_*.k2d`, `hash_config.k2d`, `taxo.k2d`, and `opts.k2d`
+- `test_out/` contains `output_*.txt` and `*.kreport2`
 
 Detailed guide:
 
@@ -98,13 +111,23 @@ Detailed guide:
 
 ### B. You already have a library or want to add your own FASTA files
 
-Prepare the library:
+Use this if:
+
+- you already have `library/*.fna` content to build from
+- you want to extend a database with your own FASTA files
+
+Before you start:
+
+- the target database directory already exists or will be created as `test_database/`
+- if you use `add-library`, the database must already contain the expected library and taxonomy structure
+
+Prepare the library with downloaded genomes:
 
 ```bash
 kun_peng merge-fna --download-dir data/ --db test_database
 ```
 
-or:
+or add your own FASTA files:
 
 ```bash
 kun_peng add-library --db test_database -i /path/to/fastas
@@ -123,12 +146,26 @@ kun_peng classify \
   data/COVID_19.fa
 ```
 
+Success looks like:
+
+- `test_database/` contains rebuilt `hash_*.k2d` files
+- `test_out/` contains `output_*.txt` and `*.kreport2`
+
 Detailed guide:
 
 - [docs/build-db-demo.md](docs/build-db-demo.md)
 - [docs/classify-demo.md](docs/classify-demo.md)
 
 ### C. You already have a Kraken 2 database
+
+Use this if:
+
+- you already have a Kraken 2 database containing `hash.k2d`, `opts.k2d`, and `taxo.k2d`
+
+Before you start:
+
+- the Kraken 2 database is available at `/path/to/kraken_db`
+- you want to convert it once and then use Kun-peng classification workflows
 
 Convert the Kraken 2 database into Kun-peng's sharded format:
 
@@ -153,6 +190,11 @@ If you have enough RAM to load all `hash_*.k2d` files at once:
 bash cal_memory.sh /path/to/kraken_db
 kun_peng direct --db /path/to/kraken_db data/COVID_19.fa
 ```
+
+Success looks like:
+
+- `/path/to/kraken_db` contains `hash_config.k2d` and `hash_*.k2d`
+- `test_out/` contains `output_*.txt` and `*.kreport2` after `classify`
 
 Detailed guide:
 
@@ -227,20 +269,6 @@ bash cal_memory.sh test_database
 - [docs/classify-demo.md](docs/classify-demo.md): integrated and direct classification workflows
 - [docs/hashshard-demo.md](docs/hashshard-demo.md): convert a Kraken 2 database
 - [examples/README.md](examples/README.md): runnable Rust examples
-
-## Development
-
-Enable the repository Git hooks:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-The provided `pre-push` hook runs:
-
-```bash
-cargo check --locked
-```
 
 ## Citation
 
